@@ -26,7 +26,7 @@ export interface Profile {
   email: string
   name: string
   department: string
-  role: 'admin' | 'member' | 'visitor'
+  role: 'admin' | 'member' | 'visitor' | 'vice-leader' | 'leader'
   avatar_url?: string
   bio?: string
   expertise_areas: string[]

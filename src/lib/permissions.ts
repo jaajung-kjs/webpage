@@ -142,6 +142,17 @@ export function hasAllPermissions(user: AuthUser | null, permissions: Permission
 }
 
 /**
+ * Check if a user has a specific role
+ */
+export function hasRole(user: AuthUser | null, role: UserRole): boolean {
+  if (!user || !user.profile?.role) {
+    return false
+  }
+
+  return user.profile.role === role
+}
+
+/**
  * Check if a user is an admin (admin, vice-leader, or leader)
  */
 export function isAdmin(user: AuthUser | null): boolean {
