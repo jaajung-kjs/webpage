@@ -3,14 +3,14 @@ import { supabase } from '@/lib/supabase'
 
 export async function GET() {
   try {
-    const result = {
+    const result: any = {
       supabaseClient: supabase ? 'Connected' : 'Null',
       timestamp: new Date().toISOString()
     }
 
     if (supabase) {
       // Test simple query
-      const { data: testData, error: testError } = await supabase
+      const { error: testError } = await supabase
         .from('profiles')
         .select('count')
         .limit(1)
