@@ -138,15 +138,17 @@ export default function CasesListPage() {
           />
         </div>
 
-        <Tabs value={activeCategory} onValueChange={setActiveCategory}>
-          <TabsList className="grid w-full grid-cols-3 gap-1 sm:grid-cols-6 sm:gap-0">
-            {Object.entries(categoryLabels).map(([key, label]) => (
-              <TabsTrigger key={key} value={key} className="text-xs px-2">
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="overflow-x-auto">
+          <Tabs value={activeCategory} onValueChange={setActiveCategory}>
+            <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+              {Object.entries(categoryLabels).map(([key, label]) => (
+                <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </motion.div>
 
       {/* Results count */}

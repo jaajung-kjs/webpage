@@ -367,15 +367,17 @@ export default function ResourcesPage() {
           />
         </div>
 
-        <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
-          <TabsList className="grid w-full grid-cols-6">
-            {Object.entries(categoryLabels).map(([key, label]) => (
-              <TabsTrigger key={key} value={key}>
-                {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        <div className="overflow-x-auto">
+          <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
+            <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+              {Object.entries(categoryLabels).map(([key, label]) => (
+                <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
+                  {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </motion.div>
 
       {/* Results count */}

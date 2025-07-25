@@ -427,12 +427,12 @@ export default function AnnouncementsPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto">
             <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(categoryLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -440,11 +440,11 @@ export default function AnnouncementsPage() {
             </Tabs>
           </div>
           
-          <div className="w-full sm:w-48">
+          <div className="overflow-x-auto">
             <Tabs value={activePriority} onValueChange={handlePriorityChange}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(priorityLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -545,7 +545,7 @@ export default function AnnouncementsPage() {
                           {priorityLabels[announcement.priority as keyof typeof priorityLabels]}
                         </Badge>
                       </div>
-                      <CardTitle className="line-clamp-2 text-xl leading-tight hover:text-primary cursor-pointer">
+                      <CardTitle className="line-clamp-2 text-lg sm:text-xl leading-tight hover:text-primary cursor-pointer">
                         <Link href={`/announcements/${announcement.id}`}>
                           {announcement.title}
                         </Link>
@@ -609,7 +609,7 @@ export default function AnnouncementsPage() {
                 </CardHeader>
                 
                 <CardContent>
-                  <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed cursor-pointer hover:text-foreground">
+                  <CardDescription className="mb-4 line-clamp-3 text-sm sm:text-base leading-relaxed cursor-pointer hover:text-foreground">
                     <Link href={`/announcements/${announcement.id}`}>
                       {announcement.content}
                     </Link>
@@ -638,15 +638,15 @@ export default function AnnouncementsPage() {
                   </div>
 
                   {/* Meta information */}
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                       <div className="flex items-center space-x-1">
-                        <span className="font-medium">{announcement.profiles?.name || '익명'}</span>
+                        <span className="font-medium truncate">{announcement.profiles?.name || '익명'}</span>
                         <span className="text-xs">({announcement.profiles?.role || '역할 없음'})</span>
                       </div>
                       <div className="flex items-center space-x-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatRelativeTime(announcement.created_at)}</span>
+                        <Calendar className="h-4 w-4 flex-shrink-0" />
+                        <span className="whitespace-nowrap">{formatRelativeTime(announcement.created_at)}</span>
                       </div>
                     </div>
                     

@@ -349,12 +349,12 @@ export default function MembersPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto">
             <Tabs value={activeRole} onValueChange={handleRoleChange}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(roleLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -362,11 +362,11 @@ export default function MembersPage() {
             </Tabs>
           </div>
           
-          <div className="w-full sm:w-48">
+          <div className="overflow-x-auto">
             <Tabs value={activeSkill} onValueChange={handleSkillChange}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(skillLevels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -441,18 +441,18 @@ export default function MembersPage() {
                           {member.name?.charAt(0) || 'U'}
                         </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <CardTitle className="text-lg">{member.name || '익명'}</CardTitle>
-                        <CardDescription>
+                      <div className="min-w-0 flex-1">
+                        <CardTitle className="text-lg truncate">{member.name || '익명'}</CardTitle>
+                        <CardDescription className="truncate">
                           {member.department || '미상'} {member.job_position || ''}
                         </CardDescription>
                       </div>
                     </div>
                     
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-2 flex-shrink-0">
                       <Badge 
                         variant="secondary" 
-                        className={roleColors[member.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
+                        className={`${roleColors[member.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'} whitespace-nowrap`}
                       >
                         {roleLabels[member.role as keyof typeof roleLabels] || member.role}
                       </Badge>
@@ -529,8 +529,8 @@ export default function MembersPage() {
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {member.ai_expertise?.slice(0, 3).map((expertise) => (
-                        <Badge key={expertise} variant="outline" className="text-xs">
+                      {member.ai_expertise?.slice(0, 2).map((expertise) => (
+                        <Badge key={expertise} variant="outline" className="text-xs truncate max-w-20">
                           {expertise}
                         </Badge>
                       )) || (
@@ -538,9 +538,9 @@ export default function MembersPage() {
                           전문분야 미정
                         </Badge>
                       )}
-                      {(member.ai_expertise?.length || 0) > 3 && (
+                      {(member.ai_expertise?.length || 0) > 2 && (
                         <Badge variant="outline" className="text-xs">
-                          +{(member.ai_expertise?.length || 0) - 3}
+                          +{(member.ai_expertise?.length || 0) - 2}
                         </Badge>
                       )}
                     </div>

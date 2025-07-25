@@ -17,7 +17,7 @@ export class ProductionReadinessChecker {
   
   // 1. 환경 설정 검증
   async checkEnvironmentConfiguration(): Promise<ProductionCheckResult> {
-    const checks = []
+    const checks: { test: string; status: 'PASS' | 'FAIL' | 'WARNING'; message: string; critical: boolean }[] = []
     
     // 필수 환경변수 확인
     const requiredEnvVars = [
@@ -69,7 +69,7 @@ export class ProductionReadinessChecker {
   
   // 2. 데이터베이스 연결성 검증
   async checkDatabaseConnectivity(): Promise<ProductionCheckResult> {
-    const checks = []
+    const checks: { test: string; status: 'PASS' | 'FAIL' | 'WARNING'; message: string; critical: boolean }[] = []
     
     try {
       if (!supabase) {
@@ -138,7 +138,7 @@ export class ProductionReadinessChecker {
   
   // 3. API 기능성 검증
   async checkAPIFunctionality(): Promise<ProductionCheckResult> {
-    const checks = []
+    const checks: { test: string; status: 'PASS' | 'FAIL' | 'WARNING'; message: string; critical: boolean }[] = []
     
     try {
       // 기존 API 테스트 재사용
@@ -171,7 +171,7 @@ export class ProductionReadinessChecker {
   
   // 4. 보안 설정 검증
   async checkSecurityConfiguration(): Promise<ProductionCheckResult> {
-    const checks = []
+    const checks: { test: string; status: 'PASS' | 'FAIL' | 'WARNING'; message: string; critical: boolean }[] = []
     
     try {
       // 기존 보안 테스트 재사용
@@ -209,7 +209,7 @@ export class ProductionReadinessChecker {
   
   // 5. 성능 및 최적화 검증
   async checkPerformanceOptimization(): Promise<ProductionCheckResult> {
-    const checks = []
+    const checks: { test: string; status: 'PASS' | 'FAIL' | 'WARNING'; message: string; critical: boolean }[] = []
     
     // 빌드 설정 확인
     checks.push({

@@ -408,12 +408,12 @@ export default function ActivitiesPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto">
             <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
-              <TabsList className="grid w-full grid-cols-6">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(categoryLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -421,11 +421,11 @@ export default function ActivitiesPage() {
             </Tabs>
           </div>
           
-          <div className="w-full sm:w-60">
+          <div className="overflow-x-auto">
             <Tabs value={activeStatus} onValueChange={handleStatusChange}>
-              <TabsList className="grid w-full grid-cols-5">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(statusLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}

@@ -273,12 +273,12 @@ export default function CommunityPage() {
           />
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row">
-          <div className="flex-1">
+        <div className="flex flex-col gap-4">
+          <div className="overflow-x-auto">
             <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
-              <TabsList className="grid w-full grid-cols-7">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(categoryLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
@@ -286,11 +286,11 @@ export default function CommunityPage() {
             </Tabs>
           </div>
           
-          <div className="w-full sm:w-40">
+          <div className="overflow-x-auto">
             <Tabs value={sortBy} onValueChange={handleSortChange}>
-              <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-4 sm:gap-0">
+              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
                 {Object.entries(sortOptions).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs px-2">
+                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
                     {label}
                   </TabsTrigger>
                 ))}
