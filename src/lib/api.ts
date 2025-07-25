@@ -1003,7 +1003,15 @@ export const membersApi = {
       query = query.range(filters.offset, filters.offset + (filters.limit || 10) - 1)
     }
 
-    return query
+    // Execute the query and return the result
+    const { data, error } = await query
+    
+    if (error) {
+      console.error('Error fetching members:', error)
+      return { data: null, error }
+    }
+    
+    return { data, error: null }
   },
 
   // Get user profile with stats

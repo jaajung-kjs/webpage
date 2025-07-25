@@ -281,6 +281,10 @@ export function filterMembersByPermissions(
   action: 'view' | 'manage' | 'remove' = 'view'
 ): any[] {
   if (!user) {
+    // Allow non-logged-in users to view all members (but not manage them)
+    if (action === 'view') {
+      return members
+    }
     return []
   }
 
