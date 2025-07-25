@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Menu, User, LogOut, Settings, Zap } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import LoginDialog from '@/components/auth/LoginDialog'
@@ -117,6 +117,12 @@ export default function Header() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="pr-0">
+                <SheetHeader>
+                  <SheetTitle className="sr-only">메뉴</SheetTitle>
+                  <SheetDescription className="sr-only">
+                    사이트 내비게이션 메뉴
+                  </SheetDescription>
+                </SheetHeader>
                 <MobileNav />
               </SheetContent>
             </Sheet>
