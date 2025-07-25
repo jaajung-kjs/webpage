@@ -8,6 +8,29 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Search, 
   BookOpen, 
@@ -17,9 +40,16 @@ import {
   Bot,
   FileText,
   Lightbulb,
-  Cpu
+  Cpu,
+  Plus,
+  MoreVertical,
+  Edit,
+  Trash2
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { resourcesApi } from '@/lib/api'
+import { canCreateAnnouncements } from '@/lib/permissions'
+import { toast } from 'sonner'
 
 interface ResourceWithAuthor {
   id: string
@@ -66,11 +96,28 @@ const categoryColors = {
 }
 
 export default function ResourcesPage() {
+  const { user } = useAuth()
   const [resources, setResources] = useState<ResourceWithAuthor[]>([])
   const [filteredResources, setFilteredResources] = useState<ResourceWithAuthor[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [loading, setLoading] = useState(true)
+
+  // Admin functionality state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [selectedResource, setSelectedResource] = useState<ResourceWithAuthor | null>(null)
+  const [operationLoading, setOperationLoading] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    url: '',
+    category: 'tutorial',
+    type: 'guide',
+    tags: [] as string[]
+  })
 
   useEffect(() => {
     fetchResources()
@@ -123,6 +170,102 @@ export default function ResourcesPage() {
     setFilteredResources(filtered)
   }
 
+  // Admin functions
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      url: '',
+      category: 'tutorial',
+      type: 'guide',
+      tags: []
+    })
+  }
+
+  const handleCreateResource = async () => {
+    if (!user || !formData.title.trim() || !formData.description.trim() || !formData.url.trim()) {
+      toast.error('제목, 설명, URL을 모두 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await resourcesApi.create({
+        ...formData,
+        author_id: user.id
+      })
+
+      if (error) throw error
+
+      toast.success('학습자료가 성공적으로 등록되었습니다.')
+      setCreateDialogOpen(false)
+      resetForm()
+      fetchResources()
+    } catch (error: any) {
+      console.error('Error creating resource:', error)
+      toast.error(error.message || '학습자료 등록에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleEditResource = async () => {
+    if (!selectedResource || !user || !formData.title.trim() || !formData.description.trim() || !formData.url.trim()) {
+      toast.error('제목, 설명, URL을 모두 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await resourcesApi.update(selectedResource.id, formData)
+
+      if (error) throw error
+
+      toast.success('학습자료가 성공적으로 수정되었습니다.')
+      setEditDialogOpen(false)
+      setSelectedResource(null)
+      resetForm()
+      fetchResources()
+    } catch (error: any) {
+      console.error('Error updating resource:', error)
+      toast.error(error.message || '학습자료 수정에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleDeleteResource = async (resourceId: string) => {
+    if (!user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await resourcesApi.delete(resourceId, user.id)
+
+      if (error) throw error
+
+      toast.success('학습자료가 삭제되었습니다.')
+      fetchResources()
+    } catch (error: any) {
+      console.error('Error deleting resource:', error)
+      toast.error(error.message || '학습자료 삭제에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const openEditDialog = (resource: ResourceWithAuthor) => {
+    setSelectedResource(resource)
+    setFormData({
+      title: resource.title,
+      description: resource.description,
+      url: resource.url,
+      category: resource.category,
+      type: resource.type,
+      tags: resource.tags || []
+    })
+    setEditDialogOpen(true)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -131,14 +274,29 @@ export default function ResourcesPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="text-center"
+          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
         >
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-            학습자료
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            AI 도구 활용을 위한 다양한 학습자료와 가이드를 제공합니다
-          </p>
+          <div className="text-center sm:text-left">
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
+              학습자료
+            </h1>
+            <p className="text-lg text-muted-foreground max-w-2xl">
+              AI 도구 활용을 위한 다양한 학습자료와 가이드를 제공합니다
+            </p>
+          </div>
+          
+          {canCreateAnnouncements(user) && (
+            <Button 
+              className="kepco-gradient"
+              onClick={() => {
+                resetForm()
+                setCreateDialogOpen(true)
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              자료 등록하기
+            </Button>
+          )}
         </motion.div>
       </div>
 
@@ -279,7 +437,37 @@ export default function ResourcesPage() {
                     >
                       {categoryLabels[resource.category as keyof typeof categoryLabels] || resource.category}
                     </Badge>
-                    <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex items-center space-x-2">
+                      <TypeIcon className="h-4 w-4 text-muted-foreground" />
+                      
+                      {canCreateAnnouncements(user) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(resource)}
+                              disabled={operationLoading}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              수정
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteResource(resource.id)}
+                              disabled={operationLoading}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              삭제
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                   <CardTitle className="line-clamp-2 text-xl leading-tight">
                     {resource.title}
@@ -356,6 +544,192 @@ export default function ResourcesPage() {
           </Button>
         </motion.div>
       )}
+
+      {/* Create Resource Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>새 학습자료 등록</DialogTitle>
+            <DialogDescription>
+              동아리 구성원들을 위한 학습자료를 등록해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="학습자료 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tutorial">튜토리얼</SelectItem>
+                    <SelectItem value="workshop">워크샵 자료</SelectItem>
+                    <SelectItem value="template">템플릿</SelectItem>
+                    <SelectItem value="reference">참고자료</SelectItem>
+                    <SelectItem value="guideline">가이드라인</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">자료 유형</label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="guide">가이드</SelectItem>
+                    <SelectItem value="presentation">프레젠테이션</SelectItem>
+                    <SelectItem value="video">영상</SelectItem>
+                    <SelectItem value="document">문서</SelectItem>
+                    <SelectItem value="spreadsheet">스프레드시트</SelectItem>
+                    <SelectItem value="template">템플릿</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">URL</label>
+              <Input
+                value={formData.url}
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder="https://..."
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">설명</label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="학습자료에 대한 자세한 설명을 입력하세요"
+                rows={4}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={operationLoading}>
+              취소
+            </Button>
+            <Button onClick={handleCreateResource} disabled={operationLoading}>
+              {operationLoading ? '등록 중...' : '등록 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Resource Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>학습자료 수정</DialogTitle>
+            <DialogDescription>
+              학습자료 정보를 수정해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="학습자료 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="tutorial">튜토리얼</SelectItem>
+                    <SelectItem value="workshop">워크샵 자료</SelectItem>
+                    <SelectItem value="template">템플릿</SelectItem>
+                    <SelectItem value="reference">참고자료</SelectItem>
+                    <SelectItem value="guideline">가이드라인</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">자료 유형</label>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="guide">가이드</SelectItem>
+                    <SelectItem value="presentation">프레젠테이션</SelectItem>
+                    <SelectItem value="video">영상</SelectItem>
+                    <SelectItem value="document">문서</SelectItem>
+                    <SelectItem value="spreadsheet">스프레드시트</SelectItem>
+                    <SelectItem value="template">템플릿</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">URL</label>
+              <Input
+                value={formData.url}
+                onChange={(e) => setFormData({ ...formData, url: e.target.value })}
+                placeholder="https://..."
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">설명</label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="학습자료에 대한 자세한 설명을 입력하세요"
+                rows={4}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setEditDialogOpen(false)
+                setSelectedResource(null)
+                resetForm()
+              }} 
+              disabled={operationLoading}
+            >
+              취소
+            </Button>
+            <Button onClick={handleEditResource} disabled={operationLoading}>
+              {operationLoading ? '수정 중...' : '수정 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

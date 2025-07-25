@@ -8,6 +8,29 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Search, 
   Clock, 
@@ -17,9 +40,17 @@ import {
   Plus,
   Filter,
   Star,
-  UserCheck
+  UserCheck,
+  MoreVertical,
+  Edit,
+  Trash2,
+  UserPlus,
+  UserMinus
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { activitiesApi } from '@/lib/api'
+import { canCreateAnnouncements } from '@/lib/permissions'
+import { toast } from 'sonner'
 
 interface ActivityWithInstructor {
   id: string
@@ -76,12 +107,33 @@ const statusColors = {
 }
 
 export default function ActivitiesPage() {
+  const { user } = useAuth()
   const [activities, setActivities] = useState<ActivityWithInstructor[]>([])
   const [filteredActivities, setFilteredActivities] = useState<ActivityWithInstructor[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
   const [loading, setLoading] = useState(true)
+
+  // Admin functionality state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [selectedActivity, setSelectedActivity] = useState<ActivityWithInstructor | null>(null)
+  const [operationLoading, setOperationLoading] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    description: '',
+    date: '',
+    time: '',
+    duration: 60,
+    location: '',
+    max_participants: 20,
+    category: 'workshop',
+    status: 'upcoming',
+    tags: [] as string[]
+  })
 
   useEffect(() => {
     fetchActivities()
@@ -159,6 +211,110 @@ export default function ActivitiesPage() {
     return timeString.substring(0, 5) // HH:MM format
   }
 
+  // Admin functions
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      description: '',
+      date: '',
+      time: '',
+      duration: 60,
+      location: '',
+      max_participants: 20,
+      category: 'workshop',
+      status: 'upcoming',
+      tags: []
+    })
+  }
+
+  const handleCreateActivity = async () => {
+    if (!user || !formData.title.trim() || !formData.description.trim()) {
+      toast.error('제목과 설명을 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await activitiesApi.create({
+        ...formData,
+        instructor_id: user.id
+      })
+
+      if (error) throw error
+
+      toast.success('활동이 성공적으로 등록되었습니다.')
+      setCreateDialogOpen(false)
+      resetForm()
+      fetchActivities()
+    } catch (error: any) {
+      console.error('Error creating activity:', error)
+      toast.error(error.message || '활동 등록에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleEditActivity = async () => {
+    if (!selectedActivity || !user || !formData.title.trim() || !formData.description.trim()) {
+      toast.error('제목과 설명을 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await activitiesApi.update(selectedActivity.id, formData)
+
+      if (error) throw error
+
+      toast.success('활동이 성공적으로 수정되었습니다.')
+      setEditDialogOpen(false)
+      setSelectedActivity(null)
+      resetForm()
+      fetchActivities()
+    } catch (error: any) {
+      console.error('Error updating activity:', error)
+      toast.error(error.message || '활동 수정에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleDeleteActivity = async (activityId: string) => {
+    if (!user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await activitiesApi.delete(activityId, user.id)
+
+      if (error) throw error
+
+      toast.success('활동이 삭제되었습니다.')
+      fetchActivities()
+    } catch (error: any) {
+      console.error('Error deleting activity:', error)
+      toast.error(error.message || '활동 삭제에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const openEditDialog = (activity: ActivityWithInstructor) => {
+    setSelectedActivity(activity)
+    setFormData({
+      title: activity.title,
+      description: activity.description,
+      date: activity.date,
+      time: activity.time,
+      duration: activity.duration,
+      location: activity.location,
+      max_participants: activity.max_participants,
+      category: activity.category,
+      status: activity.status,
+      tags: activity.tags || []
+    })
+    setEditDialogOpen(true)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -177,10 +333,18 @@ export default function ActivitiesPage() {
               AI 학습동아리의 다양한 활동과 세미나에 참여해보세요
             </p>
           </div>
-          <Button className="kepco-gradient">
-            <Plus className="mr-2 h-4 w-4" />
-            활동 등록하기
-          </Button>
+          {canCreateAnnouncements(user) && (
+            <Button 
+              className="kepco-gradient"
+              onClick={() => {
+                resetForm()
+                setCreateDialogOpen(true)
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              활동 등록하기
+            </Button>
+          )}
         </motion.div>
       </div>
 
@@ -392,11 +556,41 @@ export default function ActivitiesPage() {
                   </div>
                 </div>
 
-                {/* Action Button */}
-                <Button className="w-full kepco-gradient">
-                  <UserCheck className="mr-2 h-4 w-4" />
-                  {activity.status === 'upcoming' ? '참가 신청' : '자세히 보기'}
-                </Button>
+                {/* Admin Controls and Action Button */}
+                <div className="flex items-center gap-2">
+                  <Button className="flex-1 kepco-gradient">
+                    <UserCheck className="mr-2 h-4 w-4" />
+                    {activity.status === 'upcoming' ? '참가 신청' : '자세히 보기'}
+                  </Button>
+                  
+                  {canCreateAnnouncements(user) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => openEditDialog(activity)}
+                          disabled={operationLoading}
+                        >
+                          <Edit className="mr-2 h-4 w-4" />
+                          수정
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          onClick={() => handleDeleteActivity(activity.id)}
+                          disabled={operationLoading}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </motion.div>
@@ -431,6 +625,280 @@ export default function ActivitiesPage() {
           </Button>
         </motion.div>
       )}
+
+      {/* Create Activity Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>새 활동 등록</DialogTitle>
+            <DialogDescription>
+              동아리 구성원들을 위한 새로운 학습 활동을 등록해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="활동 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="workshop">워크샵</SelectItem>
+                    <SelectItem value="seminar">세미나</SelectItem>
+                    <SelectItem value="study">스터디</SelectItem>
+                    <SelectItem value="discussion">토론회</SelectItem>
+                    <SelectItem value="meeting">모임</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">상태</label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="upcoming">예정</SelectItem>
+                    <SelectItem value="ongoing">진행중</SelectItem>
+                    <SelectItem value="completed">완료</SelectItem>
+                    <SelectItem value="cancelled">취소</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">날짜</label>
+                <Input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">시간</label>
+                <Input
+                  type="time"
+                  value={formData.time}
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">소요시간 (분)</label>
+                <Input
+                  type="number"
+                  value={formData.duration}
+                  onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                  placeholder="60"
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">최대 참여자 수</label>
+                <Input
+                  type="number"
+                  value={formData.max_participants}
+                  onChange={(e) => setFormData({ ...formData, max_participants: parseInt(e.target.value) || 20 })}
+                  placeholder="20"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">장소</label>
+              <Input
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="활동 장소를 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">설명</label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="활동에 대한 자세한 설명을 입력하세요"
+                rows={4}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={operationLoading}>
+              취소
+            </Button>
+            <Button onClick={handleCreateActivity} disabled={operationLoading}>
+              {operationLoading ? '등록 중...' : '등록 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Activity Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>활동 수정</DialogTitle>
+            <DialogDescription>
+              활동 정보를 수정해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="활동 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="workshop">워크샵</SelectItem>
+                    <SelectItem value="seminar">세미나</SelectItem>
+                    <SelectItem value="study">스터디</SelectItem>
+                    <SelectItem value="discussion">토론회</SelectItem>
+                    <SelectItem value="meeting">모임</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">상태</label>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="upcoming">예정</SelectItem>
+                    <SelectItem value="ongoing">진행중</SelectItem>
+                    <SelectItem value="completed">완료</SelectItem>
+                    <SelectItem value="cancelled">취소</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">날짜</label>
+                <Input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">시간</label>
+                <Input
+                  type="time"
+                  value={formData.time}
+                  onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">소요시간 (분)</label>
+                <Input
+                  type="number"
+                  value={formData.duration}
+                  onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                  placeholder="60"
+                  className="mt-1"
+                />
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">최대 참여자 수</label>
+                <Input
+                  type="number"
+                  value={formData.max_participants}
+                  onChange={(e) => setFormData({ ...formData, max_participants: parseInt(e.target.value) || 20 })}
+                  placeholder="20"
+                  className="mt-1"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">장소</label>
+              <Input
+                value={formData.location}
+                onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                placeholder="활동 장소를 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">설명</label>
+              <Textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="활동에 대한 자세한 설명을 입력하세요"
+                rows={4}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setEditDialogOpen(false)
+                setSelectedActivity(null)
+                resetForm()
+              }} 
+              disabled={operationLoading}
+            >
+              취소
+            </Button>
+            <Button onClick={handleEditActivity} disabled={operationLoading}>
+              {operationLoading ? '수정 중...' : '수정 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -9,6 +9,29 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Textarea } from '@/components/ui/textarea'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { 
   Search, 
   Calendar, 
@@ -19,9 +42,17 @@ import {
   AlertCircle,
   Info,
   Megaphone,
-  Plus
+  Plus,
+  MoreVertical,
+  Edit,
+  Trash2,
+  PinIcon,
+  PinOff
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { announcementsApi } from '@/lib/api'
+import { canCreateAnnouncements } from '@/lib/permissions'
+import { toast } from 'sonner'
 
 interface AnnouncementWithAuthor {
   id: string
@@ -78,12 +109,29 @@ const categoryIcons = {
 }
 
 export default function AnnouncementsPage() {
+  const { user } = useAuth()
   const [announcements, setAnnouncements] = useState<AnnouncementWithAuthor[]>([])
   const [filteredAnnouncements, setFilteredAnnouncements] = useState<AnnouncementWithAuthor[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activePriority, setActivePriority] = useState('all')
   const [loading, setLoading] = useState(true)
+
+  // Admin functionality state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementWithAuthor | null>(null)
+  const [operationLoading, setOperationLoading] = useState(false)
+  
+  // Form state
+  const [formData, setFormData] = useState({
+    title: '',
+    content: '',
+    category: 'notice',
+    priority: 'medium',
+    is_pinned: false,
+    tags: [] as string[]
+  })
 
   useEffect(() => {
     fetchAnnouncements()
@@ -166,6 +214,121 @@ export default function AnnouncementsPage() {
     return formatDate(dateString)
   }
 
+  // Admin functions
+  const resetForm = () => {
+    setFormData({
+      title: '',
+      content: '',
+      category: 'notice',
+      priority: 'medium',
+      is_pinned: false,
+      tags: []
+    })
+  }
+
+  const handleCreateAnnouncement = async () => {
+    if (!user || !formData.title.trim() || !formData.content.trim()) {
+      toast.error('제목과 내용을 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await announcementsApi.create({
+        ...formData,
+        author_id: user.id
+      })
+
+      if (error) throw error
+
+      toast.success('공지사항이 성공적으로 작성되었습니다.')
+      setCreateDialogOpen(false)
+      resetForm()
+      fetchAnnouncements()
+    } catch (error: any) {
+      console.error('Error creating announcement:', error)
+      toast.error(error.message || '공지사항 작성에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleEditAnnouncement = async () => {
+    if (!selectedAnnouncement || !user || !formData.title.trim() || !formData.content.trim()) {
+      toast.error('제목과 내용을 입력해주세요.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      const { error } = await announcementsApi.update(selectedAnnouncement.id, formData)
+
+      if (error) throw error
+
+      toast.success('공지사항이 성공적으로 수정되었습니다.')
+      setEditDialogOpen(false)
+      setSelectedAnnouncement(null)
+      resetForm()
+      fetchAnnouncements()
+    } catch (error: any) {
+      console.error('Error updating announcement:', error)
+      toast.error(error.message || '공지사항 수정에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleDeleteAnnouncement = async (announcementId: string) => {
+    if (!user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await announcementsApi.delete(announcementId, user.id)
+
+      if (error) throw error
+
+      toast.success('공지사항이 삭제되었습니다.')
+      fetchAnnouncements()
+    } catch (error: any) {
+      console.error('Error deleting announcement:', error)
+      toast.error(error.message || '공지사항 삭제에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleTogglePin = async (announcementId: string, currentPinStatus: boolean) => {
+    if (!user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await announcementsApi.togglePin(announcementId, !currentPinStatus, user.id)
+
+      if (error) throw error
+
+      toast.success(currentPinStatus ? '고정이 해제되었습니다.' : '공지사항이 고정되었습니다.')
+      fetchAnnouncements()
+    } catch (error: any) {
+      console.error('Error toggling pin:', error)
+      toast.error(error.message || '고정 상태 변경에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const openEditDialog = (announcement: AnnouncementWithAuthor) => {
+    setSelectedAnnouncement(announcement)
+    setFormData({
+      title: announcement.title,
+      content: announcement.content,
+      category: announcement.category,
+      priority: announcement.priority,
+      is_pinned: announcement.is_pinned,
+      tags: announcement.tags || []
+    })
+    setEditDialogOpen(true)
+  }
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -232,10 +395,18 @@ export default function AnnouncementsPage() {
             </Card>
           </div>
           
-          <Button className="kepco-gradient">
-            <Plus className="mr-2 h-4 w-4" />
-            새 공지 작성
-          </Button>
+          {canCreateAnnouncements(user) && (
+            <Button 
+              className="kepco-gradient"
+              onClick={() => {
+                resetForm()
+                setCreateDialogOpen(true)
+              }}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              새 공지 작성
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -388,6 +559,51 @@ export default function AnnouncementsPage() {
                           {announcement.profiles?.name?.charAt(0) || 'U'}
                         </AvatarFallback>
                       </Avatar>
+                      
+                      {/* Admin Controls */}
+                      {canCreateAnnouncements(user) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() => handleTogglePin(announcement.id, announcement.is_pinned)}
+                              disabled={operationLoading}
+                            >
+                              {announcement.is_pinned ? (
+                                <>
+                                  <PinOff className="mr-2 h-4 w-4" />
+                                  고정 해제
+                                </>
+                              ) : (
+                                <>
+                                  <PinIcon className="mr-2 h-4 w-4" />
+                                  고정하기
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => openEditDialog(announcement)}
+                              disabled={operationLoading}
+                            >
+                              <Edit className="mr-2 h-4 w-4" />
+                              수정
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDeleteAnnouncement(announcement.id)}
+                              disabled={operationLoading}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              삭제
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -480,6 +696,190 @@ export default function AnnouncementsPage() {
           </Button>
         </motion.div>
       )}
+
+      {/* Create Announcement Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>새 공지사항 작성</DialogTitle>
+            <DialogDescription>
+              동아리 구성원들에게 전달할 공지사항을 작성해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="공지사항 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="notice">공지사항</SelectItem>
+                    <SelectItem value="event">이벤트</SelectItem>
+                    <SelectItem value="meeting">모임안내</SelectItem>
+                    <SelectItem value="announcement">발표</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">우선순위</label>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">중요</SelectItem>
+                    <SelectItem value="medium">보통</SelectItem>
+                    <SelectItem value="low">일반</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">내용</label>
+              <Textarea
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="공지사항 내용을 입력하세요"
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="pinned"
+                checked={formData.is_pinned}
+                onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
+                className="rounded"
+              />
+              <label htmlFor="pinned" className="text-sm font-medium">
+                상단 고정
+              </label>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} disabled={operationLoading}>
+              취소
+            </Button>
+            <Button onClick={handleCreateAnnouncement} disabled={operationLoading}>
+              {operationLoading ? '작성 중...' : '작성 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Announcement Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>공지사항 수정</DialogTitle>
+            <DialogDescription>
+              공지사항 내용을 수정해주세요.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">제목</label>
+              <Input
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="공지사항 제목을 입력하세요"
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">카테고리</label>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="notice">공지사항</SelectItem>
+                    <SelectItem value="event">이벤트</SelectItem>
+                    <SelectItem value="meeting">모임안내</SelectItem>
+                    <SelectItem value="announcement">발표</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div>
+                <label className="text-sm font-medium">우선순위</label>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="high">중요</SelectItem>
+                    <SelectItem value="medium">보통</SelectItem>
+                    <SelectItem value="low">일반</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            
+            <div>
+              <label className="text-sm font-medium">내용</label>
+              <Textarea
+                value={formData.content}
+                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                placeholder="공지사항 내용을 입력하세요"
+                rows={6}
+                className="mt-1"
+              />
+            </div>
+            
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="pinned-edit"
+                checked={formData.is_pinned}
+                onChange={(e) => setFormData({ ...formData, is_pinned: e.target.checked })}
+                className="rounded"
+              />
+              <label htmlFor="pinned-edit" className="text-sm font-medium">
+                상단 고정
+              </label>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setEditDialogOpen(false)
+                setSelectedAnnouncement(null)
+                resetForm()
+              }} 
+              disabled={operationLoading}
+            >
+              취소
+            </Button>
+            <Button onClick={handleEditAnnouncement} disabled={operationLoading}>
+              {operationLoading ? '수정 중...' : '수정 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

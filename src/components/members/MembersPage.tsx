@@ -8,6 +8,23 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { 
   Search, 
   Mail, 
@@ -20,9 +37,18 @@ import {
   Users,
   UserPlus,
   Award,
-  TrendingUp
+  TrendingUp,
+  MoreVertical,
+  UserCog,
+  UserMinus,
+  Crown,
+  Shield,
+  UserCheck
 } from 'lucide-react'
+import { useAuth } from '@/contexts/AuthContext'
 import { membersApi } from '@/lib/api'
+import { canManageMembers, canRemoveMembers, canChangeMemberRoles, getAssignableRoles, filterMembersByPermissions } from '@/lib/permissions'
+import { toast } from 'sonner'
 
 interface MemberWithStats {
   id: string
@@ -81,12 +107,18 @@ const skillColors = {
 }
 
 export default function MembersPage() {
+  const { user } = useAuth()
   const [members, setMembers] = useState<MemberWithStats[]>([])
   const [filteredMembers, setFilteredMembers] = useState<MemberWithStats[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeRole, setActiveRole] = useState('all')
   const [activeSkill, setActiveSkill] = useState('all')
   const [loading, setLoading] = useState(true)
+  
+  // Admin functionality state
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
+  const [selectedMember, setSelectedMember] = useState<MemberWithStats | null>(null)
+  const [operationLoading, setOperationLoading] = useState(false)
 
   useEffect(() => {
     fetchMembers()
@@ -128,6 +160,11 @@ export default function MembersPage() {
   const filterMembers = (term: string, role: string, skill: string) => {
     let filtered = members
 
+    // Filter out removed members unless user is admin
+    if (!canManageMembers(user)) {
+      filtered = filtered.filter(member => member.role !== 'removed')
+    }
+
     if (term) {
       filtered = filtered.filter(member =>
         member.name?.toLowerCase().includes(term.toLowerCase()) ||
@@ -147,10 +184,65 @@ export default function MembersPage() {
       filtered = filtered.filter(member => member.skill_level === skill)
     }
 
+    // Apply permission-based filtering
+    filtered = filterMembersByPermissions(user, filtered, 'view')
+
     // Sort by activity score
     filtered.sort((a, b) => (b.activity_score || 0) - (a.activity_score || 0))
 
     setFilteredMembers(filtered)
+  }
+
+  // Admin functions
+  const handleRemoveMember = async () => {
+    if (!selectedMember || !user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await membersApi.removeMember(selectedMember.id, user.id)
+      
+      if (error) throw error
+
+      toast.success(`${selectedMember.name} 님을 회원 목록에서 제거했습니다.`)
+      setRemoveDialogOpen(false)
+      setSelectedMember(null)
+      fetchMembers() // Refresh the list
+    } catch (error: any) {
+      console.error('Error removing member:', error)
+      toast.error(error.message || '회원 제거에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleChangeRole = async (memberId: string, newRole: string) => {
+    if (!user) return
+
+    try {
+      setOperationLoading(true)
+      const { error } = await membersApi.changeMemberRole(memberId, newRole, user.id)
+      
+      if (error) throw error
+
+      const member = members.find(m => m.id === memberId)
+      toast.success(`${member?.name} 님의 역할을 ${roleLabels[newRole as keyof typeof roleLabels] || newRole}로 변경했습니다.`)
+      fetchMembers() // Refresh the list
+    } catch (error: any) {
+      console.error('Error changing member role:', error)
+      toast.error(error.message || '역할 변경에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'leader': return Crown
+      case 'vice-leader': return Shield  
+      case 'admin': return UserCog
+      case 'removed': return UserMinus
+      default: return UserCheck
+    }
   }
 
   const formatJoinDate = (dateString: string) => {
@@ -231,10 +323,12 @@ export default function MembersPage() {
             </Card>
           </div>
           
-          <Button className="kepco-gradient">
-            <UserPlus className="mr-2 h-4 w-4" />
-            가입 신청
-          </Button>
+          {canManageMembers(user) && (
+            <Button className="kepco-gradient">
+              <UserCog className="mr-2 h-4 w-4" />
+              회원 관리
+            </Button>
+          )}
         </div>
       </motion.div>
 
@@ -355,12 +449,65 @@ export default function MembersPage() {
                       </div>
                     </div>
                     
-                    <Badge 
-                      variant="secondary" 
-                      className={roleColors[member.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
-                    >
-                      {roleLabels[member.role as keyof typeof roleLabels] || member.role}
-                    </Badge>
+                    <div className="flex items-center space-x-2">
+                      <Badge 
+                        variant="secondary" 
+                        className={roleColors[member.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
+                      >
+                        {roleLabels[member.role as keyof typeof roleLabels] || member.role}
+                      </Badge>
+                      
+                      {/* Admin Controls */}
+                      {canManageMembers(user) && member.id !== user?.id && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {canChangeMemberRoles(user) && getAssignableRoles(user).length > 0 && (
+                              <>
+                                <DropdownMenuItem 
+                                  className="text-sm font-medium text-muted-foreground cursor-default"
+                                  disabled
+                                >
+                                  역할 변경
+                                </DropdownMenuItem>
+                                {getAssignableRoles(user).map((role) => {
+                                  const RoleIcon = getRoleIcon(role)
+                                  return (
+                                    <DropdownMenuItem
+                                      key={role}
+                                      onClick={() => handleChangeRole(member.id, role)}
+                                      disabled={operationLoading || member.role === role}
+                                      className="pl-6"
+                                    >
+                                      <RoleIcon className="mr-2 h-4 w-4" />
+                                      {roleLabels[role as keyof typeof roleLabels] || role}
+                                    </DropdownMenuItem>
+                                  )
+                                })}
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            {canRemoveMembers(user) && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedMember(member)
+                                  setRemoveDialogOpen(true)
+                                }}
+                                disabled={operationLoading}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <UserMinus className="mr-2 h-4 w-4" />
+                                회원 제거
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 
@@ -506,6 +653,33 @@ export default function MembersPage() {
           </Button>
         </motion.div>
       )}
+
+      {/* Remove Member Dialog */}
+      <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>회원 제거 확인</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong>{selectedMember?.name}</strong> 님을 회원 목록에서 제거하시겠습니까?
+              <br />
+              <br />
+              제거된 회원은 다시 복구할 수 있지만, 현재 활동 기록은 유지됩니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={operationLoading}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRemoveMember}
+              disabled={operationLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {operationLoading ? '처리 중...' : '제거'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

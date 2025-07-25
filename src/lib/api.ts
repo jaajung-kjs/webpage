@@ -6,7 +6,10 @@ type Tables = Database['public']['Tables']
 // Helper function to ensure supabase is available
 function getSupabase() {
   if (!supabase) {
-    throw new Error('Supabase client not available')
+    console.error('Supabase client not available. Check environment variables:')
+    console.error('NEXT_PUBLIC_SUPABASE_URL:', process.env.NEXT_PUBLIC_SUPABASE_URL ? 'Set' : 'Missing')
+    console.error('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? 'Set' : 'Missing')
+    throw new Error('Supabase client not available. Please check your environment variables.')
   }
   return supabase
 }
@@ -459,16 +462,101 @@ export const resourcesApi = {
     return query
   },
 
-  // Create new resource
-  async create(resourceData: Tables['resources']['Insert']) {
-    const { data, error } = await getSupabase()
-      .from('resources')
-      .insert(resourceData)
-      .select()
-      .single()
+  // Create new resource (admin only)
+  async create(data: {
+    title: string
+    description: string
+    url: string
+    category: string
+    type: string
+    tags?: string[]
+    author_id: string
+  }) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', data.author_id)
+        .single()
 
-    if (error) throw error
-    return data
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { data: resource, error } = await getSupabase()
+        .from('resources')
+        .insert({
+          title: data.title,
+          description: data.description,
+          url: data.url,
+          category: data.category,
+          type: data.type,
+          tags: data.tags || [],
+          author_id: data.author_id,
+          download_count: 0
+        })
+        .select()
+        .single()
+
+      return { data: resource, error: null }
+    } catch (error: any) {
+      console.error('Error creating resource:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Update resource (admin only)
+  async update(id: string, data: {
+    title?: string
+    description?: string
+    url?: string
+    category?: string
+    type?: string
+    tags?: string[]
+  }) {
+    try {
+      const { data: resource, error } = await getSupabase()
+        .from('resources')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      return { data: resource, error: null }
+    } catch (error: any) {
+      console.error('Error updating resource:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Delete resource (admin only)
+  async delete(id: string, adminId: string) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { error } = await getSupabase()
+        .from('resources')
+        .delete()
+        .eq('id', id)
+
+      return { data: null, error: null }
+    } catch (error: any) {
+      console.error('Error deleting resource:', error)
+      return { data: null, error }
+    }
   },
 
   // Update download count
@@ -562,6 +650,122 @@ export const activitiesApi = {
 
     if (error && error.code !== 'PGRST116') throw error
     return !!data
+  },
+
+  // Create new activity (admin only)
+  async create(data: {
+    title: string
+    description: string
+    date: string
+    time: string
+    duration: number
+    location: string
+    max_participants: number
+    category: string
+    status: string
+    tags?: string[]
+    instructor_id: string
+  }) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', data.instructor_id)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { data: activity, error } = await getSupabase()
+        .from('activities')
+        .insert({
+          title: data.title,
+          description: data.description,
+          date: data.date,
+          time: data.time,
+          duration: data.duration,
+          location: data.location,
+          max_participants: data.max_participants,
+          category: data.category,
+          status: data.status,
+          tags: data.tags || [],
+          instructor_id: data.instructor_id,
+          current_participants: 0
+        })
+        .select()
+        .single()
+
+      return { data: activity, error: null }
+    } catch (error: any) {
+      console.error('Error creating activity:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Update activity (admin only)
+  async update(id: string, data: {
+    title?: string
+    description?: string
+    date?: string
+    time?: string
+    duration?: number
+    location?: string
+    max_participants?: number
+    category?: string
+    status?: string
+    tags?: string[]
+  }) {
+    try {
+      const { data: activity, error } = await getSupabase()
+        .from('activities')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      return { data: activity, error: null }
+    } catch (error: any) {
+      console.error('Error updating activity:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Delete activity (admin only)
+  async delete(id: string, adminId: string) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      // First, delete all participants
+      await getSupabase()
+        .from('activity_participants')
+        .delete()
+        .eq('activity_id', id)
+
+      // Then delete the activity
+      const { error } = await getSupabase()
+        .from('activities')
+        .delete()
+        .eq('id', id)
+
+      return { data: null, error: null }
+    } catch (error: any) {
+      console.error('Error deleting activity:', error)
+      return { data: null, error }
+    }
   }
 }
 
@@ -623,6 +827,133 @@ export const announcementsApi = {
     })
 
     if (error) throw error
+  },
+
+  // Create new announcement (admin only)
+  async create(data: {
+    title: string
+    content: string
+    category: string
+    priority: string
+    is_pinned?: boolean
+    tags?: string[]
+    author_id: string
+  }) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', data.author_id)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { data: announcement, error } = await getSupabase()
+        .from('announcements')
+        .insert({
+          title: data.title,
+          content: data.content,
+          category: data.category,
+          priority: data.priority,
+          is_pinned: data.is_pinned || false,
+          tags: data.tags || [],
+          author_id: data.author_id
+        })
+        .select()
+        .single()
+
+      return { data: announcement, error: null }
+    } catch (error: any) {
+      console.error('Error creating announcement:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Update announcement (admin only)
+  async update(id: string, data: {
+    title?: string
+    content?: string
+    category?: string
+    priority?: string
+    is_pinned?: boolean
+    tags?: string[]
+  }) {
+    try {
+      const { data: announcement, error } = await getSupabase()
+        .from('announcements')
+        .update({
+          ...data,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      return { data: announcement, error: null }
+    } catch (error: any) {
+      console.error('Error updating announcement:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Delete announcement (admin only)
+  async delete(id: string, adminId: string) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { error } = await getSupabase()
+        .from('announcements')
+        .delete()
+        .eq('id', id)
+
+      return { data: null, error: null }
+    } catch (error: any) {
+      console.error('Error deleting announcement:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Toggle pin status (admin only)
+  async togglePin(id: string, isPinned: boolean, adminId: string) {
+    try {
+      // Verify admin permissions
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      const { data: announcement, error } = await getSupabase()
+        .from('announcements')
+        .update({
+          is_pinned: isPinned,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single()
+
+      return { data: announcement, error: null }
+    } catch (error: any) {
+      console.error('Error toggling pin status:', error)
+      return { data: null, error }
+    }
   }
 }
 
@@ -699,6 +1030,159 @@ export const membersApi = {
     await getSupabase().rpc('update_user_stats', { target_user_id: userId })
 
     return data
+  },
+
+  // Get member by ID
+  async getById(id: string) {
+    return getSupabase()
+      .from('profiles')
+      .select(`
+        *,
+        user_stats (*)
+      `)
+      .eq('id', id)
+      .single()
+  },
+
+  // Remove member (admin only)
+  async removeMember(memberId: string, adminId: string) {
+    try {
+      // First check if admin has permission
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['admin', 'vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions')
+      }
+
+      // Get member to be removed
+      const { data: memberProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', memberId)
+        .single()
+
+      if (!memberProfile) {
+        throw new Error('Member not found')
+      }
+
+      // Prevent removing higher hierarchy members
+      const hierarchy = { member: 1, admin: 2, 'vice-leader': 3, leader: 4 }
+      const adminLevel = hierarchy[adminProfile.role as keyof typeof hierarchy] || 0
+      const memberLevel = hierarchy[memberProfile.role as keyof typeof hierarchy] || 0
+
+      if (adminLevel <= memberLevel) {
+        throw new Error('Cannot remove member with equal or higher role')
+      }
+
+      // Remove member by setting a special status
+      const { data, error } = await getSupabase()
+        .from('profiles')
+        .update({ 
+          role: 'removed',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberId)
+        .select()
+
+      if (error) throw error
+
+      return { data, error: null }
+    } catch (error: any) {
+      console.error('Error removing member:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Change member role (admin only)
+  async changeMemberRole(memberId: string, newRole: string, adminId: string) {
+    try {
+      // First check if admin has permission
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || !['vice-leader', 'leader'].includes(adminProfile.role)) {
+        throw new Error('Insufficient permissions to change roles')
+      }
+
+      // Get current member role
+      const { data: memberProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', memberId)
+        .single()
+
+      if (!memberProfile) {
+        throw new Error('Member not found')
+      }
+
+      // Check role hierarchy permissions
+      const hierarchy = { member: 1, admin: 2, 'vice-leader': 3, leader: 4 }
+      const adminLevel = hierarchy[adminProfile.role as keyof typeof hierarchy] || 0
+      const memberLevel = hierarchy[memberProfile.role as keyof typeof hierarchy] || 0
+      const newRoleLevel = hierarchy[newRole as keyof typeof hierarchy] || 0
+
+      // Admin must have higher level than both current and new role
+      if (adminLevel <= memberLevel || adminLevel <= newRoleLevel) {
+        throw new Error('Cannot assign role equal to or higher than your own')
+      }
+
+      // Update member role
+      const { data, error } = await getSupabase()
+        .from('profiles')
+        .update({ 
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberId)
+        .select()
+
+      if (error) throw error
+
+      return { data, error: null }
+    } catch (error: any) {
+      console.error('Error changing member role:', error)
+      return { data: null, error }
+    }
+  },
+
+  // Restore removed member (leader only)
+  async restoreMember(memberId: string, newRole: string, adminId: string) {
+    try {
+      // Only leaders can restore members
+      const { data: adminProfile } = await getSupabase()
+        .from('profiles')
+        .select('role')
+        .eq('id', adminId)
+        .single()
+
+      if (!adminProfile || adminProfile.role !== 'leader') {
+        throw new Error('Only leaders can restore members')
+      }
+
+      const { data, error } = await getSupabase()
+        .from('profiles')
+        .update({ 
+          role: newRole,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberId)
+        .eq('role', 'removed')
+        .select()
+
+      if (error) throw error
+
+      return { data, error: null }
+    } catch (error: any) {
+      console.error('Error restoring member:', error)
+      return { data: null, error }
+    }
   }
 }
 
