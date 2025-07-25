@@ -702,6 +702,459 @@ export const membersApi = {
   }
 }
 
+// Profiles API
+export const profilesApi = {
+  // Check if profiles table exists and create profile if needed
+  async ensureProfile(userId: string, userEmail: string) {
+    try {
+      // Try to check if user has a profile
+      const { data: existingProfile, error } = await getSupabase()
+        .from('profiles')
+        .select('id')
+        .eq('id', userId)
+        .single()
+
+      if (error && error.code === 'PGRST116') {
+        // Profile doesn't exist, create one
+        const { data: newProfile, error: createError } = await getSupabase()
+          .from('profiles')
+          .insert({
+            id: userId,
+            name: userEmail.split('@')[0],
+            email: userEmail,
+            role: 'member',
+            skill_level: 'beginner',
+            activity_score: 0,
+            ai_expertise: [],
+            achievements: [],
+            join_date: new Date().toISOString(),
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .select()
+          .single()
+
+        if (createError) {
+          console.warn('Could not create profile in profiles table:', createError)
+          return false
+        }
+
+        return true
+      } else if (error) {
+        console.warn('Profiles table not accessible:', error)
+        return false
+      }
+
+      return true
+    } catch (error) {
+      console.warn('Error ensuring profile:', error)
+      return false
+    }
+  },
+  // Get user profile by ID
+  async getProfile(userId: string) {
+    try {
+      const { data, error } = await getSupabase()
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        console.warn('Profiles table not accessible, using auth user data:', error)
+        // Fallback to auth user data
+        const { data: userData, error: userError } = await getSupabase().auth.getUser()
+        
+        if (userError || !userData.user) {
+          throw new Error('Cannot get user data')
+        }
+
+        // Return default profile structure
+        return {
+          id: userData.user.id,
+          name: userData.user.user_metadata?.name || userData.user.email?.split('@')[0] || '',
+          email: userData.user.email || '',
+          phone: userData.user.user_metadata?.phone || null,
+          department: userData.user.user_metadata?.department || null,
+          job_position: userData.user.user_metadata?.job_position || null,
+          role: userData.user.user_metadata?.role || 'member',
+          avatar_url: userData.user.user_metadata?.avatar_url || null,
+          location: userData.user.user_metadata?.location || null,
+          skill_level: userData.user.user_metadata?.skill_level || 'beginner',
+          bio: userData.user.user_metadata?.bio || null,
+          activity_score: userData.user.user_metadata?.activity_score || 0,
+          ai_expertise: userData.user.user_metadata?.ai_expertise || [],
+          achievements: userData.user.user_metadata?.achievements || [],
+          join_date: userData.user.created_at,
+          created_at: userData.user.created_at,
+          updated_at: userData.user.updated_at
+        }
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error in getProfile:', error)
+      throw error
+    }
+  },
+
+  // Update user profile
+  async updateProfile(userId: string, updates: {
+    name?: string
+    phone?: string
+    bio?: string
+    location?: string
+    avatar_url?: string
+    department?: string
+    job_position?: string
+    role?: string
+    skill_level?: string
+    ai_expertise?: string[]
+    achievements?: string[]
+    activity_score?: number
+  }) {
+    try {
+      // First try to update profiles table
+      const { data, error } = await getSupabase()
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+        .select()
+        .single()
+
+      if (error) {
+        console.warn('Profiles table not accessible, updating user metadata:', error)
+        
+        // Fallback to updating user metadata
+        const { data: currentUser } = await getSupabase().auth.getUser()
+        
+        if (!currentUser.user) {
+          throw new Error('User not authenticated')
+        }
+
+        const currentMetadata = currentUser.user.user_metadata || {}
+        const updatedMetadata = {
+          ...currentMetadata,
+          ...updates,
+          updated_at: new Date().toISOString()
+        }
+
+        const { data: updateData, error: updateError } = await getSupabase().auth.updateUser({
+          data: updatedMetadata
+        })
+
+        if (updateError) {
+          console.error('Error updating user metadata:', updateError)
+          throw updateError
+        }
+
+        // Return the updated data in profile format
+        return {
+          id: updateData.user.id,
+          name: updatedMetadata.name || updateData.user.email?.split('@')[0] || '',
+          email: updateData.user.email || '',
+          phone: updatedMetadata.phone,
+          department: updatedMetadata.department,
+          job_position: updatedMetadata.job_position,
+          role: updatedMetadata.role || 'member',
+          avatar_url: updatedMetadata.avatar_url,
+          location: updatedMetadata.location,
+          skill_level: updatedMetadata.skill_level || 'beginner',
+          bio: updatedMetadata.bio,
+          activity_score: updatedMetadata.activity_score || 0,
+          ai_expertise: updatedMetadata.ai_expertise || [],
+          achievements: updatedMetadata.achievements || [],
+          join_date: updateData.user.created_at,
+          created_at: updateData.user.created_at,
+          updated_at: updatedMetadata.updated_at
+        }
+      }
+
+      return data
+    } catch (error) {
+      console.error('Error in updateProfile:', error)
+      throw error
+    }
+  },
+
+  // Get user activity stats
+  async getUserStats(userId: string) {
+    try {
+      // Get posts count
+      const { count: postsCount } = await getSupabase()
+        .from('community_posts')
+        .select('*', { count: 'exact', head: true })
+        .eq('author_id', userId)
+
+      // Get cases count
+      const { count: casesCount } = await getSupabase()
+        .from('cases')
+        .select('*', { count: 'exact', head: true })
+        .eq('author_id', userId)
+
+      // Get total likes received
+      const { data: likesData } = await getSupabase()
+        .from('likes')
+        .select('community_post_id, case_id')
+        .or(`community_post_id.in.(${await getUserPostIds(userId)}),case_id.in.(${await getUserCaseIds(userId)})`)
+
+      // Get total comments made
+      const { count: commentsCount } = await getSupabase()
+        .from('comments')
+        .select('*', { count: 'exact', head: true })
+        .eq('author_id', userId)
+
+      // Get total views (sum from posts and cases)
+      const { data: postsViews } = await getSupabase()
+        .from('community_posts')
+        .select('views')
+        .eq('author_id', userId)
+
+      const { data: casesViews } = await getSupabase()
+        .from('cases')
+        .select('views')
+        .eq('author_id', userId)
+
+      // Get activity participants count
+      const { count: activitiesCount } = await getSupabase()
+        .from('activity_participants')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+
+      const totalViews = [
+        ...(postsViews || []),
+        ...(casesViews || [])
+      ].reduce((sum, item) => sum + (item.views || 0), 0)
+
+      return {
+        totalPosts: (postsCount || 0) + (casesCount || 0),
+        totalComments: commentsCount || 0,
+        totalLikes: likesData?.length || 0,
+        totalViews,
+        activitiesJoined: activitiesCount || 0,
+        resourcesShared: casesCount || 0
+      }
+    } catch (error) {
+      console.error('Error fetching user stats:', error)
+      return {
+        totalPosts: 0,
+        totalComments: 0,
+        totalLikes: 0,
+        totalViews: 0,
+        activitiesJoined: 0,
+        resourcesShared: 0
+      }
+    }
+  },
+
+  // Get user recent activity
+  async getUserActivity(userId: string, limit = 10) {
+    try {
+      // Get recent posts
+      const { data: posts } = await getSupabase()
+        .from('community_posts')
+        .select('id, title, created_at, views, likes_count, comments_count')
+        .eq('author_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      // Get recent cases
+      const { data: cases } = await getSupabase()
+        .from('cases')
+        .select('id, title, created_at, views, likes_count, comments_count')
+        .eq('author_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      // Get recent comments
+      const { data: comments } = await getSupabase()
+        .from('comments')
+        .select('id, content, created_at, community_post_id, case_id')
+        .eq('author_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit)
+
+      // Combine and sort all activities
+      const activities = [
+        ...(posts || []).map(post => ({
+          type: 'post' as const,
+          title: post.title,
+          date: post.created_at,
+          engagement: {
+            likes: post.likes_count || 0,
+            comments: post.comments_count || 0,
+            views: post.views || 0
+          }
+        })),
+        ...(cases || []).map(caseItem => ({
+          type: 'case' as const,
+          title: caseItem.title,
+          date: caseItem.created_at,
+          engagement: {
+            likes: caseItem.likes_count || 0,
+            comments: caseItem.comments_count || 0,
+            views: caseItem.views || 0
+          }
+        })),
+        ...(comments || []).map(comment => ({
+          type: 'comment' as const,
+          title: comment.content.substring(0, 50) + '...',
+          date: comment.created_at,
+          engagement: {
+            likes: 0,
+            comments: 0,
+            views: 0
+          }
+        }))
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, limit)
+
+      return activities
+    } catch (error) {
+      console.error('Error fetching user activity:', error)
+      return []
+    }
+  }
+}
+
+// Helper functions for getUserStats
+async function getUserPostIds(userId: string): Promise<string> {
+  const { data } = await getSupabase()
+    .from('community_posts')
+    .select('id')
+    .eq('author_id', userId)
+  
+  return data?.map(p => p.id).join(',') || ''
+}
+
+async function getUserCaseIds(userId: string): Promise<string> {
+  const { data } = await getSupabase()
+    .from('cases')
+    .select('id')
+    .eq('author_id', userId)
+  
+  return data?.map(c => c.id).join(',') || ''
+}
+
+// Upload result type
+interface UploadResult {
+  path: string
+  url: string
+  method: 'storage' | 'base64'
+}
+
+// File Upload API
+export const uploadApi = {
+  // Create storage bucket if it doesn't exist
+  async ensureStorageBucket() {
+    try {
+      const { data: buckets, error: listError } = await getSupabase().storage.listBuckets()
+      
+      if (listError) {
+        console.warn('Cannot list buckets:', listError)
+        return false
+      }
+
+      const bucketExists = buckets?.some(bucket => bucket.name === 'profile-images')
+      
+      if (!bucketExists) {
+        const { error: createError } = await getSupabase().storage.createBucket('profile-images', {
+          public: true,
+          allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+          fileSizeLimit: 5242880 // 5MB
+        })
+        
+        if (createError) {
+          console.warn('Cannot create bucket:', createError)
+          return false
+        }
+      }
+      
+      return true
+    } catch (error) {
+      console.warn('Storage bucket check failed:', error)
+      return false
+    }
+  },
+
+  // Upload profile avatar with fallback to base64 storage
+  async uploadAvatar(file: File, userId: string): Promise<UploadResult> {
+    try {
+      // Check if storage is available
+      const storageAvailable = await this.ensureStorageBucket()
+      
+      if (storageAvailable) {
+        // Try Supabase Storage first
+        const fileExt = file.name.split('.').pop()
+        const fileName = `${userId}-${Date.now()}.${fileExt}`
+        const filePath = `avatars/${fileName}`
+
+        const { data, error } = await getSupabase().storage
+          .from('profile-images')
+          .upload(filePath, file, {
+            cacheControl: '3600',
+            upsert: true
+          })
+
+        if (!error && data) {
+          // Get public URL
+          const { data: { publicUrl } } = getSupabase().storage
+            .from('profile-images')
+            .getPublicUrl(filePath)
+
+          return {
+            path: data.path,
+            url: publicUrl,
+            method: 'storage'
+          }
+        } else {
+          console.warn('Storage upload failed:', error)
+        }
+      }
+      
+      // Fallback to base64 encoding for user metadata
+      return new Promise<UploadResult>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => {
+          const base64Data = reader.result as string
+          resolve({
+            path: `base64-${userId}`,
+            url: base64Data,
+            method: 'base64'
+          })
+        }
+        reader.onerror = () => reject(new Error('파일 읽기에 실패했습니다.'))
+        reader.readAsDataURL(file)
+      })
+      
+    } catch (error) {
+      console.error('Error uploading avatar:', error)
+      throw new Error('파일 업로드에 실패했습니다. 파일 크기나 형식을 확인해주세요.')
+    }
+  },
+
+  // Delete old avatar
+  async deleteAvatar(path: string) {
+    try {
+      // Only delete from storage if it's a storage path
+      if (path && !path.startsWith('base64-') && !path.startsWith('data:')) {
+        const { error } = await getSupabase().storage
+          .from('profile-images')
+          .remove([path])
+
+        if (error) {
+          console.warn('Error deleting avatar from storage:', error)
+        }
+      }
+    } catch (error) {
+      console.warn('Error deleting avatar:', error)
+      // Don't throw error for deletion failures
+    }
+  }
+}
+
 // Real-time subscriptions
 export const subscriptions = {
   // Subscribe to likes changes

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -35,6 +35,8 @@ import {
   Star
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { profilesApi, uploadApi } from '@/lib/api'
+import { toast } from 'sonner'
 
 // Mock user data
 const mockUserData = {
@@ -100,22 +102,157 @@ const roleLabels = {
 export default function ProfilePage() {
   const { user } = useAuth()
   const [userData, setUserData] = useState(mockUserData)
-  const [isEditing, setIsEditing] = useState(false)
   const [editData, setEditData] = useState(userData)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('activity')
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+
+  // 실제 사용자 데이터 로딩
+  useEffect(() => {
+    async function loadUserData() {
+      if (!user) {
+        setLoading(false)
+        return
+      }
+
+      try {
+        setLoading(true)
+        
+        // 먼저 프로필이 존재하는지 확인하고 없으면 생성
+        await profilesApi.ensureProfile(user.id, user.email)
+        
+        // 프로필 데이터 가져오기 (오류 시 기본값 사용)
+        let profile
+        try {
+          profile = await profilesApi.getProfile(user.id)
+        } catch (error) {
+          console.warn('Profile not found, using defaults:', error)
+          profile = {
+            name: user.profile?.name || user.email.split('@')[0],
+            phone: '010-0000-0000',
+            department: '미지정',
+            job_position: '미지정',
+            role: 'member',
+            avatar_url: '/avatars/default.jpg',
+            location: '미지정',
+            bio: '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
+            ai_expertise: mockUserData.aiExpertise,
+            skill_level: 'beginner',
+            achievements: mockUserData.achievements,
+            activity_score: 0
+          }
+        }
+        
+        // 활동 통계 가져오기 (오류 시 기본값 사용)
+        let stats
+        try {
+          stats = await profilesApi.getUserStats(user.id)
+        } catch (error) {
+          console.warn('Stats not available, using defaults:', error)
+          stats = mockUserData.stats
+        }
+        
+        // 최근 활동 가져오기 (오류 시 빈 배열 사용)
+        let recentActivity
+        try {
+          recentActivity = await profilesApi.getUserActivity(user.id, 5)
+        } catch (error) {
+          console.warn('Recent activity not available, using defaults:', error)
+          recentActivity = mockUserData.recentActivity
+        }
+
+        const realUserData = {
+          ...mockUserData,
+          id: user.id,
+          name: profile.name || user.email.split('@')[0],
+          email: user.email,
+          phone: profile.phone || '010-0000-0000',
+          department: profile.department || '미지정',
+          job_position: profile.job_position || '미지정',
+          role: profile.role || 'member',
+          avatar: profile.avatar_url || '/avatars/default.jpg',
+          joinDate: (user as any).created_at ? new Date((user as any).created_at).toISOString().split('T')[0] : '2024-01-01',
+          location: profile.location || '미지정',
+          bio: profile.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
+          aiExpertise: profile.ai_expertise || mockUserData.aiExpertise,
+          skillLevel: profile.skill_level || 'beginner',
+          achievements: profile.achievements || mockUserData.achievements,
+          activityScore: profile.activity_score || 0,
+          stats,
+          recentActivity
+        }
+        
+        setUserData(realUserData)
+        setEditData(realUserData)
+      } catch (error) {
+        console.error('Error loading user data:', error)
+        // 오류 시 기본 데이터 사용
+        const fallbackData = {
+          ...mockUserData,
+          id: user.id,
+          name: user.profile?.name || user.email.split('@')[0],
+          email: user.email,
+        }
+        setUserData(fallbackData)
+        setEditData(fallbackData)
+        toast.error('프로필 데이터를 불러오는데 실패했습니다.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadUserData()
+  }, [user])
 
   const handleEdit = () => {
-    setIsEditing(true)
+    // 편집 탭으로 이동
     setEditData(userData)
+    setActiveTab('edit')
   }
 
-  const handleSave = () => {
-    setUserData(editData)
-    setIsEditing(false)
+  const handleSave = async () => {
+    if (!user) return
+    
+    try {
+      setSaving(true)
+      
+      // 실제 프로필 업데이트 API 호출
+      const updatedProfile = await profilesApi.updateProfile(user.id, {
+        name: editData.name,
+        phone: editData.phone,
+        bio: editData.bio,
+        location: editData.location,
+        department: editData.department,
+        job_position: editData.job_position
+      })
+      
+      // 업데이트된 프로필 데이터로 상태 업데이트
+      const updatedUserData = {
+        ...userData,
+        ...editData,
+        name: updatedProfile.name,
+        phone: updatedProfile.phone,
+        bio: updatedProfile.bio,
+        location: updatedProfile.location,
+        department: updatedProfile.department,
+        job_position: updatedProfile.job_position
+      }
+      
+      setUserData(updatedUserData)
+      setEditData(updatedUserData)
+      
+      toast.success('프로필이 성공적으로 업데이트되었습니다.')
+    } catch (error) {
+      console.error('프로필 업데이트 실패:', error)
+      toast.error('프로필 업데이트에 실패했습니다. 다시 시도해주세요.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   const handleCancel = () => {
     setEditData(userData)
-    setIsEditing(false)
   }
 
   const handleInputChange = (field: string, value: string) => {
@@ -123,6 +260,68 @@ export default function ProfilePage() {
       ...prev,
       [field]: value
     }))
+  }
+
+  const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file || !user) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('이미지 파일만 업로드 가능합니다.')
+      return
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('파일 크기는 5MB 이하여야 합니다.')
+      return
+    }
+
+    try {
+      setUploadingAvatar(true)
+      
+      // Upload new avatar
+      const uploadResult = await uploadApi.uploadAvatar(file, user.id)
+      
+      // Show different success message based on upload method
+      const successMessage = uploadResult.method === 'storage' 
+        ? '프로필 사진이 성공적으로 업로드되었습니다.'
+        : '프로필 사진이 업로드되었습니다. (임시 저장)'
+      
+      // Update profile with new avatar URL
+      try {
+        const updatedProfile = await profilesApi.updateProfile(user.id, {
+          avatar_url: uploadResult.url
+        })
+        console.log('Profile updated successfully')
+      } catch (updateError) {
+        console.warn('Profile update failed, but avatar was uploaded:', updateError)
+      }
+      
+      // Update local state regardless of profile update success
+      const updatedUserData = {
+        ...userData,
+        avatar: uploadResult.url
+      }
+      const updatedEditData = {
+        ...editData,
+        avatar: uploadResult.url
+      }
+      
+      setUserData(updatedUserData)
+      setEditData(updatedEditData)
+      
+      toast.success(successMessage)
+    } catch (error) {
+      console.error('Avatar upload failed:', error)
+      const errorMessage = error instanceof Error ? error.message : '프로필 사진 업로드에 실패했습니다.'
+      toast.error(errorMessage)
+    } finally {
+      setUploadingAvatar(false)
+      // Reset the input value so the same file can be selected again
+      event.target.value = ''
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -142,6 +341,31 @@ export default function ProfilePage() {
   }
 
   const activityLevel = getActivityLevel(userData.activityScore)
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-muted-foreground">프로필을 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground">로그인이 필요합니다.</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -166,9 +390,22 @@ export default function ProfilePage() {
                     size="sm"
                     variant="outline"
                     className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0"
+                    onClick={() => document.getElementById('avatar-upload')?.click()}
+                    disabled={uploadingAvatar}
                   >
-                    <Camera className="h-4 w-4" />
+                    {uploadingAvatar ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                    ) : (
+                      <Camera className="h-4 w-4" />
+                    )}
                   </Button>
+                  <input
+                    id="avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    className="hidden"
+                  />
                 </div>
                 
                 <CardTitle className="text-xl">{userData.name}</CardTitle>
@@ -274,7 +511,7 @@ export default function ProfilePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.1 }}
           >
-            <Tabs defaultValue="activity" className="space-y-6">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
               <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="activity">활동 내역</TabsTrigger>
                 <TabsTrigger value="stats">통계</TabsTrigger>
@@ -500,6 +737,25 @@ export default function ProfilePage() {
                         />
                       </div>
                     </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div>
+                        <Label htmlFor="department">부서</Label>
+                        <Input
+                          id="department"
+                          value={editData.department}
+                          onChange={(e) => handleInputChange('department', e.target.value)}
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="job_position">직급</Label>
+                        <Input
+                          id="job_position"
+                          value={editData.job_position}
+                          onChange={(e) => handleInputChange('job_position', e.target.value)}
+                        />
+                      </div>
+                    </div>
                     
                     <div>
                       <Label htmlFor="bio">소개</Label>
@@ -521,11 +777,19 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="flex space-x-2">
-                      <Button onClick={handleSave} className="kepco-gradient">
+                      <Button 
+                        onClick={handleSave} 
+                        disabled={saving}
+                        className="kepco-gradient"
+                      >
                         <Save className="mr-2 h-4 w-4" />
-                        저장
+                        {saving ? '저장 중...' : '저장'}
                       </Button>
-                      <Button variant="outline" onClick={handleCancel}>
+                      <Button 
+                        variant="outline" 
+                        onClick={handleCancel}
+                        disabled={saving}
+                      >
                         <X className="mr-2 h-4 w-4" />
                         취소
                       </Button>

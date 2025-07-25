@@ -22,6 +22,7 @@ const navigation = [
 
 export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
+  const [loginDialogTab, setLoginDialogTab] = useState('login')
   const { user, signOut, loading } = useAuth()
   
   return (
@@ -96,10 +97,16 @@ export default function Header() {
               </DropdownMenu>
             ) : !loading && (
               <div className="hidden sm:flex sm:items-center sm:space-x-2">
-                <Button variant="ghost" size="sm" onClick={() => setLoginDialogOpen(true)}>
+                <Button variant="ghost" size="sm" onClick={() => {
+                  setLoginDialogTab('login')
+                  setLoginDialogOpen(true)
+                }}>
                   로그인
                 </Button>
-                <Button size="sm" className="kepco-gradient" onClick={() => setLoginDialogOpen(true)}>
+                <Button size="sm" className="kepco-gradient" onClick={() => {
+                  setLoginDialogTab('signup')
+                  setLoginDialogOpen(true)
+                }}>
                   회원가입
                 </Button>
               </div>
@@ -133,6 +140,7 @@ export default function Header() {
       <LoginDialog
         open={loginDialogOpen}
         onOpenChange={setLoginDialogOpen}
+        defaultTab={loginDialogTab}
       />
     </header>
   )
@@ -141,9 +149,10 @@ export default function Header() {
 function MobileNav() {
   const { user, signOut } = useAuth()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
+  const [loginDialogTab, setLoginDialogTab] = useState('login')
 
   return (
-    <div className="my-4 h-[calc(100vh-8rem)] pb-10 pl-6">
+    <div className="my-4 h-[calc(100vh-8rem)] pb-10 px-6">
       <div className="flex items-center space-x-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg kepco-gradient">
           <Zap className="h-5 w-5 text-white" />
@@ -165,7 +174,7 @@ function MobileNav() {
           </Link>
         ))}
       </div>
-      <div className="mt-6 flex flex-col space-y-3">
+      <div className="mt-6 flex flex-col space-y-4 pr-2">
         {user ? (
           <>
             <div className="flex items-center space-x-2 p-2">
@@ -194,15 +203,33 @@ function MobileNav() {
           </>
         ) : (
           <>
-            <Button variant="outline" size="sm" onClick={() => setLoginDialogOpen(true)}>
-              로그인
-            </Button>
-            <Button size="sm" className="kepco-gradient" onClick={() => setLoginDialogOpen(true)}>
-              회원가입
-            </Button>
+            <div className="grid grid-cols-2 gap-3 mt-4">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  setLoginDialogTab('login')
+                  setLoginDialogOpen(true)
+                }}
+                className="w-full"
+              >
+                로그인
+              </Button>
+              <Button 
+                size="sm" 
+                className="kepco-gradient w-full" 
+                onClick={() => {
+                  setLoginDialogTab('signup')
+                  setLoginDialogOpen(true)
+                }}
+              >
+                회원가입
+              </Button>
+            </div>
             <LoginDialog
               open={loginDialogOpen}
               onOpenChange={setLoginDialogOpen}
+              defaultTab={loginDialogTab}
             />
           </>
         )}

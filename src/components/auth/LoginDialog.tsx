@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -47,15 +47,21 @@ const signupSchema = z.object({
 interface LoginDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  defaultTab?: string
 }
 
-export default function LoginDialog({ open, onOpenChange }: LoginDialogProps) {
+export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }: LoginDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('login')
+  const [activeTab, setActiveTab] = useState(defaultTab)
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false)
   const [emailForVerification, setEmailForVerification] = useState('')
   const { signIn, signUp, user } = useAuth()
   const router = useRouter()
+
+  // Update activeTab when defaultTab changes
+  useEffect(() => {
+    setActiveTab(defaultTab)
+  }, [defaultTab])
 
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),

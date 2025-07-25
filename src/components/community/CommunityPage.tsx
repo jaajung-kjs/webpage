@@ -286,11 +286,11 @@ export default function CommunityPage() {
             </Tabs>
           </div>
           
-          <div className="w-full sm:w-32">
+          <div className="w-full sm:w-40">
             <Tabs value={sortBy} onValueChange={handleSortChange}>
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 gap-1 sm:grid-cols-4 sm:gap-0">
                 {Object.entries(sortOptions).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="text-xs">
+                  <TabsTrigger key={key} value={key} className="text-xs px-2">
                     {label}
                   </TabsTrigger>
                 ))}

@@ -139,9 +139,9 @@ export default function CasesListPage() {
         </div>
 
         <Tabs value={activeCategory} onValueChange={setActiveCategory}>
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3 gap-1 sm:grid-cols-6 sm:gap-0">
             {Object.entries(categoryLabels).map(([key, label]) => (
-              <TabsTrigger key={key} value={key}>
+              <TabsTrigger key={key} value={key} className="text-xs px-2">
                 {label}
               </TabsTrigger>
             ))}
