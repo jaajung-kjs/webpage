@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -50,28 +50,11 @@ import {
   PinOff
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { announcementsApi } from '@/lib/api'
-import { canCreateAnnouncements } from '@/lib/permissions'
+// Note: Announcements functionality simplified for MVP
+// import { announcementsApi } from '@/lib/api'
+// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-
-interface AnnouncementWithAuthor {
-  id: string
-  title: string
-  content: string
-  category: string
-  priority: string
-  is_pinned: boolean
-  views: number
-  comments_count: number
-  tags: string[]
-  created_at: string
-  profiles: {
-    id: string
-    name: string
-    avatar_url: string | null
-    role: string
-  } | null
-}
+import { type AnnouncementWithAuthor } from '@/lib/api-unified'
 
 const categoryLabels = {
   all: '전체',
@@ -108,7 +91,7 @@ const categoryIcons = {
   announcement: Info
 }
 
-export default function AnnouncementsPage() {
+function AnnouncementsPage() {
   const { user } = useAuth()
   const [announcements, setAnnouncements] = useState<AnnouncementWithAuthor[]>([])
   const [filteredAnnouncements, setFilteredAnnouncements] = useState<AnnouncementWithAuthor[]>([])
@@ -127,8 +110,8 @@ export default function AnnouncementsPage() {
   const [formData, setFormData] = useState({
     title: '',
     content: '',
-    category: 'notice',
-    priority: 'medium',
+    category: 'notice' as 'notice' | 'event' | 'meeting' | 'announcement',
+    priority: 'medium' as 'high' | 'medium' | 'low',
     is_pinned: false,
     tags: [] as string[]
   })
@@ -144,15 +127,17 @@ export default function AnnouncementsPage() {
   const fetchAnnouncements = async () => {
     try {
       setLoading(true)
-      const { data, error } = await announcementsApi.getAll({
-        limit: 100
-      })
+      // Fetch real data from DB using api-unified
+      const { announcementsApi } = await import('@/lib/api-unified')
+      const response = await announcementsApi.getAnnouncements()
+      
+      if (response.error) throw new Error(response.error)
 
-      if (error) throw error
-      setAnnouncements(data || [])
-      setFilteredAnnouncements(data || [])
+      setAnnouncements(response.data || [])
+      setFilteredAnnouncements(response.data || [])
     } catch (error) {
       console.error('Error fetching announcements:', error)
+      toast.error('공지사항 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -219,8 +204,8 @@ export default function AnnouncementsPage() {
     setFormData({
       title: '',
       content: '',
-      category: 'notice',
-      priority: 'medium',
+      category: 'notice' as 'notice' | 'event' | 'meeting' | 'announcement',
+      priority: 'medium' as 'high' | 'medium' | 'low',
       is_pinned: false,
       tags: []
     })
@@ -234,12 +219,13 @@ export default function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await announcementsApi.create({
+      const { announcementsApi } = await import('@/lib/api-unified')
+      const response = await announcementsApi.createAnnouncement({
         ...formData,
         author_id: user.id
       })
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('공지사항이 성공적으로 작성되었습니다.')
       setCreateDialogOpen(false)
@@ -261,9 +247,10 @@ export default function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await announcementsApi.update(selectedAnnouncement.id, formData)
+      const { announcementsApi } = await import('@/lib/api-unified')
+      const response = await announcementsApi.updateAnnouncement(selectedAnnouncement.id, formData)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('공지사항이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
@@ -283,9 +270,10 @@ export default function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await announcementsApi.delete(announcementId, user.id)
+      const { announcementsApi } = await import('@/lib/api-unified')
+      const response = await announcementsApi.deleteAnnouncement(announcementId)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('공지사항이 삭제되었습니다.')
       fetchAnnouncements()
@@ -302,9 +290,10 @@ export default function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await announcementsApi.togglePin(announcementId, !currentPinStatus, user.id)
+      const { announcementsApi } = await import('@/lib/api-unified')
+      const response = await announcementsApi.togglePin(announcementId, !currentPinStatus)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success(currentPinStatus ? '고정이 해제되었습니다.' : '공지사항이 고정되었습니다.')
       fetchAnnouncements()
@@ -395,7 +384,7 @@ export default function AnnouncementsPage() {
             </Card>
           </div>
           
-          {canCreateAnnouncements(user) && (
+          {user && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -561,7 +550,7 @@ export default function AnnouncementsPage() {
                       </Avatar>
                       
                       {/* Admin Controls */}
-                      {canCreateAnnouncements(user) && (
+                      {user && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -721,7 +710,7 @@ export default function AnnouncementsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'notice' | 'event' | 'meeting' | 'announcement' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -736,7 +725,7 @@ export default function AnnouncementsPage() {
               
               <div>
                 <label className="text-sm font-medium">우선순위</label>
-                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value as 'high' | 'medium' | 'low' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -809,7 +798,7 @@ export default function AnnouncementsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'notice' | 'event' | 'meeting' | 'announcement' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -824,7 +813,7 @@ export default function AnnouncementsPage() {
               
               <div>
                 <label className="text-sm font-medium">우선순위</label>
-                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value })}>
+                <Select value={formData.priority} onValueChange={(value) => setFormData({ ...formData, priority: value as 'high' | 'medium' | 'low' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -883,3 +872,6 @@ export default function AnnouncementsPage() {
     </div>
   )
 }
+
+// React.memo로 성능 최적화
+export default memo(AnnouncementsPage)

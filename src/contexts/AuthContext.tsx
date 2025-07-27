@@ -1,8 +1,8 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { AuthUser, getCurrentUser } from '@/lib/auth'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
+import { supabaseSimple } from '@/lib/supabase-simple'
+import { AuthUser, getCurrentUser, clearUserCache } from '@/lib/auth'
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
@@ -28,34 +28,54 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
-    getCurrentUser().then((user) => {
-      setUser(user)
+    // Get initial session with timeout
+    const timeout = setTimeout(() => {
+      console.warn('Auth initialization timeout')
       setLoading(false)
-    })
+    }, 5000) // 5초 타임아웃
+
+    getCurrentUser()
+      .then((user) => {
+        clearTimeout(timeout)
+        setUser(user)
+        setLoading(false)
+      })
+      .catch((error) => {
+        clearTimeout(timeout)
+        console.error('Auth initialization error:', error)
+        setLoading(false)
+      })
 
     // Listen for auth changes
-    if (!supabase) {
+    if (!supabaseSimple) {
       setLoading(false)
       return
     }
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+    const { data: { subscription } } = supabaseSimple.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event, session?.user?.email_confirmed_at)
+        console.log('Auth state change', session?.user?.id, { event, emailConfirmed: session?.user?.email_confirmed_at })
         
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          const currentUser = await getCurrentUser()
-          setUser(currentUser)
-          console.log('User updated:', currentUser?.emailConfirmed)
-        } else if (event === 'SIGNED_OUT') {
+        if (event === 'SIGNED_OUT') {
           setUser(null)
-        } else if (session?.user) {
-          const currentUser = await getCurrentUser()
-          setUser(currentUser)
-        } else {
-          setUser(null)
+          setLoading(false)
+          return
         }
+        
+        // Only fetch user profile when necessary
+        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+          const currentUser = await getCurrentUser(true) // Force refresh for these events
+          setUser(currentUser)
+          console.log('User profile updated', currentUser?.id, { emailConfirmed: currentUser?.emailConfirmed })
+        } else if (event === 'TOKEN_REFRESHED' && !user) {
+          const currentUser = await getCurrentUser(false) // Use cache if available
+          setUser(currentUser)
+        } else if (session?.user && !user) {
+          // Only fetch if we don't already have user data
+          const currentUser = await getCurrentUser(false) // Use cache if available
+          setUser(currentUser)
+        }
+        
         setLoading(false)
       }
     )
@@ -63,26 +83,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     const { signIn } = await import('@/lib/auth')
     return signIn(email, password)
-  }
+  }, [])
 
-  const signUp = async (email: string, password: string, name: string, department?: string) => {
+  const signUp = useCallback(async (email: string, password: string, name: string, department?: string) => {
     const { signUp } = await import('@/lib/auth')
     return signUp(email, password, name, department)
-  }
+  }, [])
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     const { signOut } = await import('@/lib/auth')
     const result = await signOut()
     if (!result.error) {
       setUser(null)
+      clearUserCache() // Clear cache on sign out
     }
     return result
-  }
+  }, [])
 
-  const updateProfile = async (updates: Partial<any>) => {
+  const updateProfile = useCallback(async (updates: Partial<any>) => {
     if (!user) return { data: null, error: 'No user logged in' }
     
     const { updateProfile } = await import('@/lib/auth')
@@ -96,15 +117,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     
     return result
-  }
+  }, [user])
 
-  const resendEmailConfirmation = async (email: string) => {
+  const resendEmailConfirmation = useCallback(async (email: string) => {
     try {
-      if (!supabase) {
+      if (!supabaseSimple) {
         return { error: new Error('Supabase client not available') }
       }
       
-      const { error } = await supabase.auth.resend({
+      const { error } = await supabaseSimple.auth.resend({
         type: 'signup',
         email: email,
         options: {
@@ -116,9 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       return { error }
     }
-  }
+  }, [])
 
-  const value = {
+  const value = useMemo(() => ({
     user,
     loading,
     signIn,
@@ -126,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     updateProfile,
     resendEmailConfirmation,
-  }
+  }), [user, loading, signIn, signUp, signOut, updateProfile, resendEmailConfirmation])
 
   return (
     <AuthContext.Provider value={value}>

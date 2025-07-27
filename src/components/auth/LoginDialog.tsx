@@ -26,6 +26,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/contexts/AuthContext'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+// import { logger } from '@/lib/logger'
 import EmailVerificationModal from './EmailVerificationModal'
 
 const loginSchema = z.object({
@@ -85,52 +86,63 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     setLoading(true)
     try {
-      console.log('🔍 Attempting login for:', values.email)
+      console.log('Attempting login:', values.email)
       const { error } = await signIn(values.email, values.password)
       
-      console.log('🔍 Login result:', { error: error?.message, hasError: !!error })
+      console.log('Login result:', error?.message)
       
       if (error) {
-        console.log('❌ Login error details:', {
-          message: error.message,
-          name: error.name,
-          status: error.status,
-          __isAuthError: error.__isAuthError
-        })
-        
-        // 이메일 인증 관련 에러 체크 (더 간단하게)
+        // 이메일 인증 관련 에러 체크 먼저 (로그 출력 전에)
         const isEmailNotConfirmed = error.message && (
           error.message.includes('Email not confirmed') ||
           error.message.includes('email_not_confirmed') ||
-          error.message.includes('not confirmed') ||
-          error.name === 'AuthApiError'
-        )
+          error.message.includes('not confirmed')
+        ) && error.status === 400
         
         if (isEmailNotConfirmed) {
-          console.log('✅ EMAIL VERIFICATION REQUIRED - showing modal')
+          console.log('Email verification required - showing modal')
           
-          // 이메일 저장하고 모달 표시
+          // 이메일 저장하고 모달 표시 (에러 로그와 토스트 없이)
           setEmailForVerification(values.email)
           setShowEmailVerificationModal(true)
           onOpenChange(false)
           return
         }
+
+        // 개발 환경에서만 에러 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Login error:', error.message)
+        }
         
-        // 기타 로그인 오류
-        console.error('❌ Other login error:', error)
+        let errorMessage = '로그인 중 오류가 발생했습니다.'
+        
+        if (error.message) {
+          if (error.message.includes('Invalid login credentials') || 
+              error.message.includes('invalid_credentials')) {
+            errorMessage = '이메일 또는 비밀번호가 올바르지 않습니다.'
+          } else if (error.message.includes('Too many requests')) {
+            errorMessage = '너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.'
+          } else if (error.message.includes('Network')) {
+            errorMessage = '네트워크 연결을 확인해주세요.'
+          }
+        }
+        
         toast.error('로그인 실패', {
-          description: error.message || '로그인 중 오류가 발생했습니다.',
+          description: errorMessage,
           duration: 4000
         })
         return
       }
 
-      console.log('✅ Login successful')
+      // 로그인 성공
       onOpenChange(false)
       loginForm.reset()
     } catch (error) {
-      console.error('❌ Catch block login error:', error)
-      alert('로그인 중 예외 발생: ' + error)
+      // 개발 환경에서만 에러 로그 출력
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Login exception:', error)
+      }
+      toast.error('로그인 중 오류가 발생했습니다.')
     } finally {
       setLoading(false)
     }
@@ -147,15 +159,29 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
       )
       
       if (error) {
-        console.error('Signup error:', error)
-        console.error('Error details:', {
-          message: error.message,
-          code: error.code,
-          details: error.details
-        })
+        // 개발 환경에서만 에러 로그 출력
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('Signup error:', error.message)
+        }
+        
+        let signupErrorMessage = '회원가입 중 오류가 발생했습니다.'
+        
+        if (error.message) {
+          if (error.message.includes('User already registered')) {
+            signupErrorMessage = '이미 등록된 이메일 주소입니다.'
+          } else if (error.message.includes('Password should be at least')) {
+            signupErrorMessage = '비밀번호는 6자 이상이어야 합니다.'
+          } else if (error.message.includes('Invalid email')) {
+            signupErrorMessage = '올바른 이메일 주소를 입력해주세요.'
+          } else if (error.message.includes('weak_password')) {
+            signupErrorMessage = '더 강한 비밀번호를 입력해주세요. 문자와 숫자를 조합해주세요.'
+          } else if (error.message.includes('email_not_confirmed')) {
+            signupErrorMessage = '이메일 인증을 완료해주세요.'
+          }
+        }
         
         toast.error('회원가입 실패', {
-          description: error.message,
+          description: signupErrorMessage,
           duration: 4000
         })
         return

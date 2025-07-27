@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -24,163 +24,202 @@ import {
   MoreHorizontal,
   Edit,
   Trash2,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Loader2
 } from 'lucide-react'
+import { casesApi, commentsApi } from '@/lib/api-unified'
+import { useAuth } from '@/contexts/AuthContext'
+import { toast } from 'sonner'
+import { type CaseWithAuthor, type CommentWithAuthor } from '@/lib/api-unified'
 
-// Mock data for case detail
-const mockCaseDetail = {
-  id: '1',
-  title: 'ChatGPT를 활용한 업무 보고서 자동화',
-  content: `안녕하세요! 전력관리처에서 근무하는 김전력입니다.
 
-오늘은 제가 최근에 도입한 ChatGPT를 활용한 업무 보고서 자동화 사례를 공유하고자 합니다.
-
-## 배경
-
-매월 작성해야 하는 업무 보고서가 있는데, 항상 비슷한 형식이지만 데이터를 정리하고 분석하는 데 많은 시간이 걸렸습니다. 특히 다음과 같은 어려움이 있었습니다:
-
-- 데이터 수집 및 정리에 3-4시간 소요
-- 보고서 작성 및 검토에 2-3시간 소요  
-- 매월 반복되는 단순 업무로 인한 피로감
-
-## 해결 방법
-
-ChatGPT를 활용해서 다음과 같이 업무를 자동화했습니다:
-
-### 1. 데이터 분석 프롬프트 작성
-\`\`\`
-다음 전력 사용량 데이터를 분석해서 전월 대비 증감률과 주요 특이사항을 정리해줘:
-[데이터 입력]
-
-분석 결과를 다음 형식으로 작성해줘:
-1. 전월 대비 증감률
-2. 주요 변동 요인
-3. 향후 전망
-\`\`\`
-
-### 2. 보고서 템플릿 활용
-보고서의 기본 구조를 ChatGPT에게 학습시키고, 매월 데이터만 업데이트하면 자동으로 보고서가 생성되도록 했습니다.
-
-### 3. 검토 및 수정
-생성된 보고서를 ChatGPT에게 다시 검토 요청해서 오류나 누락된 부분을 확인하고 개선했습니다.
-
-## 결과
-
-- **시간 단축**: 기존 6-7시간 → 2-3시간 (약 50% 단축)
-- **품질 향상**: 일관된 형식과 분석 기준 적용
-- **업무 만족도**: 반복 업무 줄어들어 창의적 업무에 집중 가능
-
-## 활용 팁
-
-1. **프롬프트 최적화**: 처음에는 결과가 만족스럽지 않을 수 있으니 프롬프트를 계속 개선하세요.
-2. **템플릿 활용**: 자주 사용하는 보고서 형식은 템플릿으로 만들어두면 효율적입니다.
-3. **검증 필수**: AI가 생성한 내용은 반드시 검토하고 사실 확인을 해야 합니다.
-
-## 마무리
-
-ChatGPT를 활용한 업무 자동화로 시간을 크게 절약할 수 있었습니다. 다른 분들도 본인의 업무에 맞게 활용해보시기 바랍니다.
-
-질문이나 궁금한 점이 있으시면 언제든지 댓글로 남겨주세요!`,
-  category: 'productivity',
-  subcategory: 'automation',
-  author: '김전력',
-  authorAvatar: '/avatars/kim.jpg',
-  authorRole: '동아리장',
-  authorDepartment: '전력관리처',
-  createdAt: '2024-02-05T10:30:00Z',
-  updatedAt: '2024-02-05T10:30:00Z',
-  views: 234,
-  likes: 42,
-  comments: 18,
-  isLiked: true,
-  isBookmarked: false,
-  tags: ['ChatGPT', '업무자동화', '보고서', '생산성'],
-  tools: ['ChatGPT'],
-  difficulty: 'intermediate',
-  timeRequired: '1-2시간',
-  attachments: [
-    {
-      name: '보고서_템플릿.docx',
-      size: '245KB',
-      type: 'document'
-    },
-    {
-      name: '프롬프트_예시.txt',
-      size: '2KB',
-      type: 'text'
-    }
-  ]
-}
-
-// Mock comments data
-const mockComments = [
-  {
-    id: '1',
-    author: '박송전',
-    authorAvatar: '/avatars/park.jpg',
-    authorRole: '부동아리장',
-    content: '정말 유용한 정보 감사합니다! 저도 비슷한 업무가 있어서 한번 적용해보겠습니다. 프롬프트 예시 파일도 첨부해주셔서 더욱 도움이 됩니다.',
-    createdAt: '2024-02-05T11:15:00Z',
-    likes: 8,
-    replies: [
-      {
-        id: '1-1',
-        author: '김전력',
-        authorAvatar: '/avatars/kim.jpg',
-        authorRole: '동아리장',
-        content: '도움이 되셨다니 기쁩니다! 적용하시면서 궁금한 점이 있으시면 언제든지 연락주세요.',
-        createdAt: '2024-02-05T11:30:00Z',
-        likes: 3
-      }
-    ]
-  },
-  {
-    id: '2',
-    author: '이배전',
-    authorAvatar: '/avatars/lee.jpg',
-    authorRole: '운영진',
-    content: '50% 시간 단축이라니 정말 대단하네요! 혹시 데이터 보안은 어떻게 처리하셨나요? 민감한 정보가 포함된 보고서의 경우 주의할 점이 있을까요?',
-    createdAt: '2024-02-05T14:20:00Z',
-    likes: 12,
-    replies: []
-  },
-  {
-    id: '3',
-    author: '정고객',
-    authorAvatar: '/avatars/jung.jpg',
-    authorRole: '운영진',
-    content: '저는 아직 ChatGPT 초보인데, 이런 활용법이 있다니 놀랍습니다. 단계별로 따라해볼 수 있을 것 같아요. 다음 워크샵 때 이 내용으로 발표해주시면 어떨까요?',
-    createdAt: '2024-02-05T16:45:00Z',
-    likes: 6,
-    replies: []
-  }
-]
 
 interface CaseDetailPageProps {
   caseId: string
 }
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
-  const [caseData] = useState(mockCaseDetail)
-  const [comments] = useState(mockComments)
+  const { user } = useAuth()
+  const [caseData, setCaseData] = useState<any>(null)
+  const [comments, setComments] = useState<CommentWithAuthor[]>([])
+  const [loading, setLoading] = useState(true)
+  const [commentLoading, setCommentLoading] = useState(false)
   const [newComment, setNewComment] = useState('')
-  const [isLiked, setIsLiked] = useState(caseData.isLiked)
-  const [likeCount, setLikeCount] = useState(caseData.likes)
+  const [isLiked, setIsLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
 
-  const handleLike = () => {
-    if (isLiked) {
-      setLikeCount(prev => prev - 1)
-    } else {
-      setLikeCount(prev => prev + 1)
+  useEffect(() => {
+    fetchCaseDetail()
+    fetchComments()
+  }, [caseId])
+
+  useEffect(() => {
+    if (user && caseData) {
+      checkCaseLikeStatus()
     }
-    setIsLiked(!isLiked)
+  }, [user, caseData])
+
+  const fetchCaseDetail = async () => {
+    try {
+      setLoading(true)
+      const response = await casesApi.getCaseById(caseId)
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      if (response.data) {
+        // Transform DB data to match existing UI structure
+        const transformedData = {
+          id: response.data.id,
+          title: response.data.title,
+          content: response.data.content || '',
+          category: response.data.category,
+          subcategory: response.data.subcategory || '',
+          author: response.data.profiles?.name || '작성자',
+          authorAvatar: response.data.profiles?.avatar_url || '/avatars/default.jpg',
+          authorRole: response.data.profiles?.role || 'member',
+          authorDepartment: response.data.profiles?.department || '전력관리처',
+          createdAt: response.data.created_at,
+          updatedAt: response.data.updated_at,
+          views: response.data.views || 0,
+          likes: response.data.likes_count || 0,
+          comments: response.data.comments_count || 0,
+          isLiked: false,
+          isBookmarked: false,
+          tags: response.data.tags || [],
+          tools: (response.data as any).ai_tools || [],
+          difficulty: response.data.difficulty || 'intermediate',
+          timeRequired: response.data.time_required || '미정',
+          attachments: []
+        }
+        setCaseData(transformedData)
+        setLikeCount(transformedData.likes)
+      }
+    } catch (error) {
+      console.error('Error fetching case detail:', error)
+      toast.error('게시글을 불러오는데 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const handleCommentSubmit = () => {
-    if (newComment.trim()) {
-      // Here you would typically send the comment to your backend
-      console.log('New comment:', newComment)
+  const checkCaseLikeStatus = async () => {
+    if (!user) return
+
+    try {
+      const response = await casesApi.checkCaseLike(caseId, user.id)
+      if (response.success && response.data !== undefined) {
+        setIsLiked(response.data)
+      }
+    } catch (error) {
+      console.error('Error checking like status:', error)
+    }
+  }
+
+  const fetchComments = async () => {
+    try {
+      const response = await commentsApi.getComments(caseId)
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      setComments(response.data || [])
+    } catch (error) {
+      console.error('Error fetching comments:', error)
+    }
+  }
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    try {
+      const response = await casesApi.toggleCaseLike(caseId, user.id)
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      if (response.data) {
+        setIsLiked(response.data.liked)
+        setLikeCount(response.data.likes_count)
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error)
+      toast.error('좋아요 처리에 실패했습니다.')
+    }
+  }
+
+  const handleCommentSubmit = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    if (!newComment.trim()) {
+      toast.error('댓글 내용을 입력해주세요.')
+      return
+    }
+
+    try {
+      setCommentLoading(true)
+      const response = await commentsApi.createComment({
+        case_id: caseId,
+        author_id: user.id,
+        content: newComment,
+        likes_count: 0
+      })
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
       setNewComment('')
+      await fetchComments() // Refresh comments
+      toast.success('댓글이 등록되었습니다.')
+    } catch (error) {
+      console.error('Error creating comment:', error)
+      toast.error('댓글 작성에 실패했습니다.')
+    } finally {
+      setCommentLoading(false)
+    }
+  }
+
+  const handleCommentLike = async (commentId: string) => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    try {
+      const response = await commentsApi.toggleCommentLike(commentId, user.id)
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      if (response.data) {
+        const { liked, likes_count } = response.data
+        setCommentLikes(prev => ({
+          ...prev,
+          [commentId]: liked
+        }))
+        
+        // Update likes count in comments array
+        setComments(prev => prev.map(comment => 
+          comment.id === commentId 
+            ? { ...comment, likes_count: likes_count }
+            : comment
+        ))
+      }
+    } catch (error) {
+      console.error('Error toggling comment like:', error)
+      toast.error('좋아요 처리에 실패했습니다.')
     }
   }
 
@@ -204,6 +243,51 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     if (diffInHours < 24) return `${diffInHours}시간 전`
     if (diffInHours < 48) return '1일 전'
     return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+  }
+
+  const getRoleLabel = (role: string) => {
+    const roleLabels: { [key: string]: string } = {
+      'leader': '동아리장',
+      'vice_leader': '부동아리장',
+      'executive': '운영진',
+      'member': '일반회원',
+      'admin': '관리자'
+    }
+    return roleLabels[role] || role
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
+          <div className="animate-pulse">
+            <div className="h-8 bg-gray-200 rounded w-32 mb-6"></div>
+            <div className="bg-white rounded-lg shadow p-8">
+              <div className="h-10 bg-gray-200 rounded w-3/4 mb-4"></div>
+              <div className="h-6 bg-gray-200 rounded w-1/2 mb-8"></div>
+              <div className="space-y-4">
+                <div className="h-4 bg-gray-200 rounded"></div>
+                <div className="h-4 bg-gray-200 rounded"></div>
+                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!caseData) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-2xl font-bold mb-4">게시글을 찾을 수 없습니다.</h1>
+          <Button asChild>
+            <Link href="/cases">목록으로 돌아가기</Link>
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -238,7 +322,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                   업무효율화
                 </Badge>
                 <Badge variant="outline">자동화</Badge>
-                {caseData.tags.map((tag) => (
+                {caseData.tags.map((tag: string) => (
                   <Badge key={tag} variant="outline" className="text-xs">
                     #{tag}
                   </Badge>
@@ -263,7 +347,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                     <div className="flex items-center space-x-2">
                       <span className="font-semibold">{caseData.author}</span>
                       <Badge variant="outline" className="text-xs">
-                        {caseData.authorRole}
+                        {getRoleLabel(caseData.authorRole)}
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">
@@ -291,7 +375,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">사용 도구</div>
                   <div className="mt-1">
-                    {caseData.tools.map((tool) => (
+                    {caseData.tools.map((tool: string) => (
                       <Badge key={tool} variant="secondary" className="mr-1">
                         {tool}
                       </Badge>
@@ -323,7 +407,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 <div className="mt-8">
                   <h3 className="mb-4 text-lg font-semibold">첨부 파일</h3>
                   <div className="space-y-2">
-                    {caseData.attachments.map((attachment, index) => (
+                    {caseData.attachments.map((attachment: any, index: number) => (
                       <div key={index} className="flex items-center justify-between rounded-lg border p-3">
                         <div className="flex items-center space-x-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
@@ -405,8 +489,16 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                   rows={3}
                 />
                 <div className="flex justify-end">
-                  <Button onClick={handleCommentSubmit} className="kepco-gradient">
-                    <Send className="mr-2 h-4 w-4" />
+                  <Button 
+                    onClick={handleCommentSubmit} 
+                    className="kepco-gradient"
+                    disabled={commentLoading}
+                  >
+                    {commentLoading ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-4 w-4" />
+                    )}
                     댓글 작성
                   </Button>
                 </div>
@@ -420,20 +512,20 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                   <div key={comment.id}>
                     <div className="flex items-start space-x-3">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={comment.authorAvatar} alt={comment.author} />
+                        <AvatarImage src={comment.profiles?.avatar_url || '/avatars/default.jpg'} alt={comment.profiles?.name || '익명'} />
                         <AvatarFallback>
-                          {comment.author.charAt(0)}
+                          {(comment.profiles?.name || '익명').charAt(0)}
                         </AvatarFallback>
                       </Avatar>
                       
                       <div className="flex-1">
                         <div className="flex items-center space-x-2">
-                          <span className="font-semibold">{comment.author}</span>
+                          <span className="font-semibold">{comment.profiles?.name || '익명'}</span>
                           <Badge variant="outline" className="text-xs">
-                            {comment.authorRole}
+                            {getRoleLabel(comment.profiles?.role || 'member')}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {formatRelativeTime(comment.createdAt)}
+                            {formatRelativeTime(comment.created_at)}
                           </span>
                         </div>
                         
@@ -442,53 +534,21 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                         </p>
                         
                         <div className="mt-3 flex items-center space-x-4">
-                          <Button variant="ghost" size="sm" className="h-auto p-0 text-xs">
-                            <ThumbsUp className="mr-1 h-3 w-3" />
-                            좋아요 ({comment.likes})
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-auto p-0 text-xs"
+                            onClick={() => handleCommentLike(comment.id)}
+                          >
+                            <ThumbsUp className={`mr-1 h-3 w-3 ${commentLikes[comment.id] ? 'fill-current' : ''}`} />
+                            좋아요 ({comment.likes_count || 0})
                           </Button>
                           <Button variant="ghost" size="sm" className="h-auto p-0 text-xs">
                             답글
                           </Button>
                         </div>
                         
-                        {/* Replies */}
-                        {comment.replies && comment.replies.length > 0 && (
-                          <div className="mt-4 ml-6 space-y-4 border-l-2 border-gray-100 pl-4">
-                            {comment.replies.map((reply) => (
-                              <div key={reply.id} className="flex items-start space-x-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarImage src={reply.authorAvatar} alt={reply.author} />
-                                  <AvatarFallback className="text-xs">
-                                    {reply.author.charAt(0)}
-                                  </AvatarFallback>
-                                </Avatar>
-                                
-                                <div className="flex-1">
-                                  <div className="flex items-center space-x-2">
-                                    <span className="text-sm font-semibold">{reply.author}</span>
-                                    <Badge variant="outline" className="text-xs">
-                                      {reply.authorRole}
-                                    </Badge>
-                                    <span className="text-xs text-muted-foreground">
-                                      {formatRelativeTime(reply.createdAt)}
-                                    </span>
-                                  </div>
-                                  
-                                  <p className="mt-1 text-sm leading-relaxed">
-                                    {reply.content}
-                                  </p>
-                                  
-                                  <div className="mt-2 flex items-center space-x-4">
-                                    <Button variant="ghost" size="sm" className="h-auto p-0 text-xs">
-                                      <ThumbsUp className="mr-1 h-3 w-3" />
-                                      좋아요 ({reply.likes})
-                                    </Button>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                        {/* Replies - Feature not implemented yet */}
                       </div>
                     </div>
                   </div>

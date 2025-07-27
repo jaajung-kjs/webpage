@@ -55,12 +55,17 @@ export default function Header() {
 
           {/* User Actions */}
           <div className="flex items-center space-x-4">
-            {user ? (
+            {loading ? (
+              <div className="hidden sm:flex sm:items-center sm:space-x-2">
+                <div className="h-8 w-16 bg-muted rounded animate-pulse" />
+                <div className="h-8 w-20 bg-muted rounded animate-pulse" />
+              </div>
+            ) : user ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.profile?.avatar_url} alt="사용자" />
+                      <AvatarImage src={user.profile?.avatar_url || undefined} alt="사용자" />
                       <AvatarFallback>
                         {user.profile?.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
                       </AvatarFallback>
@@ -95,7 +100,7 @@ export default function Header() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-            ) : !loading && (
+            ) : (
               <div className="hidden sm:flex sm:items-center sm:space-x-2">
                 <Button variant="ghost" size="sm" onClick={() => {
                   setLoginDialogTab('login')
@@ -179,7 +184,7 @@ function MobileNav() {
           <>
             <div className="flex items-center space-x-2 p-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user.profile?.avatar_url} alt="사용자" />
+                <AvatarImage src={user.profile?.avatar_url || undefined} alt="사용자" />
                 <AvatarFallback>
                   {user.profile?.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
                 </AvatarFallback>

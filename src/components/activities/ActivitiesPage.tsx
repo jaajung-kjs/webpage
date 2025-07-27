@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -48,31 +48,11 @@ import {
   UserMinus
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { activitiesApi } from '@/lib/api'
-import { canCreateAnnouncements } from '@/lib/permissions'
+// Note: Activities functionality simplified for MVP
+// import { activitiesApi } from '@/lib/api'
+// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-
-interface ActivityWithInstructor {
-  id: string
-  title: string
-  description: string
-  date: string
-  time: string
-  duration: number
-  location: string
-  max_participants: number
-  current_participants: number
-  category: string
-  status: string
-  tags: string[]
-  created_at: string
-  profiles: {
-    id: string
-    name: string
-    avatar_url: string | null
-    role: string
-  } | null
-}
+import { type ActivityWithInstructor } from '@/lib/api-unified'
 
 const categoryLabels = {
   all: '전체',
@@ -106,7 +86,7 @@ const statusColors = {
   cancelled: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
 }
 
-export default function ActivitiesPage() {
+function ActivitiesPage() {
   const { user } = useAuth()
   const [activities, setActivities] = useState<ActivityWithInstructor[]>([])
   const [filteredActivities, setFilteredActivities] = useState<ActivityWithInstructor[]>([])
@@ -130,8 +110,8 @@ export default function ActivitiesPage() {
     duration: 60,
     location: '',
     max_participants: 20,
-    category: 'workshop',
-    status: 'upcoming',
+    category: 'workshop' as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting',
+    status: 'upcoming' as 'upcoming' | 'ongoing' | 'completed' | 'cancelled',
     tags: [] as string[]
   })
 
@@ -146,15 +126,17 @@ export default function ActivitiesPage() {
   const fetchActivities = async () => {
     try {
       setLoading(true)
-      const { data, error } = await activitiesApi.getAll({
-        limit: 100
-      })
+      // Fetch real data from DB using api-unified
+      const { activitiesApi } = await import('@/lib/api-unified')
+      const response = await activitiesApi.getActivities()
+      
+      if (response.error) throw new Error(response.error)
 
-      if (error) throw error
-      setActivities(data || [])
-      setFilteredActivities(data || [])
+      setActivities(response.data || [])
+      setFilteredActivities(response.data || [])
     } catch (error) {
       console.error('Error fetching activities:', error)
+      toast.error('활동일정 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -179,7 +161,7 @@ export default function ActivitiesPage() {
       filtered = filtered.filter(activity =>
         activity.title.toLowerCase().includes(term.toLowerCase()) ||
         activity.description.toLowerCase().includes(term.toLowerCase()) ||
-        activity.location.toLowerCase().includes(term.toLowerCase()) ||
+        activity.location?.toLowerCase().includes(term.toLowerCase()) ||
         activity.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
       )
     }
@@ -221,8 +203,8 @@ export default function ActivitiesPage() {
       duration: 60,
       location: '',
       max_participants: 20,
-      category: 'workshop',
-      status: 'upcoming',
+      category: 'workshop' as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting',
+      status: 'upcoming' as 'upcoming' | 'ongoing' | 'completed' | 'cancelled',
       tags: []
     })
   }
@@ -235,12 +217,13 @@ export default function ActivitiesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await activitiesApi.create({
+      const { activitiesApi } = await import('@/lib/api-unified')
+      const response = await activitiesApi.createActivity({
         ...formData,
         instructor_id: user.id
       })
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('활동이 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
@@ -262,9 +245,10 @@ export default function ActivitiesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await activitiesApi.update(selectedActivity.id, formData)
+      const { activitiesApi } = await import('@/lib/api-unified')
+      const response = await activitiesApi.updateActivity(selectedActivity.id, formData)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('활동이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
@@ -284,9 +268,10 @@ export default function ActivitiesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await activitiesApi.delete(activityId, user.id)
+      const { activitiesApi } = await import('@/lib/api-unified')
+      const response = await activitiesApi.deleteActivity(activityId)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('활동이 삭제되었습니다.')
       fetchActivities()
@@ -305,9 +290,9 @@ export default function ActivitiesPage() {
       description: activity.description,
       date: activity.date,
       time: activity.time,
-      duration: activity.duration,
-      location: activity.location,
-      max_participants: activity.max_participants,
+      duration: activity.duration || 0,
+      location: activity.location || '',
+      max_participants: activity.max_participants || 0,
       category: activity.category,
       status: activity.status,
       tags: activity.tags || []
@@ -333,7 +318,7 @@ export default function ActivitiesPage() {
               AI 학습동아리의 다양한 활동과 세미나에 참여해보세요
             </p>
           </div>
-          {canCreateAnnouncements(user) && (
+          {user && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -563,7 +548,7 @@ export default function ActivitiesPage() {
                     {activity.status === 'upcoming' ? '참가 신청' : '자세히 보기'}
                   </Button>
                   
-                  {canCreateAnnouncements(user) && (
+                  {user && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -650,7 +635,7 @@ export default function ActivitiesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -666,7 +651,7 @@ export default function ActivitiesPage() {
               
               <div>
                 <label className="text-sm font-medium">상태</label>
-                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value as 'upcoming' | 'ongoing' | 'completed' | 'cancelled' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -783,7 +768,7 @@ export default function ActivitiesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -799,7 +784,7 @@ export default function ActivitiesPage() {
               
               <div>
                 <label className="text-sm font-medium">상태</label>
-                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value as 'upcoming' | 'ongoing' | 'completed' | 'cancelled' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -902,3 +887,6 @@ export default function ActivitiesPage() {
     </div>
   )
 }
+
+// React.memo로 성능 최적화
+export default memo(ActivitiesPage)

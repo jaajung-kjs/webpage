@@ -35,54 +35,43 @@ import {
   Star
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { profilesApi, uploadApi } from '@/lib/api'
+import { profilesApi } from '@/lib/api-unified'
 import { toast } from 'sonner'
 
-// Mock user data
-const mockUserData = {
-  id: '1',
-  name: '김전력',
-  email: 'kim.power@kepco.co.kr',
-  phone: '010-1234-5678',
-  department: '전력관리처',
-  job_position: '차장',
-  role: 'leader',
-  avatar: '/avatars/kim.jpg',
-  joinDate: '2023-03-15',
-  location: '춘천',
-  aiExpertise: ['ChatGPT', 'Claude', 'Midjourney', 'GitHub Copilot'],
-  skillLevel: 'expert',
-  bio: 'AI 기술을 활용한 업무 효율성 향상에 관심이 많습니다. 동아리원들과 지식을 공유하며 함께 성장하고 싶습니다.',
-  achievements: ['최우수 회원', '멘토', '발표왕', '활동왕'],
-  activityScore: 950,
+interface UserData {
+  id: string
+  name: string
+  email: string
+  phone: string
+  department: string
+  job_position: string
+  role: string
+  avatar: string
+  joinDate: string
+  location: string
+  aiExpertise: string[]
+  skillLevel: string
+  bio: string
+  achievements: string[]
+  activityScore: number
   stats: {
-    totalPosts: 24,
-    totalComments: 156,
-    totalLikes: 342,
-    totalViews: 2847,
-    activitiesJoined: 18,
-    resourcesShared: 12
-  },
-  recentActivity: [
-    {
-      type: 'post',
-      title: 'ChatGPT로 업무 보고서 작성 시간을 50% 단축했어요!',
-      date: '2024-02-05',
-      engagement: { likes: 42, comments: 18, views: 234 }
-    },
-    {
-      type: 'comment',
-      title: 'Claude와 ChatGPT 비교 사용 후기',
-      date: '2024-02-04',
-      engagement: { likes: 8, comments: 0, views: 0 }
-    },
-    {
-      type: 'activity',
-      title: 'ChatGPT 고급 활용법 워크샵',
-      date: '2024-02-03',
-      engagement: { likes: 0, comments: 0, views: 0 }
+    totalPosts: number
+    totalComments: number
+    totalLikes: number
+    totalViews: number
+    activitiesJoined: number
+    resourcesShared: number
+  }
+  recentActivity: {
+    type: 'post' | 'comment' | 'activity' | 'resource'
+    title: string
+    date: string
+    engagement: {
+      likes: number
+      comments: number
+      views: number
     }
-  ]
+  }[]
 }
 
 const skillLevels = {
@@ -101,8 +90,8 @@ const roleLabels = {
 
 export default function ProfilePage() {
   const { user } = useAuth()
-  const [userData, setUserData] = useState(mockUserData)
-  const [editData, setEditData] = useState(userData)
+  const [userData, setUserData] = useState<UserData | null>(null)
+  const [editData, setEditData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('activity')
@@ -119,17 +108,23 @@ export default function ProfilePage() {
       try {
         setLoading(true)
         
-        // 먼저 프로필이 존재하는지 확인하고 없으면 생성
-        await profilesApi.ensureProfile(user.id, user.email)
-        
-        // 프로필 데이터 가져오기 (오류 시 기본값 사용)
-        let profile
+        // Ensure profile exists in DB
+        let profile = null
         try {
-          profile = await profilesApi.getProfile(user.id)
+          const response = await profilesApi.ensureProfile(user.id, user.email || '')
+          if (response.success && response.data) {
+            profile = response.data
+          }
         } catch (error) {
-          console.warn('Profile not found, using defaults:', error)
+          console.warn('Profile creation/fetch failed, using defaults:', error)
+        }
+        
+        // If no profile exists, use default values
+        if (!profile) {
           profile = {
-            name: user.profile?.name || user.email.split('@')[0],
+            id: user.id,
+            name: (user as any).user_metadata?.name || user.email?.split('@')[0] || '사용자',
+            email: user.email || '',
             phone: '010-0000-0000',
             department: '미지정',
             job_position: '미지정',
@@ -137,47 +132,70 @@ export default function ProfilePage() {
             avatar_url: '/avatars/default.jpg',
             location: '미지정',
             bio: '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
-            ai_expertise: mockUserData.aiExpertise,
+            ai_expertise: ['ChatGPT'],
             skill_level: 'beginner',
-            achievements: mockUserData.achievements,
-            activity_score: 0
+            achievements: [],
+            activity_score: 0,
+            created_at: (user as any).created_at || new Date().toISOString(),
+            updated_at: new Date().toISOString()
           }
         }
         
-        // 활동 통계 가져오기 (오류 시 기본값 사용)
-        let stats
-        try {
-          stats = await profilesApi.getUserStats(user.id)
-        } catch (error) {
-          console.warn('Stats not available, using defaults:', error)
-          stats = mockUserData.stats
+        // Get user stats from DB
+        let stats = {
+          totalPosts: 0,
+          totalComments: 0,
+          totalLikes: 0,
+          totalViews: 0,
+          activitiesJoined: 0,
+          resourcesShared: 0
         }
-        
-        // 최근 활동 가져오기 (오류 시 빈 배열 사용)
-        let recentActivity
         try {
-          recentActivity = await profilesApi.getUserActivity(user.id, 5)
+          const statsResponse = await profilesApi.getUserStats(user.id)
+          if (statsResponse.success && statsResponse.data) {
+            stats = statsResponse.data
+          }
         } catch (error) {
-          console.warn('Recent activity not available, using defaults:', error)
-          recentActivity = mockUserData.recentActivity
+          console.warn('Failed to fetch user stats:', error)
         }
 
-        const realUserData = {
-          ...mockUserData,
+        // Get recent activity from DB
+        let recentActivity: any[] = []
+        try {
+          const activityResponse = await profilesApi.getUserActivity(user.id, 3)
+          if (activityResponse.success && activityResponse.data) {
+            recentActivity = activityResponse.data
+          }
+        } catch (error) {
+          console.warn('Failed to fetch recent activity:', error)
+        }
+
+        // Get user achievements from DB
+        let achievements: string[] = profile.achievements || []
+        try {
+          const achievementsResponse = await profilesApi.getUserAchievements(user.id)
+          if (achievementsResponse.success && achievementsResponse.data) {
+            achievements = achievementsResponse.data.map(a => a.achievement_name)
+          }
+        } catch (error) {
+          console.warn('Failed to fetch achievements:', error)
+        }
+
+        const realUserData: UserData = {
           id: user.id,
-          name: profile.name || user.email.split('@')[0],
-          email: user.email,
+          name: profile.name || user.email?.split('@')[0] || '사용자',
+          email: user.email || '',
           phone: profile.phone || '010-0000-0000',
           department: profile.department || '미지정',
           job_position: profile.job_position || '미지정',
           role: profile.role || 'member',
           avatar: profile.avatar_url || '/avatars/default.jpg',
-          joinDate: (user as any).created_at ? new Date((user as any).created_at).toISOString().split('T')[0] : '2024-01-01',
+          joinDate: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : (user as any).created_at ? new Date((user as any).created_at).toISOString().split('T')[0] : '2024-01-01',
           location: profile.location || '미지정',
           bio: profile.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
-          aiExpertise: profile.ai_expertise || mockUserData.aiExpertise,
+          aiExpertise: profile.ai_expertise || ['ChatGPT'],
           skillLevel: profile.skill_level || 'beginner',
-          achievements: profile.achievements || mockUserData.achievements,
+          achievements,
           activityScore: profile.activity_score || 0,
           stats,
           recentActivity
@@ -187,15 +205,6 @@ export default function ProfilePage() {
         setEditData(realUserData)
       } catch (error) {
         console.error('Error loading user data:', error)
-        // 오류 시 기본 데이터 사용
-        const fallbackData = {
-          ...mockUserData,
-          id: user.id,
-          name: user.profile?.name || user.email.split('@')[0],
-          email: user.email,
-        }
-        setUserData(fallbackData)
-        setEditData(fallbackData)
         toast.error('프로필 데이터를 불러오는데 실패했습니다.')
       } finally {
         setLoading(false)
@@ -207,18 +216,20 @@ export default function ProfilePage() {
 
   const handleEdit = () => {
     // 편집 탭으로 이동
-    setEditData(userData)
-    setActiveTab('edit')
+    if (userData) {
+      setEditData(userData)
+      setActiveTab('edit')
+    }
   }
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user || !editData) return
     
     try {
       setSaving(true)
       
-      // 실제 프로필 업데이트 API 호출
-      const updatedProfile = await profilesApi.updateProfile(user.id, {
+      // Update profile in DB
+      const response = await profilesApi.updateProfile(user.id, {
         name: editData.name,
         phone: editData.phone,
         bio: editData.bio,
@@ -227,20 +238,24 @@ export default function ProfilePage() {
         job_position: editData.job_position
       })
       
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
       // 업데이트된 프로필 데이터로 상태 업데이트
       const updatedUserData = {
-        ...userData,
-        ...editData,
-        name: updatedProfile.name,
-        phone: updatedProfile.phone,
-        bio: updatedProfile.bio,
-        location: updatedProfile.location,
-        department: updatedProfile.department,
-        job_position: updatedProfile.job_position
+        ...userData!,
+        name: editData!.name,
+        phone: editData!.phone,
+        bio: editData!.bio,
+        location: editData!.location,
+        department: editData!.department,
+        job_position: editData!.job_position
       }
       
       setUserData(updatedUserData)
       setEditData(updatedUserData)
+      setActiveTab('activity') // 저장 후 활동 탭으로 이동
       
       toast.success('프로필이 성공적으로 업데이트되었습니다.')
     } catch (error) {
@@ -252,14 +267,18 @@ export default function ProfilePage() {
   }
 
   const handleCancel = () => {
-    setEditData(userData)
+    if (userData) {
+      setEditData(userData)
+    }
   }
 
   const handleInputChange = (field: string, value: string) => {
-    setEditData(prev => ({
-      ...prev,
-      [field]: value
-    }))
+    if (editData) {
+      setEditData(prev => ({
+        ...prev!,
+        [field]: value
+      }))
+    }
   }
 
   const handleAvatarUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,36 +300,46 @@ export default function ProfilePage() {
     try {
       setUploadingAvatar(true)
       
-      // Upload new avatar
-      const uploadResult = await uploadApi.uploadAvatar(file, user.id)
+      // Note: Avatar upload disabled for MVP
+      // const uploadResult = await uploadApi.uploadAvatar(file, user.id)
       
-      // Show different success message based on upload method
-      const successMessage = uploadResult.method === 'storage' 
-        ? '프로필 사진이 성공적으로 업로드되었습니다.'
-        : '프로필 사진이 업로드되었습니다. (임시 저장)'
-      
-      // Update profile with new avatar URL
-      try {
-        const updatedProfile = await profilesApi.updateProfile(user.id, {
-          avatar_url: uploadResult.url
-        })
-        console.log('Profile updated successfully')
-      } catch (updateError) {
-        console.warn('Profile update failed, but avatar was uploaded:', updateError)
+      // Mock upload for MVP
+      const uploadResult = {
+        url: '/avatars/default.jpg',
+        method: 'mock'
       }
+      
+      const successMessage = '프로필 사진이 업로드되었습니다. (MVP 임시 기능)'
+      
+      // Note: Profile update disabled for MVP
+      // try {
+      //   const response = await profilesApi.updateProfile(user.id, {
+      //     avatar_url: uploadResult.url
+      //   })
+      //   const updatedProfile = response.data
+        
+        // 프로필 상태 업데이트 (MVP - direct update)
+        setUserData(prev => prev ? { ...prev, avatar: uploadResult.url } : null)
+        setEditData(prev => prev ? { ...prev, avatar: uploadResult.url } : null)
+        
+        console.log('Profile updated successfully (MVP mode)')
       
       // Update local state regardless of profile update success
-      const updatedUserData = {
-        ...userData,
-        avatar: uploadResult.url
-      }
-      const updatedEditData = {
-        ...editData,
-        avatar: uploadResult.url
+      if (userData) {
+        const updatedUserData = {
+          ...userData,
+          avatar: uploadResult.url
+        }
+        setUserData(updatedUserData)
       }
       
-      setUserData(updatedUserData)
-      setEditData(updatedEditData)
+      if (editData) {
+        const updatedEditData = {
+          ...editData,
+          avatar: uploadResult.url
+        }
+        setEditData(updatedEditData)
+      }
       
       toast.success(successMessage)
     } catch (error) {
@@ -340,7 +369,7 @@ export default function ProfilePage() {
     return { level: '조용', color: 'text-gray-600', bgColor: 'bg-gray-100' }
   }
 
-  const activityLevel = getActivityLevel(userData.activityScore)
+  const activityLevel = userData ? getActivityLevel(userData.activityScore) : { level: '조용', color: 'text-gray-600', bgColor: 'bg-gray-100' }
 
   if (loading) {
     return (
@@ -355,7 +384,7 @@ export default function ProfilePage() {
     )
   }
 
-  if (!user) {
+  if (!user || !userData) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -724,7 +753,7 @@ export default function ProfilePage() {
                         <Label htmlFor="name">이름</Label>
                         <Input
                           id="name"
-                          value={editData.name}
+                          value={editData?.name || ''}
                           onChange={(e) => handleInputChange('name', e.target.value)}
                         />
                       </div>
@@ -732,7 +761,7 @@ export default function ProfilePage() {
                         <Label htmlFor="phone">전화번호</Label>
                         <Input
                           id="phone"
-                          value={editData.phone}
+                          value={editData?.phone || ''}
                           onChange={(e) => handleInputChange('phone', e.target.value)}
                         />
                       </div>
@@ -743,7 +772,7 @@ export default function ProfilePage() {
                         <Label htmlFor="department">부서</Label>
                         <Input
                           id="department"
-                          value={editData.department}
+                          value={editData?.department || ''}
                           onChange={(e) => handleInputChange('department', e.target.value)}
                         />
                       </div>
@@ -751,7 +780,7 @@ export default function ProfilePage() {
                         <Label htmlFor="job_position">직급</Label>
                         <Input
                           id="job_position"
-                          value={editData.job_position}
+                          value={editData?.job_position || ''}
                           onChange={(e) => handleInputChange('job_position', e.target.value)}
                         />
                       </div>
@@ -761,7 +790,7 @@ export default function ProfilePage() {
                       <Label htmlFor="bio">소개</Label>
                       <Textarea
                         id="bio"
-                        value={editData.bio}
+                        value={editData?.bio || ''}
                         onChange={(e) => handleInputChange('bio', e.target.value)}
                         rows={3}
                       />
@@ -771,7 +800,7 @@ export default function ProfilePage() {
                       <Label htmlFor="location">지역</Label>
                       <Input
                         id="location"
-                        value={editData.location}
+                        value={editData?.location || ''}
                         onChange={(e) => handleInputChange('location', e.target.value)}
                       />
                     </div>

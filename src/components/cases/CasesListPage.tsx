@@ -10,33 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, Plus, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { casesApi } from '@/lib/api'
-
-interface CaseWithAuthor {
-  id: string
-  title: string
-  content: string
-  category: string
-  subcategory: string | null
-  author_id: string
-  views: number
-  likes_count: number
-  comments_count: number
-  tags: string[]
-  tools: string[]
-  difficulty: string
-  time_required: string | null
-  is_featured: boolean
-  created_at: string
-  updated_at: string
-  profiles: {
-    id: string
-    name: string
-    avatar_url: string | null
-    role: string
-    department: string | null
-  } | null
-}
+import { casesApi, utils, type CaseWithAuthor } from '@/lib/api-unified'
 
 const categoryLabels = {
   all: '전체',
@@ -69,15 +43,17 @@ export default function CasesListPage() {
   const fetchCases = async () => {
     try {
       setLoading(true)
-      const { data, error } = await casesApi.getAll({
-        category: activeCategory === 'all' ? undefined : activeCategory,
+      const response = await casesApi.getCases({
+        category: activeCategory !== 'all' ? activeCategory : undefined,
         search: searchTerm || undefined,
-        sortBy: 'latest',
         limit: 50
       })
 
-      if (error) throw error
-      setCases(data || [])
+      if (response.success && response.data) {
+        setCases(response.data)
+      } else {
+        console.error('Error fetching cases:', response.error)
+      }
     } catch (error) {
       console.error('Error fetching cases:', error)
     } finally {
@@ -85,11 +61,6 @@ export default function CasesListPage() {
     }
   }
 
-  const getDescription = (content: string) => {
-    // Remove markdown and get first 150 characters
-    const plainText = content.replace(/[#*`]/g, '').replace(/\n/g, ' ')
-    return plainText.length > 150 ? plainText.substring(0, 150) + '...' : plainText
-  }
 
 
   return (
@@ -242,7 +213,7 @@ export default function CasesListPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                    {getDescription(caseItem.content)}
+                    {utils.getDescription(caseItem.content)}
                   </CardDescription>
                   
                   {/* Tags */}

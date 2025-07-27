@@ -26,27 +26,8 @@ import {
   Coffee,
   TrendingUp
 } from 'lucide-react'
-import { communityApi } from '@/lib/api'
-
-interface CommunityPostWithAuthor {
-  id: string
-  title: string
-  content: string
-  category: string
-  views: number
-  likes_count: number
-  comments_count: number
-  is_pinned: boolean
-  has_image: boolean
-  tags: string[]
-  created_at: string
-  profiles: {
-    id: string
-    name: string
-    avatar_url: string | null
-    role: string
-  } | null
-}
+import { toast } from 'sonner'
+import { type CommunityPostWithAuthor } from '@/lib/api-unified'
 
 const categoryLabels = {
   all: '전체',
@@ -102,15 +83,17 @@ export default function CommunityPage() {
   const fetchPosts = async () => {
     try {
       setLoading(true)
-      const { data, error } = await communityApi.getAll({
-        limit: 100
-      })
+      // Fetch real data from DB using api-unified
+      const { communityApi } = await import('@/lib/api-unified')
+      const response = await communityApi.getPosts()
+      
+      if (response.error) throw new Error(response.error)
 
-      if (error) throw error
-      setPosts(data || [])
-      setFilteredPosts(data || [])
+      setPosts(response.data || [])
+      setFilteredPosts(response.data || [])
     } catch (error) {
       console.error('Error fetching community posts:', error)
+      toast.error('자유게시판 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }

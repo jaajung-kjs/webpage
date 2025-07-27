@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { ErrorBoundary } from "@/components/ui/error-boundary";
+import { PerformanceProvider } from "@/components/providers/performance-provider";
 
 const notoSansKR = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -14,13 +16,6 @@ export const metadata: Metadata = {
   description: "한국전력공사 강원본부 전력관리처 AI 학습동아리 - 생성형 AI를 활용한 업무 생산성 향상과 사례 공유",
   keywords: ["KEPCO", "AI", "학습동아리", "생성형AI", "업무생산성", "한국전력공사"],
   manifest: "/manifest.json",
-  themeColor: "#3b82f6",
-  viewport: {
-    width: "device-width",
-    initialScale: 1,
-    maximumScale: 1,
-    userScalable: false,
-  },
   icons: {
     icon: [
       { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
@@ -37,6 +32,14 @@ export const metadata: Metadata = {
   },
 };
 
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  themeColor: "#3b82f6",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -47,11 +50,15 @@ export default function RootLayout({
       <body
         className={`${notoSansKR.variable} font-sans antialiased`}
       >
-        <AuthProvider>
-          <div className="relative flex min-h-screen flex-col">
-            {children}
-          </div>
-        </AuthProvider>
+        <ErrorBoundary>
+          <PerformanceProvider>
+            <AuthProvider>
+              <div className="relative flex min-h-screen flex-col">
+                {children}
+              </div>
+            </AuthProvider>
+          </PerformanceProvider>
+        </ErrorBoundary>
       </body>
     </html>
   );

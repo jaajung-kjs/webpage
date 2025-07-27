@@ -7,18 +7,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { casesApi } from '@/lib/api'
+import { casesApi } from '@/lib/api-unified'
 
-interface CaseWithAuthor {
+interface PostWithAuthor {
   id: string
   title: string
   content: string
   category: string
-  subcategory: string | null
   views: number
   likes_count: number
   comments_count: number
   created_at: string
+  author_id: string
   profiles: {
     name: string
   } | null
@@ -35,7 +35,13 @@ const categoryLabels = {
   coding: '코딩',
   design: '디자인',
   research: '연구',
-  communication: '커뮤니케이션'
+  communication: '커뮤니케이션',
+  tips: '팁 공유',
+  review: '리뷰',
+  help: '도움 요청',
+  discussion: '토론',
+  question: '질문',
+  chat: '잡담'
 }
 
 const categoryColors = {
@@ -49,28 +55,51 @@ const categoryColors = {
   coding: 'bg-indigo-100 text-indigo-800',
   design: 'bg-pink-100 text-pink-800',
   research: 'bg-yellow-100 text-yellow-800',
-  communication: 'bg-cyan-100 text-cyan-800'
+  communication: 'bg-cyan-100 text-cyan-800',
+  tips: 'bg-emerald-100 text-emerald-800',
+  review: 'bg-violet-100 text-violet-800',
+  help: 'bg-red-100 text-red-800',
+  discussion: 'bg-amber-100 text-amber-800',
+  question: 'bg-sky-100 text-sky-800',
+  chat: 'bg-slate-100 text-slate-800'
 }
 
 export default function RecentPostsSection() {
-  const [recentCases, setRecentCases] = useState<CaseWithAuthor[]>([])
+  const [recentPosts, setRecentPosts] = useState<PostWithAuthor[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchRecentCases()
+    fetchRecentPosts()
   }, [])
 
-  const fetchRecentCases = async () => {
+  const fetchRecentPosts = async () => {
     try {
-      const { data, error } = await casesApi.getAll({
-        sortBy: 'latest',
-        limit: 3
-      })
-
-      if (error) throw error
-      setRecentCases(data || [])
+      // Fetch recent cases from DB
+      const response = await casesApi.getCases({ limit: 3 })
+      
+      if (response.error) {
+        throw new Error(response.error)
+      }
+      
+      // Transform data to match expected type
+      const transformedData = (response.data || []).map(caseItem => ({
+        id: caseItem.id,
+        title: caseItem.title,
+        content: caseItem.content || '',
+        category: caseItem.category,
+        views: caseItem.views || 0,
+        likes_count: caseItem.likes_count || 0,
+        comments_count: caseItem.comments_count || 0,
+        created_at: caseItem.created_at,
+        author_id: caseItem.author_id,
+        profiles: caseItem.profiles
+      }))
+      
+      setRecentPosts(transformedData)
     } catch (error) {
-      console.error('Error fetching recent cases:', error)
+      console.error('Error fetching recent posts:', error)
+      // 에러가 발생해도 빈 배열로 설정하여 UI가 깨지지 않도록 함
+      setRecentPosts([])
     } finally {
       setLoading(false)
     }
@@ -146,11 +175,11 @@ export default function RecentPostsSection() {
             </div>
           ) : (
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {recentCases.map((caseItem, index) => {
-                const displayCategory = caseItem.subcategory || caseItem.category
+              {recentPosts.map((postItem, index) => {
+                const displayCategory = postItem.category
                 return (
                   <motion.div
-                    key={caseItem.id}
+                    key={postItem.id}
                     initial={{ opacity: 0, y: 20 }}
                     whileInView={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: index * 0.1 }}
@@ -166,34 +195,34 @@ export default function RecentPostsSection() {
                             {categoryLabels[displayCategory as keyof typeof categoryLabels] || displayCategory}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(caseItem.created_at).toLocaleDateString('ko-KR')}
+                            {new Date(postItem.created_at).toLocaleDateString('ko-KR')}
                           </span>
                         </div>
                         <CardTitle className="line-clamp-2 text-xl leading-tight">
-                          <Link href={`/cases/${caseItem.id}`} className="hover:text-primary">
-                            {caseItem.title}
+                          <Link href={`/cases/${postItem.id}`} className="hover:text-primary">
+                            {postItem.title}
                           </Link>
                         </CardTitle>
                       </CardHeader>
                       <CardContent>
                         <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                          {getDescription(caseItem.content)}
+                          {getDescription(postItem.content)}
                         </CardDescription>
                         
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span className="font-medium">{caseItem.profiles?.name || '익명'}</span>
+                          <span className="font-medium">{postItem.profiles?.name || '익명'}</span>
                           <div className="flex items-center space-x-3">
                             <div className="flex items-center space-x-1">
                               <Eye className="h-4 w-4" />
-                              <span>{caseItem.views}</span>
+                              <span>{postItem.views}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <ThumbsUp className="h-4 w-4" />
-                              <span>{caseItem.likes_count}</span>
+                              <span>{postItem.likes_count}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <MessageCircle className="h-4 w-4" />
-                              <span>{caseItem.comments_count}</span>
+                              <span>{postItem.comments_count}</span>
                             </div>
                           </div>
                         </div>
@@ -205,19 +234,19 @@ export default function RecentPostsSection() {
             </div>
           )}
 
-          {!loading && recentCases.length === 0 && (
+          {!loading && recentPosts.length === 0 && (
             <div className="text-center py-12">
-              <p className="text-muted-foreground mb-4">아직 공유된 활용사례가 없습니다.</p>
+              <p className="text-muted-foreground mb-4">아직 공유된 게시글이 없습니다.</p>
               <Button size="lg" className="kepco-gradient" asChild>
                 <Link href="/cases/new">
-                  첫 번째 활용사례를 공유해보세요!
+                  첫 번째 게시글을 작성해보세요!
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>
             </div>
           )}
 
-          {!loading && recentCases.length > 0 && (
+          {!loading && recentPosts.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -227,7 +256,7 @@ export default function RecentPostsSection() {
             >
               <Button size="lg" className="kepco-gradient" asChild>
                 <Link href="/cases/new">
-                  나의 활용사례 공유하기
+                  나의 게시글 작성하기
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Link>
               </Button>

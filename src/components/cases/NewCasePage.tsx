@@ -28,6 +28,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
+import { casesApi, utils } from '@/lib/api-unified'
+import { toast } from 'sonner'
 import { ArrowLeft, Save, Eye, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -35,17 +37,19 @@ const formSchema = z.object({
   title: z.string().min(5, '제목은 최소 5자 이상이어야 합니다').max(100, '제목은 100자 이하여야 합니다'),
   description: z.string().min(20, '내용 요약은 최소 20자 이상이어야 합니다').max(200, '내용 요약은 200자 이하여야 합니다'),
   content: z.string().min(50, '본문은 최소 50자 이상이어야 합니다'),
-  category: z.enum(['automation', 'document', 'analysis', 'creative'], {
+  category: z.enum(['productivity', 'creativity', 'development', 'analysis', 'other'], {
     message: '카테고리를 선택해주세요',
   }),
+  priority: z.enum(['high', 'medium', 'low']).optional(),
   tags: z.string().min(1, '최소 1개의 태그를 입력해주세요'),
 })
 
 const categoryLabels = {
-  automation: '업무자동화',
-  document: '문서작성',
-  analysis: '데이터분석',
-  creative: '창의적작업'
+  productivity: '생산성',
+  creativity: '창의성',
+  development: '개발',
+  analysis: '분석',
+  other: '기타'
 }
 
 export default function NewCasePage() {
@@ -89,18 +93,46 @@ export default function NewCasePage() {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setLoading(true)
     try {
-      // TODO: Submit to Supabase
-      console.log('Form values:', {
-        ...values,
+      const caseData = {
+        title: values.title,
+        content: values.content,
+        category: values.category,
+        subcategory: 'automation' as const,
         tags: values.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        user_id: user.id,
-      })
+        tools: ['AI Assistant'] as string[],
+        difficulty: 'beginner' as const,
+        time_required: '1-2시간',
+        author_id: user.id,
+        views: 0,
+        likes_count: 0,
+        comments_count: 0,
+        is_featured: false
+      }
 
-      // TODO: Show success toast
-      router.push('/cases')
+      // Validate case data
+      const validation = utils.validateCase(caseData)
+      if (!validation.valid) {
+        toast.error('입력 오류', {
+          description: validation.errors.join(', ')
+        })
+        return
+      }
+
+      const response = await casesApi.createCase(caseData)
+      
+      if (response.success) {
+        toast.success('사례 등록 성공', {
+          description: '새로운 사례가 성공적으로 등록되었습니다.'
+        })
+        router.push('/cases')
+      } else {
+        throw new Error(response.error)
+      }
     } catch (error) {
       console.error('Error submitting case:', error)
-      // TODO: Show error toast
+      toast.error('사례 등록 실패', {
+        description: error instanceof Error ? error.message : '사례 등록 중 오류가 발생했습니다.'
+      })
     } finally {
       setLoading(false)
     }

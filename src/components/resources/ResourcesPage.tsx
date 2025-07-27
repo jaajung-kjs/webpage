@@ -47,27 +47,11 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { resourcesApi } from '@/lib/api'
-import { canCreateAnnouncements } from '@/lib/permissions'
+// Note: Resources functionality simplified for MVP
+// import { resourcesApi } from '@/lib/api'
+// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-
-interface ResourceWithAuthor {
-  id: string
-  title: string
-  description: string
-  category: string
-  type: string
-  url: string
-  download_count: number
-  tags: string[]
-  created_at: string
-  profiles: {
-    id: string
-    name: string
-    avatar_url: string | null
-    role: string
-  } | null
-}
+import { type ResourceWithAuthor } from '@/lib/api-unified'
 
 const categoryLabels = {
   all: '전체',
@@ -114,8 +98,8 @@ export default function ResourcesPage() {
     title: '',
     description: '',
     url: '',
-    category: 'tutorial',
-    type: 'guide',
+    category: 'tutorial' as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline',
+    type: 'guide' as 'guide' | 'presentation' | 'video' | 'document' | 'spreadsheet' | 'template',
     tags: [] as string[]
   })
 
@@ -130,15 +114,17 @@ export default function ResourcesPage() {
   const fetchResources = async () => {
     try {
       setLoading(true)
-      const { data, error } = await resourcesApi.getAll({
-        limit: 100
-      })
+      // Fetch real data from DB using api-unified
+      const { resourcesApi } = await import('@/lib/api-unified')
+      const response = await resourcesApi.getResources()
+      
+      if (response.error) throw new Error(response.error)
 
-      if (error) throw error
-      setResources(data || [])
-      setFilteredResources(data || [])
+      setResources(response.data || [])
+      setFilteredResources(response.data || [])
     } catch (error) {
       console.error('Error fetching resources:', error)
+      toast.error('학습자료 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
     }
@@ -176,8 +162,8 @@ export default function ResourcesPage() {
       title: '',
       description: '',
       url: '',
-      category: 'tutorial',
-      type: 'guide',
+      category: 'tutorial' as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline',
+      type: 'guide' as 'guide' | 'presentation' | 'video' | 'document' | 'spreadsheet' | 'template',
       tags: []
     })
   }
@@ -190,12 +176,13 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await resourcesApi.create({
+      const { resourcesApi } = await import('@/lib/api-unified')
+      const response = await resourcesApi.createResource({
         ...formData,
         author_id: user.id
       })
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('학습자료가 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
@@ -217,9 +204,10 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await resourcesApi.update(selectedResource.id, formData)
+      const { resourcesApi } = await import('@/lib/api-unified')
+      const response = await resourcesApi.updateResource(selectedResource.id, formData)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('학습자료가 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
@@ -239,9 +227,10 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { error } = await resourcesApi.delete(resourceId, user.id)
+      const { resourcesApi } = await import('@/lib/api-unified')
+      const response = await resourcesApi.deleteResource(resourceId)
 
-      if (error) throw error
+      if (response.error) throw new Error(response.error)
 
       toast.success('학습자료가 삭제되었습니다.')
       fetchResources()
@@ -258,7 +247,7 @@ export default function ResourcesPage() {
     setFormData({
       title: resource.title,
       description: resource.description,
-      url: resource.url,
+      url: resource.url || '',
       category: resource.category,
       type: resource.type,
       tags: resource.tags || []
@@ -285,7 +274,7 @@ export default function ResourcesPage() {
             </p>
           </div>
           
-          {canCreateAnnouncements(user) && (
+          {user && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -442,7 +431,7 @@ export default function ResourcesPage() {
                     <div className="flex items-center space-x-2">
                       <TypeIcon className="h-4 w-4 text-muted-foreground" />
                       
-                      {canCreateAnnouncements(user) && (
+                      {user && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -502,12 +491,12 @@ export default function ResourcesPage() {
                     <span className="font-medium">{resource.profiles?.name || '익명'}</span>
                     <div className="flex items-center space-x-1">
                       <Download className="h-4 w-4" />
-                      <span>{resource.download_count || 0}</span>
+                      <span>{(resource as any).download_count || 0}</span>
                     </div>
                   </div>
 
                   <Button asChild className="w-full kepco-gradient">
-                    <Link href={resource.url} target="_blank" rel="noopener noreferrer">
+                    <Link href={resource.url || '#'} target="_blank" rel="noopener noreferrer">
                       <ExternalLink className="mr-2 h-4 w-4" />
                       자료 보기
                     </Link>
@@ -571,7 +560,7 @@ export default function ResourcesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -587,7 +576,7 @@ export default function ResourcesPage() {
               
               <div>
                 <label className="text-sm font-medium">자료 유형</label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as 'guide' | 'presentation' | 'video' | 'document' | 'spreadsheet' | 'template' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -660,7 +649,7 @@ export default function ResourcesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
@@ -676,7 +665,7 @@ export default function ResourcesPage() {
               
               <div>
                 <label className="text-sm font-medium">자료 유형</label>
-                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value })}>
+                <Select value={formData.type} onValueChange={(value) => setFormData({ ...formData, type: value as 'guide' | 'presentation' | 'video' | 'document' | 'spreadsheet' | 'template' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
