@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
@@ -24,6 +24,17 @@ export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const { user, signOut, loading } = useAuth()
+  
+  // Listen for login dialog open events
+  useEffect(() => {
+    const handleOpenLoginDialog = (event: any) => {
+      setLoginDialogTab(event.detail?.tab || 'login')
+      setLoginDialogOpen(true)
+    }
+    
+    window.addEventListener('openLoginDialog', handleOpenLoginDialog)
+    return () => window.removeEventListener('openLoginDialog', handleOpenLoginDialog)
+  }, [])
   
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

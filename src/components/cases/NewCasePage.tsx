@@ -28,7 +28,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useAuth } from '@/contexts/AuthContext'
-import { casesApi, utils } from '@/lib/api-unified'
+import api from "@/lib/api.modern"
 import { toast } from 'sonner'
 import { ArrowLeft, Save, Eye, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -96,21 +96,23 @@ export default function NewCasePage() {
       const caseData = {
         title: values.title,
         content: values.content,
+        type: 'case' as const,
         category: values.category,
-        subcategory: 'automation' as const,
         tags: values.tags.split(',').map(tag => tag.trim()).filter(Boolean),
-        tools: ['AI Assistant'] as string[],
-        difficulty: 'beginner' as const,
-        time_required: '1-2시간',
         author_id: user.id,
-        views: 0,
-        likes_count: 0,
-        comments_count: 0,
-        is_featured: false
+        status: 'published' as const,
+        excerpt: values.description,
+        metadata: {
+          subcategory: 'automation',
+          tools: ['AI Assistant'],
+          difficulty: 'beginner',
+          time_required: '1-2시간',
+          is_featured: false
+        }
       }
 
       // Validate case data
-      const validation = utils.validateCase(caseData)
+      const validation = api.utils.validateContent(caseData)
       if (!validation.valid) {
         toast.error('입력 오류', {
           description: validation.errors.join(', ')
@@ -118,7 +120,7 @@ export default function NewCasePage() {
         return
       }
 
-      const response = await casesApi.createCase(caseData)
+      const response = await api.content.createContent(caseData)
       
       if (response.success) {
         toast.success('사례 등록 성공', {

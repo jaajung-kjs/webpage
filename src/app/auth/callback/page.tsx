@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabaseSimple } from '@/lib/supabase-simple'
+import { supabase } from '@/lib/api.modern'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
@@ -16,7 +16,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        if (!supabaseSimple) {
+        if (!supabase) {
           setStatus('error')
           setMessage('인증 서비스에 연결할 수 없습니다.')
           return
@@ -28,13 +28,9 @@ export default function AuthCallbackPage() {
         const accessToken = urlParams.get('access_token')
         const refreshToken = urlParams.get('refresh_token')
         
-        console.log('Callback parameters:', { type, hasAccessToken: !!accessToken })
-        
         // 이메일 인증 토큰이 있는 경우
         if (type === 'email' && accessToken && refreshToken) {
-          console.log('Processing email verification...')
-          
-          const { data, error } = await supabaseSimple.auth.setSession({
+          const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
@@ -64,7 +60,7 @@ export default function AuthCallbackPage() {
         }
         
         // 일반 세션 확인
-        const { data, error } = await supabaseSimple.auth.getSession()
+        const { data, error } = await supabase.auth.getSession()
         
         if (error) {
           setStatus('error')

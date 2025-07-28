@@ -86,10 +86,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     setLoading(true)
     try {
-      console.log('Attempting login:', values.email)
       const { error } = await signIn(values.email, values.password)
-      
-      console.log('Login result:', error?.message)
       
       if (error) {
         // 이메일 인증 관련 에러 체크 먼저 (로그 출력 전에)
@@ -100,8 +97,6 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
         ) && error.status === 400
         
         if (isEmailNotConfirmed) {
-          console.log('Email verification required - showing modal')
-          
           // 이메일 저장하고 모달 표시 (에러 로그와 토스트 없이)
           setEmailForVerification(values.email)
           setShowEmailVerificationModal(true)

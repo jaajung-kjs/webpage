@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, Plus, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { casesApi, utils, type CaseWithAuthor } from '@/lib/api-unified'
+import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
+import { type PostCategory } from '@/lib/types.core'
 
 const categoryLabels = {
   all: '전체',
@@ -30,10 +31,10 @@ const categoryColors = {
 }
 
 export default function CasesListPage() {
-  const [cases, setCases] = useState<CaseWithAuthor[]>([])
+  const [cases, setCases] = useState<ContentWithAuthorNonNull[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeCategory, setActiveCategory] = useState('all')
+  const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
   const { user } = useAuth()
 
   useEffect(() => {
@@ -43,14 +44,34 @@ export default function CasesListPage() {
   const fetchCases = async () => {
     try {
       setLoading(true)
-      const response = await casesApi.getCases({
+      const response = await api.content.getContent({
+        type: 'case',
         category: activeCategory !== 'all' ? activeCategory : undefined,
         search: searchTerm || undefined,
         limit: 50
       })
 
       if (response.success && response.data) {
-        setCases(response.data)
+        // Filter to ensure we only have cases and transform to non-null type
+        const casesData = response.data
+          .filter(item => item.type === 'case')
+          .map(item => ({
+            ...item,
+            id: item.id || crypto.randomUUID(),
+            title: item.title || '',
+            content: item.content || '',
+            author_name: item.author_name || '익명',
+            author_avatar: item.author_avatar || '',
+            author_department: item.author_department || '부서 미지정',
+            author_role: item.author_role || 'member',
+            created_at: item.created_at || new Date().toISOString(),
+            tags: item.tags || [],
+            view_count: item.view_count || 0,
+            like_count: item.like_count || 0,
+            comment_count: item.comment_count || 0,
+            metadata: item.metadata || {}
+          } as ContentWithAuthorNonNull))
+        setCases(casesData)
       } else {
         console.error('Error fetching cases:', response.error)
       }
@@ -110,7 +131,7 @@ export default function CasesListPage() {
         </div>
 
         <div className="overflow-x-auto">
-          <Tabs value={activeCategory} onValueChange={setActiveCategory}>
+          <Tabs value={activeCategory} onValueChange={(value) => setActiveCategory(value as PostCategory | 'all')}>
             <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
               {Object.entries(categoryLabels).map(([key, label]) => (
                 <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
@@ -194,12 +215,12 @@ export default function CasesListPage() {
                   <div className="mb-2 flex items-center justify-between">
                     <Badge 
                       variant="secondary" 
-                      className={categoryColors[caseItem.category as keyof typeof categoryColors]}
+                      className={categoryColors[caseItem.category as keyof typeof categoryColors] || ''}
                     >
-                      {categoryLabels[caseItem.category as keyof typeof categoryLabels]}
+                      {categoryLabels[caseItem.category as keyof typeof categoryLabels] || caseItem.category}
                     </Badge>
                     <span className="text-sm text-muted-foreground">
-                      {new Date(caseItem.created_at).toLocaleDateString('ko-KR')}
+                      {caseItem.created_at ? new Date(caseItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
                     </span>
                   </div>
                   <CardTitle className="line-clamp-2 text-xl leading-tight">
@@ -213,17 +234,17 @@ export default function CasesListPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                    {utils.getDescription(caseItem.content)}
+                    {caseItem.excerpt || caseItem.content.substring(0, 150) + '...'}
                   </CardDescription>
                   
                   {/* Tags */}
                   <div className="mb-4 flex flex-wrap gap-1">
-                    {caseItem.tags.slice(0, 3).map((tag) => (
+                    {caseItem.tags && caseItem.tags.slice(0, 3).map((tag) => (
                       <Badge key={tag} variant="outline" className="text-xs">
                         {tag}
                       </Badge>
                     ))}
-                    {caseItem.tags.length > 3 && (
+                    {caseItem.tags && caseItem.tags.length > 3 && (
                       <Badge variant="outline" className="text-xs">
                         +{caseItem.tags.length - 3}
                       </Badge>
@@ -232,22 +253,22 @@ export default function CasesListPage() {
                   
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center space-x-1">
-                      <span className="font-medium">{caseItem.profiles?.name || '익명'}</span>
+                      <span className="font-medium">{caseItem.author_name}</span>
                       <span>·</span>
-                      <span>{caseItem.profiles?.department || '미상'}</span>
+                      <span>{caseItem.author_department}</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-1">
                         <Eye className="h-4 w-4" />
-                        <span>{caseItem.views}</span>
+                        <span>{caseItem.view_count}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <ThumbsUp className="h-4 w-4" />
-                        <span>{caseItem.likes_count}</span>
+                        <span>{caseItem.like_count}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <MessageCircle className="h-4 w-4" />
-                        <span>{caseItem.comments_count}</span>
+                        <span>{caseItem.comment_count}</span>
                       </div>
                   </div>
                 </div>

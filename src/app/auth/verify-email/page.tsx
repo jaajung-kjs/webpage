@@ -34,19 +34,14 @@ export default function VerifyEmailPage() {
   // 주기적으로 인증 상태 확인 (이메일 클릭 후 탭 전환 시를 위해)
   useEffect(() => {
     if (!user?.emailConfirmed && user) {
-      console.log('Setting up email verification polling...')
-      
       const interval = setInterval(async () => {
         try {
-          console.log('Checking email verification status...')
           // 사용자 정보를 다시 가져와서 확인
           const { getCurrentUser } = await import('@/lib/auth')
           const updatedUser = await getCurrentUser()
           
-          console.log('Updated user verification status:', updatedUser?.emailConfirmed)
-          
+
           if (updatedUser?.emailConfirmed && !isVerified) {
-            console.log('Email verification detected via polling!')
             setIsVerified(true)
             clearInterval(interval)
           }
@@ -56,26 +51,15 @@ export default function VerifyEmailPage() {
       }, 3000) // 3초마다 확인
       
       return () => {
-        console.log('Clearing verification polling interval')
         clearInterval(interval)
       }
     }
   }, [user, isVerified])
 
-  // 페이지 로드 시 상태 로깅
-  useEffect(() => {
-    console.log('📧 VerifyEmailPage loaded:', {
-      hasUser: !!user,
-      userEmail: user?.email,
-      emailConfirmed: user?.emailConfirmed,
-      isLoading: loading
-    })
-  }, [user, loading])
 
   // 사용자가 없으면 홈으로 리다이렉트
   useEffect(() => {
     if (!loading && !user) {
-      console.log('❌ No user found, redirecting to home')
       router.push('/')
     }
   }, [user, router, loading])

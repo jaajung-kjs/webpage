@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useEffect, memo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -50,11 +50,9 @@ import {
   PinOff
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-// Note: Announcements functionality simplified for MVP
-// import { announcementsApi } from '@/lib/api'
-// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-import { type AnnouncementWithAuthor } from '@/lib/api-unified'
+import api from '@/lib/api.modern'
+import type { ContentWithAuthor } from '@/lib/types.core'
 
 const categoryLabels = {
   all: '전체',
@@ -93,8 +91,8 @@ const categoryIcons = {
 
 function AnnouncementsPage() {
   const { user } = useAuth()
-  const [announcements, setAnnouncements] = useState<AnnouncementWithAuthor[]>([])
-  const [filteredAnnouncements, setFilteredAnnouncements] = useState<AnnouncementWithAuthor[]>([])
+  const [announcements, setAnnouncements] = useState<ContentWithAuthor[]>([])
+  const [filteredAnnouncements, setFilteredAnnouncements] = useState<ContentWithAuthor[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activePriority, setActivePriority] = useState('all')
@@ -103,7 +101,7 @@ function AnnouncementsPage() {
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<AnnouncementWithAuthor | null>(null)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<ContentWithAuthor | null>(null)
   const [operationLoading, setOperationLoading] = useState(false)
   
   // Form state
@@ -127,11 +125,18 @@ function AnnouncementsPage() {
   const fetchAnnouncements = async () => {
     try {
       setLoading(true)
-      // Fetch real data from DB using api-unified
-      const { announcementsApi } = await import('@/lib/api-unified')
-      const response = await announcementsApi.getAnnouncements()
+      // Fetch announcements using unified content API
+      const response = await api.content.getContent({
+        type: 'announcement',
+        status: 'published',
+        sort: 'created_at',
+        order: 'desc'
+      })
       
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Update content failed:', response.error)
+        throw new Error(response.error || 'Failed to update announcement')
+      }
 
       setAnnouncements(response.data || [])
       setFilteredAnnouncements(response.data || [])
@@ -160,9 +165,9 @@ function AnnouncementsPage() {
 
     if (term) {
       filtered = filtered.filter(announcement =>
-        announcement.title.toLowerCase().includes(term.toLowerCase()) ||
-        announcement.content.toLowerCase().includes(term.toLowerCase()) ||
-        announcement.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
+        announcement.title?.toLowerCase().includes(term.toLowerCase()) ||
+        announcement.content?.toLowerCase().includes(term.toLowerCase()) ||
+        announcement.tags?.some((tag: string) => tag.toLowerCase().includes(term.toLowerCase()))
       )
     }
 
@@ -171,7 +176,9 @@ function AnnouncementsPage() {
     }
 
     if (priority !== 'all') {
-      filtered = filtered.filter(announcement => announcement.priority === priority)
+      filtered = filtered.filter(announcement => 
+        (announcement.metadata as any)?.priority === priority
+      )
     }
 
     // Sort by pinned first, then by date (already handled by API)
@@ -219,21 +226,33 @@ function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { announcementsApi } = await import('@/lib/api-unified')
-      const response = await announcementsApi.createAnnouncement({
-        ...formData,
-        author_id: user.id
+      const response = await api.content.createContent({
+        title: formData.title,
+        content: formData.content,
+        type: 'announcement',
+        category: formData.category,
+        tags: formData.tags,
+        author_id: user.id,
+        status: 'published',
+        metadata: {
+          priority: formData.priority,
+          is_pinned: formData.is_pinned
+        }
       })
 
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Create content failed:', response.error)
+        throw new Error(response.error || 'Failed to create announcement')
+      }
 
       toast.success('공지사항이 성공적으로 작성되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
       fetchAnnouncements()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating announcement:', error)
-      toast.error(error.message || '공지사항 작성에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '공지사항 작성에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -247,19 +266,31 @@ function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { announcementsApi } = await import('@/lib/api-unified')
-      const response = await announcementsApi.updateAnnouncement(selectedAnnouncement.id, formData)
+      const response = await api.content.updateContent(selectedAnnouncement.id!, {
+        title: formData.title,
+        content: formData.content,
+        category: formData.category,
+        tags: formData.tags,
+        metadata: {
+          priority: formData.priority,
+          is_pinned: formData.is_pinned
+        }
+      })
 
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Update content failed:', response.error)
+        throw new Error(response.error || 'Failed to update announcement')
+      }
 
       toast.success('공지사항이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedAnnouncement(null)
       resetForm()
       fetchAnnouncements()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating announcement:', error)
-      toast.error(error.message || '공지사항 수정에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '공지사항 수정에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -270,16 +301,19 @@ function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { announcementsApi } = await import('@/lib/api-unified')
-      const response = await announcementsApi.deleteAnnouncement(announcementId)
+      const response = await api.content.deleteContent(announcementId)
 
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Delete content failed:', response.error)
+        throw new Error(response.error || 'Failed to delete announcement')
+      }
 
       toast.success('공지사항이 삭제되었습니다.')
       fetchAnnouncements()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting announcement:', error)
-      toast.error(error.message || '공지사항 삭제에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '공지사항 삭제에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -290,29 +324,41 @@ function AnnouncementsPage() {
 
     try {
       setOperationLoading(true)
-      const { announcementsApi } = await import('@/lib/api-unified')
-      const response = await announcementsApi.togglePin(announcementId, !currentPinStatus)
+      // Get current announcement to preserve other metadata
+      const announcement = announcements.find(a => a.id === announcementId)
+      if (!announcement) throw new Error('Announcement not found')
+      
+      const response = await api.content.updateContent(announcementId, {
+        metadata: {
+          ...(announcement.metadata as any || {}),
+          is_pinned: !currentPinStatus
+        }
+      })
 
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Update content failed:', response.error)
+        throw new Error(response.error || 'Failed to update announcement')
+      }
 
       toast.success(currentPinStatus ? '고정이 해제되었습니다.' : '공지사항이 고정되었습니다.')
       fetchAnnouncements()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error toggling pin:', error)
-      toast.error(error.message || '고정 상태 변경에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '고정 상태 변경에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
   }
 
-  const openEditDialog = (announcement: AnnouncementWithAuthor) => {
+  const openEditDialog = (announcement: ContentWithAuthor) => {
     setSelectedAnnouncement(announcement)
     setFormData({
-      title: announcement.title,
-      content: announcement.content,
-      category: announcement.category,
-      priority: announcement.priority,
-      is_pinned: announcement.is_pinned,
+      title: announcement.title || '',
+      content: announcement.content || '',
+      category: announcement.category as 'announcement' | 'meeting' | 'notice' | 'event' || 'notice',
+      priority: ((announcement.metadata as any)?.priority as 'high' | 'medium' | 'low') || 'medium',
+      is_pinned: (announcement.metadata as any)?.is_pinned || false,
       tags: announcement.tags || []
     })
     setEditDialogOpen(true)
@@ -349,7 +395,9 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-red-600">
-                  {loading ? '-' : announcements.filter(a => a.is_pinned).length}
+                  {loading ? '-' : announcements.filter(a => 
+                    (a.metadata as any)?.is_pinned === true
+                  ).length}
                 </div>
                 <div className="text-sm text-muted-foreground">고정 공지</div>
               </CardContent>
@@ -368,7 +416,7 @@ function AnnouncementsPage() {
                   {loading ? '-' : announcements.filter(a => {
                     const weekAgo = new Date()
                     weekAgo.setDate(weekAgo.getDate() - 7)
-                    return new Date(a.created_at) > weekAgo
+                    return a.created_at && new Date(a.created_at) > weekAgo
                   }).length}
                 </div>
                 <div className="text-sm text-muted-foreground">이번 주</div>
@@ -377,14 +425,14 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-blue-600">
-                  {loading ? '-' : announcements.reduce((total, a) => total + (a.views || 0), 0)}
+                  {loading ? '-' : announcements.reduce((total, a) => total + (a.view_count || 0), 0)}
                 </div>
                 <div className="text-sm text-muted-foreground">총 조회수</div>
               </CardContent>
             </Card>
           </div>
           
-          {user && (
+          {user && user.role === 'admin' && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -498,7 +546,8 @@ function AnnouncementsPage() {
             </Card>
           ))
         ) : filteredAnnouncements.map((announcement, index) => {
-          const CategoryIcon = categoryIcons[announcement.category as keyof typeof categoryIcons]
+          const CategoryIcon = categoryIcons[announcement.category as keyof typeof categoryIcons] || categoryIcons.notice
+          const metadata = announcement.metadata as any || {}
           
           return (
             <motion.div
@@ -508,13 +557,13 @@ function AnnouncementsPage() {
               transition={{ duration: 0.5, delay: 0.1 * index }}
             >
               <Card className={`transition-all hover:shadow-lg hover:-translate-y-1 ${
-                announcement.is_pinned ? 'border-primary bg-primary/5' : ''
+                metadata.is_pinned ? 'border-primary bg-primary/5' : ''
               }`}>
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1">
                       <div className="mb-2 flex items-center gap-2">
-                        {announcement.is_pinned && (
+                        {metadata.is_pinned && (
                           <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">
                             <Pin className="mr-1 h-3 w-3" />
                             고정
@@ -522,16 +571,16 @@ function AnnouncementsPage() {
                         )}
                         <Badge 
                           variant="secondary" 
-                          className={categoryColors[announcement.category as keyof typeof categoryColors]}
+                          className={categoryColors[announcement.category as keyof typeof categoryColors] || ''}
                         >
                           <CategoryIcon className="mr-1 h-3 w-3" />
-                          {categoryLabels[announcement.category as keyof typeof categoryLabels]}
+                          {categoryLabels[announcement.category as keyof typeof categoryLabels] || '공지사항'}
                         </Badge>
                         <Badge 
                           variant="outline"
-                          className={priorityColors[announcement.priority as keyof typeof priorityColors]}
+                          className={priorityColors[metadata.priority as keyof typeof priorityColors] || ''}
                         >
-                          {priorityLabels[announcement.priority as keyof typeof priorityLabels]}
+                          {priorityLabels[metadata.priority as keyof typeof priorityLabels] || '일반'}
                         </Badge>
                       </div>
                       <CardTitle className="line-clamp-2 text-lg sm:text-xl leading-tight hover:text-primary cursor-pointer">
@@ -543,9 +592,9 @@ function AnnouncementsPage() {
                     
                     <div className="flex items-center space-x-2">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={announcement.profiles?.avatar_url || ''} alt={announcement.profiles?.name || ''} />
+                        <AvatarImage src={announcement.author_avatar || ''} alt={announcement.author_name || ''} />
                         <AvatarFallback>
-                          {announcement.profiles?.name?.charAt(0) || 'U'}
+                          {announcement.author_name?.charAt(0) || 'U'}
                         </AvatarFallback>
                       </Avatar>
                       
@@ -559,10 +608,10 @@ function AnnouncementsPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem
-                              onClick={() => handleTogglePin(announcement.id, announcement.is_pinned)}
+                              onClick={() => handleTogglePin(announcement.id!, metadata.is_pinned || false)}
                               disabled={operationLoading}
                             >
-                              {announcement.is_pinned ? (
+                              {metadata.is_pinned ? (
                                 <>
                                   <PinOff className="mr-2 h-4 w-4" />
                                   고정 해제
@@ -583,7 +632,7 @@ function AnnouncementsPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDeleteAnnouncement(announcement.id)}
+                              onClick={() => handleDeleteAnnouncement(announcement.id!)}
                               disabled={operationLoading}
                               className="text-red-600 focus:text-red-600"
                             >
@@ -630,23 +679,23 @@ function AnnouncementsPage() {
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-sm text-muted-foreground">
                     <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
                       <div className="flex items-center space-x-1">
-                        <span className="font-medium truncate">{announcement.profiles?.name || '익명'}</span>
-                        <span className="text-xs">({announcement.profiles?.role || '역할 없음'})</span>
+                        <span className="font-medium truncate">{announcement.author_name || '익명'}</span>
+                        <span className="text-xs">({announcement.author_role || 'member'})</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <Calendar className="h-4 w-4 flex-shrink-0" />
-                        <span className="whitespace-nowrap">{formatRelativeTime(announcement.created_at)}</span>
+                        <span className="whitespace-nowrap">{announcement.created_at ? formatRelativeTime(announcement.created_at) : '날짜 없음'}</span>
                       </div>
                     </div>
                     
                     <div className="flex items-center space-x-4">
                       <div className="flex items-center space-x-1">
                         <Eye className="h-4 w-4" />
-                        <span>{announcement.views || 0}</span>
+                        <span>{announcement.view_count || 0}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <MessageCircle className="h-4 w-4" />
-                        <span>{announcement.comments_count || 0}</span>
+                        <span>{announcement.comment_count || 0}</span>
                       </div>
                     </div>
                   </div>

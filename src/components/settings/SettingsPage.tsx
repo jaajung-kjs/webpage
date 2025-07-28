@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,10 +28,13 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
+import api from '@/lib/api.modern'
+import type { UserSettings } from '@/lib/api.modern'
 
 export default function SettingsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
+  const [initialLoading, setInitialLoading] = useState(true)
   
   // 알림 설정
   const [emailNotifications, setEmailNotifications] = useState(true)
@@ -45,16 +48,73 @@ export default function SettingsPage() {
   const [showPhone, setShowPhone] = useState(false)
   
   // 테마 설정
-  const [theme, setTheme] = useState('system')
-  const [language, setLanguage] = useState('ko')
+  const [theme, setTheme] = useState<'light' | 'dark' | 'system'>('system')
+  const [language, setLanguage] = useState<'ko' | 'en'>('ko')
+
+  // Load user settings on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      if (!user) {
+        setInitialLoading(false)
+        return
+      }
+
+      try {
+        const response = await api.settings.getSettings(user.id)
+        if (response.success && response.data) {
+          const settings = response.data
+          
+          // Update state with loaded settings
+          setEmailNotifications(settings.email_notifications)
+          setPushNotifications(settings.push_notifications)
+          setCommunityUpdates(settings.community_updates)
+          setWeeklyDigest(settings.weekly_digest)
+          setProfilePublic(settings.profile_public)
+          setShowEmail(settings.show_email)
+          setShowPhone(settings.show_phone)
+          setTheme(settings.theme)
+          setLanguage(settings.language)
+        }
+      } catch (error) {
+        console.error('Failed to load settings:', error)
+        toast.error('설정을 불러오는데 실패했습니다.')
+      } finally {
+        setInitialLoading(false)
+      }
+    }
+
+    loadSettings()
+  }, [user])
 
   const handleSaveSettings = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
     setLoading(true)
     try {
-      // 여기에 실제 설정 저장 로직 구현
-      await new Promise(resolve => setTimeout(resolve, 1000)) // 임시 딜레이
-      toast.success('설정이 저장되었습니다.')
+      const settingsUpdate = {
+        email_notifications: emailNotifications,
+        push_notifications: pushNotifications,
+        community_updates: communityUpdates,
+        weekly_digest: weeklyDigest,
+        profile_public: profilePublic,
+        show_email: showEmail,
+        show_phone: showPhone,
+        theme,
+        language
+      }
+
+      const response = await api.settings.updateSettings(user.id, settingsUpdate)
+      
+      if (response.success) {
+        toast.success('설정이 저장되었습니다.')
+      } else {
+        throw new Error(response.error || 'Settings update failed')
+      }
     } catch (error) {
+      console.error('Failed to save settings:', error)
       toast.error('설정 저장에 실패했습니다.')
     } finally {
       setLoading(false)
@@ -67,6 +127,33 @@ export default function SettingsPage() {
 
   const handleDeleteAccount = () => {
     toast.error('계정 삭제 기능은 관리자에게 문의해주세요.')
+  }
+
+  // Show loading state
+  if (initialLoading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+            <p className="text-muted-foreground">설정을 불러오는 중...</p>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show error state if not logged in
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center space-y-4">
+            <p className="text-muted-foreground">로그인이 필요합니다.</p>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -276,7 +363,7 @@ export default function SettingsPage() {
                   <select
                     id="language"
                     value={language}
-                    onChange={(e) => setLanguage(e.target.value)}
+                    onChange={(e) => setLanguage(e.target.value as 'ko' | 'en')}
                     className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="ko">한국어</option>

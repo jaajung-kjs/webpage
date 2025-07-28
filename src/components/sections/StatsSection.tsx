@@ -2,7 +2,6 @@
 
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { casesApi } from '@/lib/api-unified'
 
 interface Stats {
   membersCount: number
@@ -29,37 +28,28 @@ export default function StatsSection() {
   const fetchStats = async () => {
     try {
       // Direct DB query for real statistics
-      const { supabaseSimple } = await import('@/lib/supabase-simple')
+      const { supabase } = await import('@/lib/api.modern')
       
-      const [profilesResult, casesResult, activitiesResult, resourcesResult] = await Promise.all([
-        supabaseSimple.from('profiles').select('activity_score'),
-        supabaseSimple.from('cases').select('*', { count: 'exact', head: true }),
-        supabaseSimple.from('activities').select('*', { count: 'exact', head: true }),
-        supabaseSimple.from('resources').select('*', { count: 'exact', head: true })
+      const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
+        supabase.from('users').select('activity_score'),
+        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),
+        supabase.from('activities').select('*', { count: 'exact', head: true }),
+        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'resource')
       ])
 
-      const profiles = profilesResult.data || []
-      const profilesCount = profiles.length
-      const casesCount = casesResult.count || 0
-      const activitiesCount = activitiesResult.count || 0
-      const resourcesCount = resourcesResult.count || 0
+      const users = usersResult.status === 'fulfilled' ? (usersResult.value.data || []) : []
+      const profilesCount = users.length
+      const casesCount = casesResult.status === 'fulfilled' ? (casesResult.value.count || 0) : 0
+      const activitiesCount = activitiesResult.status === 'fulfilled' ? (activitiesResult.value.count || 0) : 0
+      const resourcesCount = resourcesResult.status === 'fulfilled' ? (resourcesResult.value.count || 0) : 0
       
       // Calculate real average activity score
-      const totalActivityScore = profiles.reduce((sum, profile) => sum + (profile.activity_score || 0), 0)
+      const totalActivityScore = users.reduce((sum, user) => sum + (user.activity_score || 0), 0)
       const avgScore = profilesCount > 0 ? Math.round(totalActivityScore / profilesCount) : 0
       
       // Use actual learning sessions count, fallback to resources count if activities table doesn't exist
       const learningSessionsCount = activitiesCount > 0 ? activitiesCount : resourcesCount
       
-      console.log('Real DB stats:', { 
-        profilesCount, 
-        casesCount, 
-        activitiesCount, 
-        resourcesCount, 
-        learningSessionsCount,
-        totalActivityScore,
-        avgScore 
-      })
       
       setStats({
         membersCount: profilesCount, // Show actual count

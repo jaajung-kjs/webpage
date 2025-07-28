@@ -25,12 +25,15 @@ import {
   Edit,
   Trash2,
   Link as LinkIcon,
-  Loader2
+  Loader2,
+  Bookmark,
+  BookmarkCheck
 } from 'lucide-react'
-import { casesApi, commentsApi } from '@/lib/api-unified'
+import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import { type CaseWithAuthor, type CommentWithAuthor } from '@/lib/api-unified'
+import { ReportDialog } from '@/components/ui/report-dialog'
+import CommentSection from '@/components/shared/CommentSection'
 
 
 
@@ -40,97 +43,59 @@ interface CaseDetailPageProps {
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { user } = useAuth()
-  const [caseData, setCaseData] = useState<any>(null)
-  const [comments, setComments] = useState<CommentWithAuthor[]>([])
+  const [caseData, setCaseData] = useState<ContentWithAuthorNonNull | null>(null)
   const [loading, setLoading] = useState(true)
-  const [commentLoading, setCommentLoading] = useState(false)
-  const [newComment, setNewComment] = useState('')
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
-  const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
+  const [isBookmarked, setIsBookmarked] = useState(false)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
 
   useEffect(() => {
-    fetchCaseDetail()
-    fetchComments()
-  }, [caseId])
-
-  useEffect(() => {
-    if (user && caseData) {
-      checkCaseLikeStatus()
-    }
-  }, [user, caseData])
-
-  const fetchCaseDetail = async () => {
-    try {
-      setLoading(true)
-      const response = await casesApi.getCaseById(caseId)
-      
-      if (response.error) {
-        throw new Error(response.error)
-      }
-      
-      if (response.data) {
-        // Transform DB data to match existing UI structure
-        const transformedData = {
-          id: response.data.id,
-          title: response.data.title,
-          content: response.data.content || '',
-          category: response.data.category,
-          subcategory: response.data.subcategory || '',
-          author: response.data.profiles?.name || '작성자',
-          authorAvatar: response.data.profiles?.avatar_url || '/avatars/default.jpg',
-          authorRole: response.data.profiles?.role || 'member',
-          authorDepartment: response.data.profiles?.department || '전력관리처',
-          createdAt: response.data.created_at,
-          updatedAt: response.data.updated_at,
-          views: response.data.views || 0,
-          likes: response.data.likes_count || 0,
-          comments: response.data.comments_count || 0,
-          isLiked: false,
-          isBookmarked: false,
-          tags: response.data.tags || [],
-          tools: (response.data as any).ai_tools || [],
-          difficulty: response.data.difficulty || 'intermediate',
-          timeRequired: response.data.time_required || '미정',
-          attachments: []
+    const loadPageData = async () => {
+      try {
+        setLoading(true)
+        
+        // First get the case data
+        const caseResponse = await api.content.getContentById(caseId)
+        
+        if (caseResponse.error) {
+          throw new Error(caseResponse.error)
         }
-        setCaseData(transformedData)
-        setLikeCount(transformedData.likes)
+        
+        if (caseResponse.data) {
+          if (caseResponse.data.type !== 'case') {
+            throw new Error('Content is not a case')
+          }
+          setCaseData(caseResponse.data)
+          setLikeCount(caseResponse.data.like_count || 0)
+          
+          // If user is logged in, check interactions in parallel
+          if (user) {
+            const [likeResult, bookmarkResult] = await Promise.allSettled([
+              api.interactions.checkInteraction(user.id, caseId, 'like'),
+              api.interactions.checkInteraction(user.id, caseId, 'bookmark')
+            ])
+            
+            if (likeResult.status === 'fulfilled' && likeResult.value.success && likeResult.value.data !== undefined) {
+              setIsLiked(likeResult.value.data)
+            }
+            
+            if (bookmarkResult.status === 'fulfilled' && bookmarkResult.value.success && bookmarkResult.value.data !== undefined) {
+              setIsBookmarked(bookmarkResult.value.data)
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading page data:', error)
+        toast.error('게시글을 불러오는데 실패했습니다.')
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error('Error fetching case detail:', error)
-      toast.error('게시글을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
     }
-  }
+    
+    loadPageData()
+  }, [caseId, user])
 
-  const checkCaseLikeStatus = async () => {
-    if (!user) return
-
-    try {
-      const response = await casesApi.checkCaseLike(caseId, user.id)
-      if (response.success && response.data !== undefined) {
-        setIsLiked(response.data)
-      }
-    } catch (error) {
-      console.error('Error checking like status:', error)
-    }
-  }
-
-  const fetchComments = async () => {
-    try {
-      const response = await commentsApi.getComments(caseId)
-      
-      if (response.error) {
-        throw new Error(response.error)
-      }
-      
-      setComments(response.data || [])
-    } catch (error) {
-      console.error('Error fetching comments:', error)
-    }
-  }
 
   const handleLike = async () => {
     if (!user) {
@@ -139,15 +104,19 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     }
 
     try {
-      const response = await casesApi.toggleCaseLike(caseId, user.id)
+      const response = await api.interactions.toggleInteraction(
+        user.id,
+        caseId,
+        'like'
+      )
       
       if (response.error) {
         throw new Error(response.error)
       }
       
       if (response.data) {
-        setIsLiked(response.data.liked)
-        setLikeCount(response.data.likes_count)
+        setIsLiked(response.data.isActive)
+        setLikeCount(prevCount => response.data!.isActive ? prevCount + 1 : prevCount - 1)
       }
     } catch (error) {
       console.error('Error toggling like:', error)
@@ -155,71 +124,28 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     }
   }
 
-  const handleCommentSubmit = async () => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
 
-    if (!newComment.trim()) {
-      toast.error('댓글 내용을 입력해주세요.')
-      return
-    }
-
-    try {
-      setCommentLoading(true)
-      const response = await commentsApi.createComment({
-        case_id: caseId,
-        author_id: user.id,
-        content: newComment,
-        likes_count: 0
-      })
-      
-      if (response.error) {
-        throw new Error(response.error)
-      }
-      
-      setNewComment('')
-      await fetchComments() // Refresh comments
-      toast.success('댓글이 등록되었습니다.')
-    } catch (error) {
-      console.error('Error creating comment:', error)
-      toast.error('댓글 작성에 실패했습니다.')
-    } finally {
-      setCommentLoading(false)
-    }
-  }
-
-  const handleCommentLike = async (commentId: string) => {
+  const handleBookmark = async () => {
     if (!user) {
       toast.error('로그인이 필요합니다.')
       return
     }
 
     try {
-      const response = await commentsApi.toggleCommentLike(commentId, user.id)
-      
-      if (response.error) {
-        throw new Error(response.error)
-      }
+      const response = await api.interactions.toggleInteraction(
+        user.id,
+        caseId,
+        'bookmark'
+      )
+      if (response.error) throw new Error(response.error)
       
       if (response.data) {
-        const { liked, likes_count } = response.data
-        setCommentLikes(prev => ({
-          ...prev,
-          [commentId]: liked
-        }))
-        
-        // Update likes count in comments array
-        setComments(prev => prev.map(comment => 
-          comment.id === commentId 
-            ? { ...comment, likes_count: likes_count }
-            : comment
-        ))
+        setIsBookmarked(response.data.isActive)
+        toast.success(response.data.isActive ? '북마크에 추가되었습니다.' : '북마크에서 제거되었습니다.')
       }
     } catch (error) {
-      console.error('Error toggling comment like:', error)
-      toast.error('좋아요 처리에 실패했습니다.')
+      console.error('Error toggling bookmark:', error)
+      toast.error('북마크 처리에 실패했습니다.')
     }
   }
 
@@ -322,7 +248,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                   업무효율화
                 </Badge>
                 <Badge variant="outline">자동화</Badge>
-                {caseData.tags.map((tag: string) => (
+                {(caseData.tags || []).map((tag: string) => (
                   <Badge key={tag} variant="outline" className="text-xs">
                     #{tag}
                   </Badge>
@@ -338,20 +264,20 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
               <div className="flex items-center justify-between pt-4">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={caseData.authorAvatar} alt={caseData.author} />
+                    <AvatarImage src={caseData.author_avatar || ''} alt={caseData.author_name || ''} />
                     <AvatarFallback>
-                      {caseData.author.charAt(0)}
+                      {(caseData.author_name || 'U').charAt(0)}
                     </AvatarFallback>
                   </Avatar>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{caseData.author}</span>
+                      <span className="font-semibold">{caseData.author_name || '익명'}</span>
                       <Badge variant="outline" className="text-xs">
-                        {getRoleLabel(caseData.authorRole)}
+                        {getRoleLabel(caseData.author_role || 'member')}
                       </Badge>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      {caseData.authorDepartment} • {formatDate(caseData.createdAt)}
+                      {caseData.author_department || '부서 미지정'} • {caseData.created_at ? formatDate(caseData.created_at) : '날짜 없음'}
                     </div>
                   </div>
                 </div>
@@ -359,11 +285,11 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-1">
                     <Eye className="h-4 w-4" />
-                    <span>{caseData.views}</span>
+                    <span>{caseData.view_count || 0}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <MessageCircle className="h-4 w-4" />
-                    <span>{caseData.comments}</span>
+                    <span>{caseData.comment_count || 0}</span>
                   </div>
                 </div>
               </div>
@@ -375,7 +301,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">사용 도구</div>
                   <div className="mt-1">
-                    {caseData.tools.map((tool: string) => (
+                    {((caseData.metadata as any)?.ai_tools || []).map((tool: string) => (
                       <Badge key={tool} variant="secondary" className="mr-1">
                         {tool}
                       </Badge>
@@ -388,7 +314,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 </div>
                 <div>
                   <div className="text-sm font-medium text-muted-foreground">소요 시간</div>
-                  <div className="mt-1 font-medium">{caseData.timeRequired}</div>
+                  <div className="mt-1 font-medium">{(caseData.metadata as any)?.time_required || '미정'}</div>
                 </div>
               </div>
 
@@ -403,11 +329,11 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
               </div>
 
               {/* Attachments */}
-              {caseData.attachments && caseData.attachments.length > 0 && (
+              {(caseData.metadata as any)?.attachments && (caseData.metadata as any).attachments.length > 0 && (
                 <div className="mt-8">
                   <h3 className="mb-4 text-lg font-semibold">첨부 파일</h3>
                   <div className="space-y-2">
-                    {caseData.attachments.map((attachment: any, index: number) => (
+                    {((caseData.metadata as any).attachments || []).map((attachment: any, index: number) => (
                       <div key={index} className="flex items-center justify-between rounded-lg border p-3">
                         <div className="flex items-center space-x-3">
                           <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100">
@@ -443,14 +369,27 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                     <Share2 className="mr-2 h-4 w-4" />
                     공유
                   </Button>
-                  <Button variant="outline" size="sm">
-                    <BookOpen className="mr-2 h-4 w-4" />
+                  <Button 
+                    variant={isBookmarked ? "default" : "outline"} 
+                    size="sm"
+                    onClick={handleBookmark}
+                    className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
+                  >
+                    {isBookmarked ? (
+                      <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />
+                    ) : (
+                      <Bookmark className="mr-2 h-4 w-4" />
+                    )}
                     북마크
                   </Button>
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="sm">
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => setReportDialogOpen(true)}
+                  >
                     <Flag className="mr-2 h-4 w-4" />
                     신고
                   </Button>
@@ -470,92 +409,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mt-8"
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <MessageCircle className="h-5 w-5" />
-                <span>댓글 ({comments.length})</span>
-              </CardTitle>
-            </CardHeader>
-            
-            <CardContent>
-              {/* New Comment Form */}
-              <div className="mb-6">
-                <Textarea
-                  placeholder="댓글을 작성해보세요..."
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  className="mb-3"
-                  rows={3}
-                />
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={handleCommentSubmit} 
-                    className="kepco-gradient"
-                    disabled={commentLoading}
-                  >
-                    {commentLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Send className="mr-2 h-4 w-4" />
-                    )}
-                    댓글 작성
-                  </Button>
-                </div>
-              </div>
-
-              <Separator className="mb-6" />
-
-              {/* Comments List */}
-              <div className="space-y-6">
-                {comments.map((comment) => (
-                  <div key={comment.id}>
-                    <div className="flex items-start space-x-3">
-                      <Avatar className="h-10 w-10">
-                        <AvatarImage src={comment.profiles?.avatar_url || '/avatars/default.jpg'} alt={comment.profiles?.name || '익명'} />
-                        <AvatarFallback>
-                          {(comment.profiles?.name || '익명').charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-semibold">{comment.profiles?.name || '익명'}</span>
-                          <Badge variant="outline" className="text-xs">
-                            {getRoleLabel(comment.profiles?.role || 'member')}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {formatRelativeTime(comment.created_at)}
-                          </span>
-                        </div>
-                        
-                        <p className="mt-2 text-sm leading-relaxed">
-                          {comment.content}
-                        </p>
-                        
-                        <div className="mt-3 flex items-center space-x-4">
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="h-auto p-0 text-xs"
-                            onClick={() => handleCommentLike(comment.id)}
-                          >
-                            <ThumbsUp className={`mr-1 h-3 w-3 ${commentLikes[comment.id] ? 'fill-current' : ''}`} />
-                            좋아요 ({comment.likes_count || 0})
-                          </Button>
-                          <Button variant="ghost" size="sm" className="h-auto p-0 text-xs">
-                            답글
-                          </Button>
-                        </div>
-                        
-                        {/* Replies - Feature not implemented yet */}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <CommentSection contentId={caseId} contentType="case" />
         </motion.div>
 
         {/* Related Cases */}
@@ -605,6 +459,16 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
           </Card>
         </motion.div>
       </div>
+
+      {/* Report Dialog */}
+      <ReportDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        postType="case"
+        postId={caseId}
+        title={caseData?.title}
+      />
     </div>
   )
 }
+

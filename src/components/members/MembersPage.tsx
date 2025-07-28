@@ -43,13 +43,13 @@ import {
   UserMinus,
   Crown,
   Shield,
-  UserCheck
+  UserCheck,
+  User
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-// Note: Members functionality simplified for MVP
-// import { membersApi } from '@/lib/api'
-// import { canManageMembers, canRemoveMembers, canChangeMemberRoles, getAssignableRoles, filterMembersByPermissions } from '@/lib/permissions'
+import api from '@/lib/api.modern'
 import { toast } from 'sonner'
+import type { Database } from '@/lib/database.types'
 
 interface MemberWithStats {
   id: string
@@ -82,6 +82,7 @@ const roleLabels = {
   leader: '동아리장',
   'vice-leader': '부동아리장',
   admin: '운영진',
+  moderator: '중재자',
   member: '일반회원'
 }
 
@@ -120,10 +121,14 @@ function MembersPage() {
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [selectedMember, setSelectedMember] = useState<MemberWithStats | null>(null)
   const [operationLoading, setOperationLoading] = useState(false)
+  const [assignableRoles, setAssignableRoles] = useState<string[]>([])
 
   useEffect(() => {
     fetchMembers()
-  }, [])
+    if (user) {
+      fetchAssignableRoles()
+    }
+  }, [user])
 
   useEffect(() => {
     filterMembers(searchTerm, activeRole, activeSkill)
@@ -132,55 +137,40 @@ function MembersPage() {
   const fetchMembers = async () => {
     try {
       setLoading(true)
-      // Fetch real data from DB using api-unified
-      const { profilesApi } = await import('@/lib/api-unified')
-      const response = await profilesApi.getProfiles()
+      // Fetch members using member management API
+      const response = await api.users.getAllMembers()
       
-      if (response.error) throw response.error
+      if (!response.success) throw new Error(response.error || 'Failed to fetch members')
 
-      // Transform profiles to MemberWithStats format
-      const transformedData: MemberWithStats[] = []
-      
-      // Fetch stats for each profile
-      for (const profile of response.data || []) {
-        try {
-          const statsResponse = await profilesApi.getUserStats(profile.id)
-          const stats = statsResponse.success && statsResponse.data ? [{
-            total_posts: statsResponse.data.totalPosts,
-            total_comments: statsResponse.data.totalComments,
-            total_likes_received: statsResponse.data.totalLikes,
-            total_views: statsResponse.data.totalViews,
-            activities_joined: statsResponse.data.activitiesJoined,
-            resources_shared: statsResponse.data.resourcesShared
-          }] : [{
-            total_posts: 0,
-            total_comments: 0,
-            total_likes_received: 0,
-            total_views: 0,
-            activities_joined: 0,
-            resources_shared: 0
+      // Transform user data to MemberWithStats format
+      const transformedData: MemberWithStats[] = (response.data || []).map((userData: any) => {
+        const metadata = (userData.metadata || {}) as any
+        return {
+          id: userData.id || '',
+          name: userData.name || '익명',
+          email: userData.email || '',
+          phone: metadata.phone || null,
+          department: userData.department || null,
+          job_position: metadata.job_position || null,
+          role: userData.role || 'member',
+          avatar_url: userData.avatar_url || null,
+          location: metadata.location || null,
+          skill_level: metadata.skill_level || 'beginner',
+          bio: userData.bio || null,
+          activity_score: userData.activity_score || 0,
+          ai_expertise: metadata.ai_expertise || [],
+          achievements: metadata.achievements || [],
+          join_date: userData.created_at || new Date().toISOString(),
+          user_stats: [{
+            total_posts: userData.post_count || 0,
+            total_comments: userData.comment_count || 0,
+            total_likes_received: userData.like_count || 0,
+            total_views: userData.view_count || 0,
+            activities_joined: userData.activity_count || 0,
+            resources_shared: userData.resource_count || 0
           }]
-          
-          transformedData.push({
-            ...profile,
-            user_stats: stats
-          })
-        } catch (error) {
-          console.warn(`Failed to fetch stats for user ${profile.id}:`, error)
-          // Use default stats if fetch fails
-          transformedData.push({
-            ...profile,
-            user_stats: [{
-              total_posts: 0,
-              total_comments: 0,
-              total_likes_received: 0,
-              total_views: 0,
-              activities_joined: 0,
-              resources_shared: 0
-            }]
-          })
         }
-      }
+      })
 
       setMembers(transformedData)
       setFilteredMembers(transformedData)
@@ -189,6 +179,19 @@ function MembersPage() {
       toast.error('회원 목록을 불러오는데 실패했습니다.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchAssignableRoles = async () => {
+    if (!user) return
+    
+    try {
+      const response = await api.users.getAssignableRoles(user.id)
+      if (response.success) {
+        setAssignableRoles(response.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching assignable roles:', error)
     }
   }
 
@@ -246,11 +249,11 @@ function MembersPage() {
 
     try {
       setOperationLoading(true)
-      // Mock API call for MVP
-      const error = null
-      // const { error } = await membersApi.removeMember(selectedMember.id, user.id)
+      const result = await api.users.removeUser(selectedMember.id, user.id, '회원 삭제')
       
-      if (error) throw error
+      if (!result.success) {
+        throw new Error(result.error || '회원 제거에 실패했습니다.')
+      }
 
       toast.success(`${selectedMember.name} 님을 회원 목록에서 제거했습니다.`)
       setRemoveDialogOpen(false)
@@ -269,11 +272,11 @@ function MembersPage() {
 
     try {
       setOperationLoading(true)
-      // Mock API call for MVP
-      const error = null
-      // const { error } = await membersApi.changeMemberRole(memberId, newRole, user.id)
+      const result = await api.users.changeUserRole(memberId, newRole as Database['public']['Enums']['user_role'], user.id)
       
-      if (error) throw error
+      if (!result.success) {
+        throw new Error(result.error || '역할 변경에 실패했습니다.')
+      }
 
       const member = members.find(m => m.id === memberId)
       toast.success(`${member?.name} 님의 역할을 ${roleLabels[newRole as keyof typeof roleLabels] || newRole}로 변경했습니다.`)
@@ -291,6 +294,7 @@ function MembersPage() {
       case 'leader': return Crown
       case 'vice-leader': return Shield  
       case 'admin': return UserCog
+      case 'moderator': return Shield
       case 'removed': return UserMinus
       default: return UserCheck
     }
@@ -374,12 +378,6 @@ function MembersPage() {
             </Card>
           </div>
           
-          {user && (
-            <Button className="kepco-gradient">
-              <UserCog className="mr-2 h-4 w-4" />
-              회원 관리
-            </Button>
-          )}
         </div>
       </motion.div>
 
@@ -508,8 +506,8 @@ function MembersPage() {
                         {roleLabels[member.role as keyof typeof roleLabels] || member.role}
                       </Badge>
                       
-                      {/* Admin Controls */}
-                      {user && member.id !== user?.id && (
+                      {/* Admin Controls - Show only if user can manage this member */}
+                      {user && member.id !== user?.id && (user.role && ['leader', 'vice-leader'].includes(user.role) || assignableRoles.length > 0) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -517,7 +515,7 @@ function MembersPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {user && (
+                            {assignableRoles.length > 0 && (
                               <>
                                 <DropdownMenuItem 
                                   className="text-sm font-medium text-muted-foreground cursor-default"
@@ -525,8 +523,8 @@ function MembersPage() {
                                 >
                                   역할 변경
                                 </DropdownMenuItem>
-                                {/* Role assignment disabled for MVP */}
-                                {['member', 'admin'].map((role) => {
+                                {/* Show assignable roles based on user's permissions */}
+                                {assignableRoles.map((role) => {
                                   const RoleIcon = getRoleIcon(role)
                                   return (
                                     <DropdownMenuItem
@@ -543,7 +541,7 @@ function MembersPage() {
                                 <DropdownMenuSeparator />
                               </>
                             )}
-                            {user && (
+                            {user.role && ['leader', 'vice-leader'].includes(user.role) && (
                               <DropdownMenuItem
                                 onClick={() => {
                                   setSelectedMember(member)
@@ -667,9 +665,16 @@ function MembersPage() {
                       <MessageCircle className="mr-2 h-4 w-4" />
                       메시지
                     </Button>
-                    <Button variant="outline" size="sm" className="flex-1">
-                      <Mail className="mr-2 h-4 w-4" />
-                      이메일
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                      onClick={() => {
+                        window.location.href = `/profile/${member.id}`
+                      }}
+                    >
+                      <User className="mr-2 h-4 w-4" />
+                      프로필
                     </Button>
                   </div>
                 </CardContent>

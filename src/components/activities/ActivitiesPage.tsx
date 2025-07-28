@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useEffect, useCallback, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -38,8 +38,6 @@ import {
   Users, 
   Calendar,
   Plus,
-  Filter,
-  Star,
   UserCheck,
   MoreVertical,
   Edit,
@@ -48,11 +46,9 @@ import {
   UserMinus
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-// Note: Activities functionality simplified for MVP
-// import { activitiesApi } from '@/lib/api'
-// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-import { type ActivityWithInstructor } from '@/lib/api-unified'
+import api from "@/lib/api.modern"
+import type { ActivityWithDetails } from "@/lib/types.core"
 
 const categoryLabels = {
   all: '전체',
@@ -88,8 +84,8 @@ const statusColors = {
 
 function ActivitiesPage() {
   const { user } = useAuth()
-  const [activities, setActivities] = useState<ActivityWithInstructor[]>([])
-  const [filteredActivities, setFilteredActivities] = useState<ActivityWithInstructor[]>([])
+  const [activities, setActivities] = useState<ActivityWithDetails[]>([])
+  const [filteredActivities, setFilteredActivities] = useState<ActivityWithDetails[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
@@ -98,8 +94,9 @@ function ActivitiesPage() {
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedActivity, setSelectedActivity] = useState<ActivityWithInstructor | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<ActivityWithDetails | null>(null)
   const [operationLoading, setOperationLoading] = useState(false)
+  const [participationStatus, setParticipationStatus] = useState<{ [key: string]: boolean }>({})
   
   // Form state
   const [formData, setFormData] = useState({
@@ -123,14 +120,20 @@ function ActivitiesPage() {
     filterActivities(searchTerm, activeCategory, activeStatus)
   }, [searchTerm, activeCategory, activeStatus, activities])
 
+  useEffect(() => {
+    // Check participation status for all activities when user changes
+    if (user && activities.length > 0) {
+      checkAllParticipationStatus()
+    }
+  }, [user, activities])
+
   const fetchActivities = async () => {
     try {
       setLoading(true)
-      // Fetch real data from DB using api-unified
-      const { activitiesApi } = await import('@/lib/api-unified')
-      const response = await activitiesApi.getActivities()
+      // Fetch real data from DB using modern API
+      const response = await api.activities.getActivities()
       
-      if (response.error) throw new Error(response.error)
+      if (!response.success) throw new Error(response.error)
 
       setActivities(response.data || [])
       setFilteredActivities(response.data || [])
@@ -154,13 +157,13 @@ function ActivitiesPage() {
     setActiveStatus(status)
   }
 
-  const filterActivities = (term: string, category: string, status: string) => {
+  const filterActivities = useCallback((term: string, category: string, status: string) => {
     let filtered = activities
 
     if (term) {
       filtered = filtered.filter(activity =>
-        activity.title.toLowerCase().includes(term.toLowerCase()) ||
-        activity.description.toLowerCase().includes(term.toLowerCase()) ||
+        activity.title?.toLowerCase().includes(term.toLowerCase()) ||
+        activity.content?.toLowerCase().includes(term.toLowerCase()) ||
         activity.location?.toLowerCase().includes(term.toLowerCase()) ||
         activity.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
       )
@@ -174,24 +177,12 @@ function ActivitiesPage() {
       filtered = filtered.filter(activity => activity.status === status)
     }
 
-    // Sort by date (upcoming first)
-    filtered.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    // Sort by scheduled_at (upcoming first)
+    filtered.sort((a, b) => new Date(a.scheduled_at || '').getTime() - new Date(b.scheduled_at || '').getTime())
 
     setFilteredActivities(filtered)
-  }
+  }, [activities])
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
-      month: 'long',
-      day: 'numeric',
-      weekday: 'short'
-    })
-  }
-
-  const formatTime = (timeString: string) => {
-    return timeString.substring(0, 5) // HH:MM format
-  }
 
   // Admin functions
   const resetForm = () => {
@@ -217,11 +208,33 @@ function ActivitiesPage() {
 
     try {
       setOperationLoading(true)
-      const { activitiesApi } = await import('@/lib/api-unified')
-      const response = await activitiesApi.createActivity({
-        ...formData,
+      
+      // Prepare content data for the content table
+      const contentData = {
+        title: formData.title,
+        content: formData.description,
+        category: formData.category,
+        tags: formData.tags,
+        author_id: user.id,
+        type: 'activity' as const,
+        status: 'published' as const
+      }
+
+      // Prepare activity data for the activities table
+      const scheduledAt = formData.date && formData.time 
+        ? new Date(`${formData.date}T${formData.time}`).toISOString()
+        : new Date().toISOString()
+
+      const activityData = {
+        scheduled_at: scheduledAt,
+        duration_minutes: formData.duration,
+        location: formData.location,
+        max_participants: formData.max_participants,
+        status: formData.status,
         instructor_id: user.id
-      })
+      }
+
+      const response = await api.activities.createActivity(contentData, activityData)
 
       if (response.error) throw new Error(response.error)
 
@@ -229,35 +242,52 @@ function ActivitiesPage() {
       setCreateDialogOpen(false)
       resetForm()
       fetchActivities()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating activity:', error)
-      toast.error(error.message || '활동 등록에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '활동 등록에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
   }
 
   const handleEditActivity = async () => {
-    if (!selectedActivity || !user || !formData.title.trim() || !formData.description.trim()) {
+    if (!selectedActivity || !selectedActivity.id || !user || !formData.title.trim() || !formData.description.trim()) {
       toast.error('제목과 설명을 입력해주세요.')
       return
     }
 
     try {
       setOperationLoading(true)
-      const { activitiesApi } = await import('@/lib/api-unified')
-      const response = await activitiesApi.updateActivity(selectedActivity.id, formData)
-
-      if (response.error) throw new Error(response.error)
-
-      toast.success('활동이 성공적으로 수정되었습니다.')
+      
+      const contentData = {
+        title: formData.title,
+        content: formData.description,
+        category: formData.category,
+        tags: formData.tags
+      }
+      
+      const activityData = {
+        scheduled_at: new Date(`${formData.date}T${formData.time}`).toISOString(),
+        duration_minutes: formData.duration,
+        location: formData.location,
+        max_participants: formData.max_participants || null,
+        instructor_id: null
+      }
+      
+      const response = await api.activities.updateActivity(selectedActivity.id, contentData, activityData)
+      if (response.success) {
+        toast.success('활동이 성공적으로 수정되었습니다.')
+        await fetchActivities()
+      }
+      
       setEditDialogOpen(false)
       setSelectedActivity(null)
       resetForm()
-      fetchActivities()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating activity:', error)
-      toast.error(error.message || '활동 수정에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '활동 수정에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -268,36 +298,106 @@ function ActivitiesPage() {
 
     try {
       setOperationLoading(true)
-      const { activitiesApi } = await import('@/lib/api-unified')
-      const response = await activitiesApi.deleteActivity(activityId)
-
-      if (response.error) throw new Error(response.error)
-
-      toast.success('활동이 삭제되었습니다.')
-      fetchActivities()
-    } catch (error: any) {
+      const response = await api.activities.deleteActivity(activityId)
+      if (response.success) {
+        toast.success('활동이 성공적으로 삭제되었습니다.')
+        await fetchActivities()
+      }
+    } catch (error) {
       console.error('Error deleting activity:', error)
-      toast.error(error.message || '활동 삭제에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '활동 삭제에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
   }
 
-  const openEditDialog = (activity: ActivityWithInstructor) => {
+  const openEditDialog = (activity: ActivityWithDetails) => {
     setSelectedActivity(activity)
+    
+    // Extract date and time from scheduled_at
+    const scheduledDate = activity.scheduled_at ? new Date(activity.scheduled_at) : new Date()
+    const dateString = scheduledDate.toISOString().split('T')[0]
+    const timeString = scheduledDate.toTimeString().split(' ')[0].substring(0, 5)
+    
     setFormData({
-      title: activity.title,
-      description: activity.description,
-      date: activity.date,
-      time: activity.time,
-      duration: activity.duration || 0,
+      title: activity.title || '',
+      description: activity.content || '',
+      date: dateString,
+      time: timeString,
+      duration: activity.duration_minutes || 60,
       location: activity.location || '',
-      max_participants: activity.max_participants || 0,
-      category: activity.category,
-      status: activity.status,
+      max_participants: activity.max_participants || 20,
+      category: activity.category as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' || 'workshop',
+      status: activity.status as 'upcoming' | 'ongoing' | 'completed' | 'cancelled' || 'upcoming',
       tags: activity.tags || []
     })
     setEditDialogOpen(true)
+  }
+
+  const checkAllParticipationStatus = useCallback(async () => {
+    if (!user) return
+    
+    try {
+      // Check all participation statuses in parallel
+      const participationChecks = activities
+        .filter(activity => activity.id)
+        .map(activity => 
+          api.activities.checkActivityParticipation(user.id, activity.id!)
+            .then(response => ({ 
+              activityId: activity.id!, 
+              isParticipating: response.success ? (response.data || false) : false 
+            }))
+            .catch(() => ({ activityId: activity.id!, isParticipating: false }))
+        )
+      
+      const results = await Promise.allSettled(participationChecks)
+      
+      const statuses: { [key: string]: boolean } = {}
+      results.forEach(result => {
+        if (result.status === 'fulfilled') {
+          statuses[result.value.activityId] = result.value.isParticipating
+        }
+      })
+      
+      setParticipationStatus(statuses)
+    } catch (error) {
+      console.error('Error checking participation status:', error)
+    }
+  }, [user, activities])
+
+  const handleActivityParticipation = async (activityId: string) => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    try {
+      setOperationLoading(true)
+      
+      const isCurrentlyParticipating = participationStatus[activityId]
+      
+      if (isCurrentlyParticipating) {
+        const response = await api.activities.leaveActivity(user.id, activityId)
+        if (response.success) {
+          toast.success('활동에서 탈퇴하였습니다.')
+          await checkAllParticipationStatus()
+          await fetchActivities()
+        }
+      } else {
+        const response = await api.activities.joinActivity(user.id, activityId)
+        if (response.success) {
+          toast.success('활동에 참가하였습니다.')
+          await checkAllParticipationStatus()
+          await fetchActivities()
+        }
+      }
+    } catch (error: any) {
+      console.error('Error handling activity participation:', error)
+      toast.error(error.message || '참가 처리에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
   }
 
   return (
@@ -318,7 +418,7 @@ function ActivitiesPage() {
               AI 학습동아리의 다양한 활동과 세미나에 참여해보세요
             </p>
           </div>
-          {user && (
+          {user && user.role === 'admin' && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -488,18 +588,18 @@ function ActivitiesPage() {
               </CardHeader>
               <CardContent>
                 <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                  {activity.description}
+                  {activity.content}
                 </CardDescription>
                 
                 {/* Activity Details */}
                 <div className="mb-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{formatDate(activity.date)} {formatTime(activity.time)}</span>
+                    <span>{api.utils.formatActivityDate(activity.scheduled_at)} {api.utils.formatActivityTime(activity.scheduled_at)}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4" />
-                    <span>{activity.duration}분</span>
+                    <span>{api.utils.formatDuration(activity.duration_minutes)}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin className="h-4 w-4" />
@@ -507,7 +607,16 @@ function ActivitiesPage() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <Users className="h-4 w-4" />
-                    <span>{activity.current_participants}/{activity.max_participants}명</span>
+                    <span className={
+                      activity.max_participants && (activity.current_participants || 0) >= activity.max_participants 
+                        ? 'text-red-600 font-semibold' 
+                        : activity.max_participants && (activity.current_participants || 0) >= activity.max_participants * 0.8 
+                          ? 'text-orange-600 font-medium'
+                          : ''
+                    }>
+                      {activity.current_participants || 0}/{activity.max_participants || '∞'}명
+                      {activity.max_participants && (activity.current_participants || 0) >= activity.max_participants && ' (마감)'}
+                    </span>
                   </div>
                 </div>
 
@@ -530,23 +639,49 @@ function ActivitiesPage() {
                 {/* Instructor */}
                 <div className="mb-4 flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={activity.profiles?.avatar_url || ''} alt={activity.profiles?.name || ''} />
+                    <AvatarImage src={activity.instructor_avatar || ''} alt={activity.instructor_name || ''} />
                     <AvatarFallback>
-                      {activity.profiles?.name?.charAt(0) || 'U'}
+                      {activity.instructor_name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="font-medium text-sm">{activity.profiles?.name || '익명'}</div>
+                    <div className="font-medium text-sm">{activity.instructor_name || '익명'}</div>
                     <div className="text-xs text-muted-foreground">진행자</div>
                   </div>
                 </div>
 
                 {/* Admin Controls and Action Button */}
                 <div className="flex items-center gap-2">
-                  <Button className="flex-1 kepco-gradient">
-                    <UserCheck className="mr-2 h-4 w-4" />
-                    {activity.status === 'upcoming' ? '참가 신청' : '자세히 보기'}
-                  </Button>
+                  {activity.status === 'upcoming' ? (
+                    <Button 
+                      className="flex-1 kepco-gradient"
+                      onClick={() => activity.id && handleActivityParticipation(activity.id)}
+                      disabled={operationLoading || !activity.id || (activity.max_participants !== null && (activity.current_participants || 0) >= activity.max_participants)}
+                    >
+                      {activity.id && participationStatus[activity.id] ? (
+                        <>
+                          <UserMinus className="mr-2 h-4 w-4" />
+                          참가 취소
+                        </>
+                      ) : activity.max_participants !== null && (activity.current_participants || 0) >= activity.max_participants ? (
+                        <>
+                          <UserCheck className="mr-2 h-4 w-4" />
+                          마감됨
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="mr-2 h-4 w-4" />
+                          참가 신청
+                        </>
+                      )}
+                    </Button>
+                  ) : (
+                    <Button className="flex-1" variant="outline">
+                      <UserCheck className="mr-2 h-4 w-4" />
+                      {activity.status === 'ongoing' ? '진행 중' : 
+                       activity.status === 'completed' ? '완료됨' : '취소됨'}
+                    </Button>
+                  )}
                   
                   {user && (
                     <DropdownMenu>
@@ -565,7 +700,7 @@ function ActivitiesPage() {
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => handleDeleteActivity(activity.id)}
+                          onClick={() => activity.id && handleDeleteActivity(activity.id)}
                           disabled={operationLoading}
                           className="text-red-600 focus:text-red-600"
                         >

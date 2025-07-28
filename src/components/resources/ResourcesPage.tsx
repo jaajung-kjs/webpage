@@ -47,11 +47,8 @@ import {
   Trash2
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-// Note: Resources functionality simplified for MVP
-// import { resourcesApi } from '@/lib/api'
-// import { canCreateAnnouncements } from '@/lib/permissions'
 import { toast } from 'sonner'
-import { type ResourceWithAuthor } from '@/lib/api-unified'
+import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
 
 const categoryLabels = {
   all: '전체',
@@ -81,8 +78,8 @@ const categoryColors = {
 
 export default function ResourcesPage() {
   const { user } = useAuth()
-  const [resources, setResources] = useState<ResourceWithAuthor[]>([])
-  const [filteredResources, setFilteredResources] = useState<ResourceWithAuthor[]>([])
+  const [resources, setResources] = useState<ContentWithAuthorNonNull[]>([])
+  const [filteredResources, setFilteredResources] = useState<ContentWithAuthorNonNull[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [loading, setLoading] = useState(true)
@@ -90,7 +87,7 @@ export default function ResourcesPage() {
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedResource, setSelectedResource] = useState<ResourceWithAuthor | null>(null)
+  const [selectedResource, setSelectedResource] = useState<ContentWithAuthorNonNull | null>(null)
   const [operationLoading, setOperationLoading] = useState(false)
   
   // Form state
@@ -114,11 +111,13 @@ export default function ResourcesPage() {
   const fetchResources = async () => {
     try {
       setLoading(true)
-      // Fetch real data from DB using api-unified
-      const { resourcesApi } = await import('@/lib/api-unified')
-      const response = await resourcesApi.getResources()
+      // Fetch real data from DB using modern API
+      const response = await api.content.getContent({
+        type: 'resource',
+        status: 'published'
+      })
       
-      if (response.error) throw new Error(response.error)
+      if (!response.success) throw new Error(response.error || 'Failed to fetch resources')
 
       setResources(response.data || [])
       setFilteredResources(response.data || [])
@@ -144,7 +143,7 @@ export default function ResourcesPage() {
     if (term) {
       filtered = filtered.filter(resource =>
         resource.title.toLowerCase().includes(term.toLowerCase()) ||
-        resource.description.toLowerCase().includes(term.toLowerCase()) ||
+        resource.content.toLowerCase().includes(term.toLowerCase()) ||
         resource.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
       )
     }
@@ -176,21 +175,38 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { resourcesApi } = await import('@/lib/api-unified')
-      const response = await resourcesApi.createResource({
-        ...formData,
-        author_id: user.id
-      })
+      const resourceData = {
+        title: formData.title,
+        content: formData.description,
+        type: 'resource' as const,
+        category: formData.category,
+        tags: formData.tags,
+        author_id: user.id,
+        status: 'published' as const,
+        excerpt: formData.description.substring(0, 200),
+        metadata: {
+          url: formData.url,
+          type: formData.type,
+          downloads: 0
+        }
+      }
+      
 
-      if (response.error) throw new Error(response.error)
+      const response = await api.content.createContent(resourceData)
+
+      if (!response.success) {
+        console.error('Create content failed:', response.error)
+        throw new Error(response.error || 'Failed to create resource')
+      }
 
       toast.success('학습자료가 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
       fetchResources()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error creating resource:', error)
-      toast.error(error.message || '학습자료 등록에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '학습자료 등록에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -204,19 +220,36 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { resourcesApi } = await import('@/lib/api-unified')
-      const response = await resourcesApi.updateResource(selectedResource.id, formData)
+      const metadata = selectedResource.metadata as any
+      const updateData = {
+        title: formData.title,
+        content: formData.description,
+        category: formData.category,
+        tags: formData.tags,
+        excerpt: formData.description.substring(0, 200),
+        metadata: {
+          ...metadata,
+          url: formData.url,
+          type: formData.type
+        }
+      }
 
-      if (response.error) throw new Error(response.error)
+      const response = await api.content.updateContent(selectedResource.id, updateData)
+
+      if (!response.success) {
+        console.error('Update content failed:', response.error)
+        throw new Error(response.error || 'Failed to update resource')
+      }
 
       toast.success('학습자료가 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedResource(null)
       resetForm()
       fetchResources()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error updating resource:', error)
-      toast.error(error.message || '학습자료 수정에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '학습자료 수정에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
@@ -227,29 +260,33 @@ export default function ResourcesPage() {
 
     try {
       setOperationLoading(true)
-      const { resourcesApi } = await import('@/lib/api-unified')
-      const response = await resourcesApi.deleteResource(resourceId)
+      const response = await api.content.deleteContent(resourceId)
 
-      if (response.error) throw new Error(response.error)
+      if (!response.success) {
+        console.error('Delete content failed:', response.error)
+        throw new Error(response.error || 'Failed to delete resource')
+      }
 
       toast.success('학습자료가 삭제되었습니다.')
       fetchResources()
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error deleting resource:', error)
-      toast.error(error.message || '학습자료 삭제에 실패했습니다.')
+      const message = error instanceof Error ? error.message : '학습자료 삭제에 실패했습니다.'
+      toast.error(message)
     } finally {
       setOperationLoading(false)
     }
   }
 
-  const openEditDialog = (resource: ResourceWithAuthor) => {
+  const openEditDialog = (resource: ContentWithAuthorNonNull) => {
     setSelectedResource(resource)
+    const metadata = resource.metadata as any
     setFormData({
       title: resource.title,
-      description: resource.description,
-      url: resource.url || '',
-      category: resource.category,
-      type: resource.type,
+      description: resource.content,
+      url: metadata?.url || '',
+      category: resource.category as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline',
+      type: metadata?.type || 'guide',
       tags: resource.tags || []
     })
     setEditDialogOpen(true)
@@ -410,7 +447,8 @@ export default function ResourcesPage() {
             </Card>
           ))
         ) : filteredResources.map((resource, index) => {
-          const TypeIcon = typeIcons[resource.type as keyof typeof typeIcons] || FileText
+          const metadata = resource.metadata as any
+          const TypeIcon = typeIcons[metadata?.type as keyof typeof typeIcons] || FileText
           
           return (
             <motion.div
@@ -466,7 +504,7 @@ export default function ResourcesPage() {
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                    {resource.description}
+                    {resource.content}
                   </CardDescription>
                   
                   {/* Tags */}
@@ -488,15 +526,18 @@ export default function ResourcesPage() {
                   </div>
                   
                   <div className="flex items-center justify-between text-sm text-muted-foreground mb-4">
-                    <span className="font-medium">{resource.profiles?.name || '익명'}</span>
+                    <span className="font-medium">{resource.author_name || '익명'}</span>
                     <div className="flex items-center space-x-1">
                       <Download className="h-4 w-4" />
-                      <span>{(resource as any).download_count || 0}</span>
+                      <span>{metadata?.downloads || 0}</span>
                     </div>
                   </div>
 
-                  <Button asChild className="w-full kepco-gradient">
-                    <Link href={resource.url || '#'} target="_blank" rel="noopener noreferrer">
+                  <Button 
+                    className="w-full kepco-gradient"
+                    asChild
+                  >
+                    <Link href={`/resources/${resource.id}`}>
                       <ExternalLink className="mr-2 h-4 w-4" />
                       자료 보기
                     </Link>

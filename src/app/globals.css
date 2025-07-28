@@ -145,4 +145,19 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  
+  /* Comment highlight animation */
+  .highlight-comment {
+    @apply ring-2 ring-blue-500 ring-offset-2;
+    animation: highlight-fade 2s ease-out;
+  }
+  
+  @keyframes highlight-fade {
+    0% {
+      opacity: 1;
+    }
+    100% {
+      opacity: 0;
+    }
+  }
 }

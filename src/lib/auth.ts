@@ -1,23 +1,26 @@
-import { supabaseSimple } from './supabase-simple'
+import { supabase, AUTH_STORAGE_KEY } from './api.modern'
 import { Database } from './database.types'
+import { AUTH_CONSTANTS, authLog } from './constants/auth'
+import { AuthMonitorLite } from './utils/auth-monitor.lite'
 
-type Profile = Database['public']['Tables']['profiles']['Row']
+type User = Database['public']['Tables']['users']['Row']
 
 export interface AuthUser {
   id: string
   email: string
   emailConfirmed: boolean
-  profile: Profile | null
+  role?: string
+  profile: User | null
 }
 
 // Sign up with email and password
 export async function signUp(email: string, password: string, name: string, department: string = '전력관리처') {
-  if (!supabaseSimple) {
+  if (!supabase) {
     return { data: null, error: new Error('Supabase not configured') }
   }
   
   try {
-    const { data, error } = await supabaseSimple.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -30,10 +33,6 @@ export async function signUp(email: string, password: string, name: string, depa
     })
 
     if (error) throw error
-
-    // Profile is automatically created by handle_new_user() trigger
-    // No need to manually create profile here
-
     return { data, error: null }
   } catch (error) {
     return { data: null, error }
@@ -42,58 +41,41 @@ export async function signUp(email: string, password: string, name: string, depa
 
 // Sign in with email and password
 export async function signIn(email: string, password: string) {
-  // console.log('Sign in attempt initiated', email)
-  
-  if (!supabaseSimple) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Supabase client not configured')
-    }
+  if (!supabase) {
+    authLog.warn('Supabase client not configured')
     return { data: null, error: new Error('Supabase not configured') }
   }
   
   try {
-    // console.log('Calling supabase.auth.signInWithPassword')
-    const { data, error } = await supabaseSimple.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    // console.log('Supabase auth response received', {
-    //   hasData: !!data,
-    //   hasUser: !!data?.user,
-    //   hasSession: !!data?.session,
-    //   error: error?.message,
-    //   errorName: error?.name
-    // })
-
     if (error) {
-      // 개발 환경에서만 에러 로그 출력
-      if (process.env.NODE_ENV === 'development') {
-        console.warn('Authentication failed:', error.message)
-      }
-      
-      // 모든 에러를 그대로 반환 (LoginDialog에서 처리)
+      authLog.warn('Authentication failed:', error.message)
       return { data: null, error }
     }
     
-    // console.log('Sign in successful', email)
+    // Update last login time on successful sign in
+    if (data?.user?.id) {
+      await updateLastLogin(data.user.id)
+    }
     return { data, error: null }
   } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Sign in exception:', error)
-    }
+    authLog.warn('Sign in exception:', error)
     return { data: null, error }
   }
 }
 
 // Sign out
 export async function signOut() {
-  if (!supabaseSimple) {
+  if (!supabase) {
     return { error: new Error('Supabase not configured') }
   }
   
   try {
-    const { error } = await supabaseSimple.auth.signOut()
+    const { error } = await supabase.auth.signOut()
     if (error) throw error
     return { error: null }
   } catch (error) {
@@ -101,110 +83,176 @@ export async function signOut() {
   }
 }
 
-// Cache for user data to prevent excessive API calls
-let userCache: { data: AuthUser | null; timestamp: number } | null = null
-const CACHE_DURATION = 30000 // 30 seconds
+// 간소화된 캐시 시스템
+interface UserCache {
+  data: AuthUser | null
+  timestamp: number
+  sessionExpiry?: number
+}
 
-// Get current user with profile
+let userCache: UserCache | null = null
+let getCurrentUserPromise: Promise<AuthUser | null> | null = null
+
+// JWT 만료 체크 (간소화)
+function isTokenExpired(expiresAt?: number): boolean {
+  if (!expiresAt) return true
+  const now = Date.now() / 1000
+  return now >= (expiresAt - AUTH_CONSTANTS.JWT_EXPIRY_BUFFER)
+}
+
+// 캐시 유효성 체크 (간소화)
+function isCacheValid(cache: UserCache): boolean {
+  const now = Date.now()
+  const cacheAge = now - cache.timestamp
+  
+  // 캐시가 5분 이상 오래됨
+  if (cacheAge > AUTH_CONSTANTS.DEFAULT_CACHE_DURATION) {
+    return false
+  }
+  
+  // 세션 만료 임박
+  if (cache.sessionExpiry && isTokenExpired(cache.sessionExpiry)) {
+    return false
+  }
+  
+  return true
+}
+
+// Get current user - 최적화 버전
 export async function getCurrentUser(forceRefresh = false): Promise<AuthUser | null> {
-  if (!supabaseSimple) {
-    console.warn('Supabase client not configured')
+  if (!supabase) {
+    authLog.warn('Supabase client not configured')
     return null
   }
   
-  // Return cached data if available and not expired
-  if (!forceRefresh && userCache && Date.now() - userCache.timestamp < CACHE_DURATION) {
+  // Mutex 패턴 유지 (중복 호출 방지)
+  if (getCurrentUserPromise && !forceRefresh) {
+    AuthMonitorLite.log('getCurrentUser:waiting')
+    return getCurrentUserPromise
+  }
+  
+  // 캐시 확인
+  if (!forceRefresh && userCache && isCacheValid(userCache)) {
+    AuthMonitorLite.log('getCurrentUser:cache_hit')
     return userCache.data
   }
   
-  try {
-    const { data: { user }, error: userError } = await supabaseSimple.auth.getUser()
-    
-    if (userError) {
-      // Only log non-session errors to reduce console noise
-      if (userError.message !== 'Auth session missing!') {
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('Error getting user from auth:', userError.message)
-        }
+  getCurrentUserPromise = (async () => {
+    try {
+      // 세션 가져오기
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+      
+      if (sessionError || !session) {
+        authLog.info('No session found')
+        userCache = { data: null, timestamp: Date.now() }
+        return null
       }
-      userCache = { data: null, timestamp: Date.now() }
-      return null
-    }
-    
-    if (!user) {
-      userCache = { data: null, timestamp: Date.now() }
-      return null
-    }
-
-    // Check cache first for profile data (disabled for MVP)
-    let profile: Profile | null = null
-    
-    if (!profile) {
-      try {
-        const { data: profileData, error: profileError } = await supabaseSimple
-          .from('profiles')
+      
+      // 캐시된 사용자 정보 사용 (프로필 없이)
+      if (!forceRefresh && userCache?.data?.id === session.user.id) {
+        return userCache.data
+      }
+      
+      // 프로필 가져오기 (필요시)
+      let profile: User | null = null
+      
+      if (forceRefresh || !userCache?.data?.profile) {
+        const { data: userData, error: userError } = await supabase
+          .from('users')
           .select('*')
-          .eq('id', user.id)
+          .eq('id', session.user.id)
           .single()
         
-        if (profileError) {
-          console.warn('Profile not found or error', { error: profileError })
-          // Continue without profile if it doesn't exist
-          profile = null
+        if (userError) {
+          authLog.warn('User profile not found')
+          // 프로필 자동 생성 로직은 유지
+          try {
+            const userMetadata = session.user.user_metadata || {}
+            const { data: newUser } = await supabase
+              .from('users')
+              .insert({
+                id: session.user.id,
+                email: session.user.email!,
+                name: userMetadata.name || session.user.email!.split('@')[0],
+                department: userMetadata.department || null,
+                role: 'member',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+                last_seen_at: new Date().toISOString()
+              })
+              .select()
+              .single()
+            
+            profile = newUser
+          } catch {
+            profile = null
+          }
         } else {
-          profile = profileData || null
-          // Cache profile for 10 minutes
-          if (profile) {
-            // Note: Cache disabled for MVP
+          profile = userData
+          // 강제 새로고침시에만 last_seen 업데이트
+          if (forceRefresh) {
+            updateLastActive(session.user.id).catch(() => {})
           }
         }
-      } catch (profileError) {
-        console.warn('Profile query failed', { error: profileError })
-        profile = null
+      } else {
+        profile = userCache.data.profile
       }
-    }
 
-    const userData: AuthUser = {
-      id: user.id,
-      email: user.email!,
-      emailConfirmed: !!user.email_confirmed_at,
-      profile,
+      const userData: AuthUser = {
+        id: session.user.id,
+        email: session.user.email!,
+        emailConfirmed: !!session.user.email_confirmed_at,
+        role: profile?.role || 'member',
+        profile,
+      }
+      
+      // 캐시 업데이트
+      userCache = { 
+        data: userData, 
+        timestamp: Date.now(),
+        sessionExpiry: session.expires_at
+      }
+      
+      AuthMonitorLite.log('getCurrentUser:success')
+      return userData
+    } catch (error) {
+      authLog.error('Failed to get current user:', error)
+      userCache = { data: null, timestamp: Date.now() }
+      return null
+    } finally {
+      getCurrentUserPromise = null
     }
-    
-    // Cache the result
-    userCache = { data: userData, timestamp: Date.now() }
-    
-    return userData
-  } catch (error) {
-    if (process.env.NODE_ENV === 'development') {
-      console.warn('Failed to get current user:', error)
-    }
-    userCache = { data: null, timestamp: Date.now() }
-    return null
-  }
+  })()
+  
+  return getCurrentUserPromise
 }
 
-// Clear user cache (used when user data changes)
-export function clearUserCache(userId?: string) {
+// Clear user cache
+export function clearUserCache() {
   userCache = null
+}
+
+// Quick session check
+export async function hasSession(): Promise<boolean> {
+  if (!supabase) return false
   
-  // Clear profile cache for specific user or all profiles
-  if (userId) {
-    // Note: Cache disabled for MVP
-  } else {
-    // Note: Cache disabled for MVP
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    return !!session
+  } catch {
+    return false
   }
 }
 
 // Update user profile
-export async function updateProfile(userId: string, updates: Partial<Profile>) {
-  if (!supabaseSimple) {
+export async function updateProfile(userId: string, updates: Partial<User>) {
+  if (!supabase) {
     return { data: null, error: new Error('Supabase not configured') }
   }
   
   try {
-    const { data, error } = await supabaseSimple
-      .from('profiles')
+    const { data, error } = await supabase
+      .from('users')
       .update({
         ...updates,
         updated_at: new Date().toISOString(),
@@ -215,8 +263,7 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
 
     if (error) throw error
     
-    // Clear cache after profile update
-    clearUserCache(userId)
+    clearUserCache()
     
     return { data, error: null }
   } catch (error) {
@@ -224,7 +271,28 @@ export async function updateProfile(userId: string, updates: Partial<Profile>) {
   }
 }
 
-// Update last active timestamp (removed - field not in database schema)
-// export async function updateLastActive(userId: string) {
-//   // Field 'last_active' is not defined in profiles table
-// }
+// 통합된 사용자 활동 시간 업데이트
+export async function updateUserActivity(userId: string) {
+  if (!supabase) {
+    return { error: new Error('Supabase not configured') }
+  }
+  
+  try {
+    const { error } = await supabase
+      .from('users')
+      .update({
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq('id', userId)
+    
+    if (error) throw error
+    
+    return { error: null }
+  } catch (error) {
+    return { error }
+  }
+}
+
+// 하위 호환성을 위한 별칭
+export const updateLastActive = updateUserActivity
+export const updateLastLogin = updateUserActivity

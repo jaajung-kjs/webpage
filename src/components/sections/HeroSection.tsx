@@ -3,6 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Zap, Users, BookOpen, Lightbulb } from 'lucide-react'
 import { motion } from 'framer-motion'
+import QuickSearchBar from '@/components/ui/quick-search-bar'
 
 export default function HeroSection() {
   return (
@@ -51,18 +52,39 @@ export default function HeroSection() {
             구성원들과 함께 실무 경험과 노하우를 공유합니다
           </motion.p>
 
-          {/* CTA buttons */}
+          {/* Quick Search */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
+            className="mb-8 max-w-2xl mx-auto"
+          >
+            <QuickSearchBar />
+          </motion.div>
+
+          {/* CTA buttons */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
             className="mb-16 flex flex-col gap-4 sm:flex-row sm:justify-center"
           >
-            <Button size="lg" className="kepco-gradient text-white">
+            <Button 
+              size="lg" 
+              className="kepco-gradient text-white"
+              onClick={() => window.location.href = '/cases'}
+            >
               활용사례 보기
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
-            <Button size="lg" variant="outline">
+            <Button 
+              size="lg" 
+              variant="outline"
+              onClick={() => {
+                const event = new CustomEvent('openLoginDialog', { detail: { tab: 'signup' } })
+                window.dispatchEvent(event)
+              }}
+            >
               동아리 가입하기
             </Button>
           </motion.div>

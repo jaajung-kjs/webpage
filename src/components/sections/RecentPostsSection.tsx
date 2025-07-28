@@ -7,21 +7,19 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { casesApi } from '@/lib/api-unified'
+import api from '@/lib/api.modern'
 
 interface PostWithAuthor {
   id: string
   title: string
   content: string
-  category: string
-  views: number
-  likes_count: number
-  comments_count: number
-  created_at: string
+  category: string | null
+  view_count: number
+  like_count: number
+  comment_count: number
+  created_at: string | null
   author_id: string
-  profiles: {
-    name: string
-  } | null
+  author_name: string | null
 }
 
 const categoryLabels = {
@@ -75,10 +73,15 @@ export default function RecentPostsSection() {
   const fetchRecentPosts = async () => {
     try {
       // Fetch recent cases from DB
-      const response = await casesApi.getCases({ limit: 3 })
+      const response = await api.content.getContent({ 
+        type: 'case', 
+        limit: 3,
+        sort: 'created_at',
+        order: 'desc'
+      })
       
-      if (response.error) {
-        throw new Error(response.error)
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to fetch recent cases')
       }
       
       // Transform data to match expected type
@@ -87,12 +90,12 @@ export default function RecentPostsSection() {
         title: caseItem.title,
         content: caseItem.content || '',
         category: caseItem.category,
-        views: caseItem.views || 0,
-        likes_count: caseItem.likes_count || 0,
-        comments_count: caseItem.comments_count || 0,
+        view_count: caseItem.view_count || 0,
+        like_count: caseItem.like_count || 0,
+        comment_count: caseItem.comment_count || 0,
         created_at: caseItem.created_at,
         author_id: caseItem.author_id,
-        profiles: caseItem.profiles
+        author_name: caseItem.author_name
       }))
       
       setRecentPosts(transformedData)
@@ -192,10 +195,10 @@ export default function RecentPostsSection() {
                             variant="secondary" 
                             className={categoryColors[displayCategory as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'}
                           >
-                            {categoryLabels[displayCategory as keyof typeof categoryLabels] || displayCategory}
+                            {categoryLabels[displayCategory as keyof typeof categoryLabels] || displayCategory || '기타'}
                           </Badge>
                           <span className="text-sm text-muted-foreground">
-                            {new Date(postItem.created_at).toLocaleDateString('ko-KR')}
+                            {postItem.created_at ? new Date(postItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
                           </span>
                         </div>
                         <CardTitle className="line-clamp-2 text-xl leading-tight">
@@ -210,19 +213,19 @@ export default function RecentPostsSection() {
                         </CardDescription>
                         
                         <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span className="font-medium">{postItem.profiles?.name || '익명'}</span>
+                          <span className="font-medium">{postItem.author_name || '익명'}</span>
                           <div className="flex items-center space-x-3">
                             <div className="flex items-center space-x-1">
                               <Eye className="h-4 w-4" />
-                              <span>{postItem.views}</span>
+                              <span>{postItem.view_count}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <ThumbsUp className="h-4 w-4" />
-                              <span>{postItem.likes_count}</span>
+                              <span>{postItem.like_count}</span>
                             </div>
                             <div className="flex items-center space-x-1">
                               <MessageCircle className="h-4 w-4" />
-                              <span>{postItem.comments_count}</span>
+                              <span>{postItem.comment_count}</span>
                             </div>
                           </div>
                         </div>

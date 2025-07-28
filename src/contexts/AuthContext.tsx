@@ -1,8 +1,11 @@
 'use client'
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
-import { supabaseSimple } from '@/lib/supabase-simple'
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, useRef } from 'react'
+import { supabase, AUTH_STORAGE_KEY } from '@/lib/api.modern'
 import { AuthUser, getCurrentUser, clearUserCache } from '@/lib/auth'
+import { AUTH_CONSTANTS, authLog } from '@/lib/constants/auth'
+import { AuthMonitorLite } from '@/lib/utils/auth-monitor.lite'
+
 interface AuthContextType {
   user: AuthUser | null
   loading: boolean
@@ -26,63 +29,133 @@ export function useAuth() {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  
+  // 핵심 refs만 유지
+  const isUpdatingRef = useRef(false)
+  const refreshRetryCountRef = useRef(0)
+  const updateTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const updateCountRef = useRef(0) // 간단한 카운터로 루프 감지
 
+  // 최적화된 디바운스 업데이트
+  const debouncedAuthUpdate = useCallback(async (forceRefresh: boolean = false, source?: string) => {
+    // 간단한 루프 체크
+    updateCountRef.current++
+    if (AuthMonitorLite.checkLoop(updateCountRef.current)) {
+      return
+    }
+    
+    // 타이머 정리
+    if (updateTimeoutRef.current) {
+      clearTimeout(updateTimeoutRef.current)
+    }
+    
+    // 디바운스 실행
+    updateTimeoutRef.current = setTimeout(async () => {
+      if (isUpdatingRef.current) {
+        authLog.info('Auth update already in progress')
+        return
+      }
+      
+      isUpdatingRef.current = true
+      
+      try {
+        const freshUser = await getCurrentUser(forceRefresh)
+        setUser(freshUser)
+        refreshRetryCountRef.current = 0
+        
+        AuthMonitorLite.log('auth:updated', { userId: freshUser?.id, source })
+      } catch (error) {
+        authLog.error('Auth update failed:', error)
+      } finally {
+        isUpdatingRef.current = false
+      }
+    }, AUTH_CONSTANTS.AUTH_UPDATE_DEBOUNCE_MS)
+  }, [])
+
+  // 초기화 - 간소화
   useEffect(() => {
-    // Get initial session with timeout
-    const timeout = setTimeout(() => {
-      console.warn('Auth initialization timeout')
-      setLoading(false)
-    }, 5000) // 5초 타임아웃
-
-    getCurrentUser()
-      .then((user) => {
-        clearTimeout(timeout)
+    const initAuth = async () => {
+      try {
+        const user = await getCurrentUser(false)
         setUser(user)
+      } catch (error) {
+        authLog.error('Auth initialization error:', error)
+      } finally {
         setLoading(false)
-      })
-      .catch((error) => {
-        clearTimeout(timeout)
-        console.error('Auth initialization error:', error)
-        setLoading(false)
-      })
+      }
+    }
 
-    // Listen for auth changes
-    if (!supabaseSimple) {
+    initAuth()
+
+    if (!supabase) {
       setLoading(false)
       return
     }
     
-    const { data: { subscription } } = supabaseSimple.auth.onAuthStateChange(
+    // 이벤트 리스너 최적화
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state change', session?.user?.id, { event, emailConfirmed: session?.user?.email_confirmed_at })
-        
-        if (event === 'SIGNED_OUT') {
-          setUser(null)
-          setLoading(false)
-          return
+        // 중요 이벤트만 처리
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'USER_UPDATED':
+            debouncedAuthUpdate(true, event)
+            break
+            
+          case 'TOKEN_REFRESHED':
+            if (session?.user) {
+              refreshRetryCountRef.current = 0
+              debouncedAuthUpdate(false, event)
+            } else if (!session) {
+              // 토큰 갱신 실패 처리
+              refreshRetryCountRef.current++
+              
+              if (refreshRetryCountRef.current >= AUTH_CONSTANTS.MAX_REFRESH_RETRIES) {
+                authLog.error('Max refresh retries reached')
+                setUser(null)
+                clearUserCache()
+                if (typeof window !== 'undefined') {
+                  window.localStorage.removeItem(AUTH_STORAGE_KEY)
+                }
+                refreshRetryCountRef.current = 0
+              } else {
+                // Exponential backoff
+                const delay = AUTH_CONSTANTS.REFRESH_BACKOFF_BASE_MS * Math.pow(2, refreshRetryCountRef.current - 1)
+                setTimeout(() => debouncedAuthUpdate(true, 'retry'), delay)
+              }
+            }
+            break
+            
+          case 'SIGNED_OUT':
+            setUser(null)
+            clearUserCache()
+            refreshRetryCountRef.current = 0
+            break
+            
+          case 'INITIAL_SESSION':
+            if (!user && session?.user) {
+              debouncedAuthUpdate(false, event)
+            }
+            break
         }
-        
-        // Only fetch user profile when necessary
-        if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
-          const currentUser = await getCurrentUser(true) // Force refresh for these events
-          setUser(currentUser)
-          console.log('User profile updated', currentUser?.id, { emailConfirmed: currentUser?.emailConfirmed })
-        } else if (event === 'TOKEN_REFRESHED' && !user) {
-          const currentUser = await getCurrentUser(false) // Use cache if available
-          setUser(currentUser)
-        } else if (session?.user && !user) {
-          // Only fetch if we don't already have user data
-          const currentUser = await getCurrentUser(false) // Use cache if available
-          setUser(currentUser)
-        }
-        
-        setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
-  }, [])
+    // 루프 카운터 리셋 (5초마다)
+    const resetInterval = setInterval(() => {
+      updateCountRef.current = 0
+    }, AUTH_CONSTANTS.LOOP_DETECTION_WINDOW_MS)
 
+    return () => {
+      subscription.unsubscribe()
+      if (updateTimeoutRef.current) {
+        clearTimeout(updateTimeoutRef.current)
+      }
+      clearInterval(resetInterval)
+    }
+  }, [debouncedAuthUpdate, user])
+
+  // 메서드들은 그대로 유지 (최적화 불필요)
   const signIn = useCallback(async (email: string, password: string) => {
     const { signIn } = await import('@/lib/auth')
     return signIn(email, password)
@@ -98,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const result = await signOut()
     if (!result.error) {
       setUser(null)
-      clearUserCache() // Clear cache on sign out
+      clearUserCache()
     }
     return result
   }, [])
@@ -121,11 +194,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const resendEmailConfirmation = useCallback(async (email: string) => {
     try {
-      if (!supabaseSimple) {
+      if (!supabase) {
         return { error: new Error('Supabase client not available') }
       }
       
-      const { error } = await supabaseSimple.auth.resend({
+      const { error } = await supabase.auth.resend({
         type: 'signup',
         email: email,
         options: {
