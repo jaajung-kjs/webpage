@@ -31,7 +31,7 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>
   signUp: (email: string, password: string, name: string, department?: string) => Promise<{ error: AuthError | null }>
-  signOut: () => Promise<void>
+  signOut: () => Promise<{ error: any } | undefined>
   refreshSession: () => Promise<void>
   updateProfile: (updates: Partial<UserProfile>) => Promise<{ error: any }>
 }
@@ -53,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLeader: false
   })
   const [isInitialLoad, setIsInitialLoad] = useState(true)
+  const [profileSubscription, setProfileSubscription] = useState<any>(null)
 
   // Fetch user profile from database with caching
   const fetchProfile = useCallback(async (userId: string) => {
@@ -134,9 +135,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         toast.success('로그인되었습니다.')
       } else if (event === 'SIGNED_OUT') {
         toast.success('로그아웃되었습니다.')
+        // Ensure state is cleared
+        setState({
+          user: null,
+          profile: null,
+          session: null,
+          loading: false,
+          isAuthenticated: false,
+          isMember: false,
+          isAdmin: false,
+          isLeader: false
+        })
         // Clear all auth-related caches
-        HybridCache.invalidate('auth:profile')
-        router.push('/')
+        HybridCache.invalidate('auth:')
+        // Delay navigation to ensure state updates propagate
+        setTimeout(() => {
+          router.push('/')
+        }, 100)
       } else if (event === 'USER_UPDATED') {
         toast.success('사용자 정보가 업데이트되었습니다.')
       }
@@ -154,7 +169,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Subscribe to profile changes
   useEffect(() => {
-    if (!state.user) return
+    if (!state.user) {
+      // Clean up subscription if user logs out
+      if (profileSubscription) {
+        profileSubscription.unsubscribe()
+        setProfileSubscription(null)
+      }
+      return
+    }
 
     // Subscribe to realtime changes for the user's profile
     const subscription = supabase
@@ -190,6 +212,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       )
       .subscribe()
+      
+    setProfileSubscription(subscription)
 
     return () => {
       subscription.unsubscribe()
@@ -243,11 +267,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Sign out method
   const signOut = useCallback(async () => {
-    const { error } = await supabase.auth.signOut()
-    if (error) {
-      toast.error(handleSupabaseError(error))
+    try {
+      // Clear all caches first
+      HybridCache.invalidate('auth:')
+      
+      // Clear localStorage session manually as backup
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('kepco-ai-auth')
+      }
+      
+      // Unsubscribe from realtime
+      if (profileSubscription) {
+        await profileSubscription.unsubscribe()
+        setProfileSubscription(null)
+      }
+      
+      // Remove all active channels
+      const channels = supabase.getChannels()
+      await Promise.all(channels.map(channel => supabase.removeChannel(channel)))
+      
+      // Sign out from Supabase
+      const { error } = await supabase.auth.signOut()
+      
+      if (error) {
+        toast.error(handleSupabaseError(error))
+        return { error }
+      }
+      
+      // Clear state immediately
+      setState({
+        user: null,
+        profile: null,
+        session: null,
+        loading: false,
+        isAuthenticated: false,
+        isMember: false,
+        isAdmin: false,
+        isLeader: false
+      })
+      
+      return { error: null }
+    } catch (error) {
+      console.error('Logout error:', error)
+      toast.error('로그아웃 중 오류가 발생했습니다.')
+      return { error }
     }
-  }, [])
+  }, [profileSubscription])
 
   // Refresh session
   const refreshSession = useCallback(async () => {

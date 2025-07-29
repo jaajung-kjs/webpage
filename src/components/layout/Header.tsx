@@ -126,8 +126,13 @@ export default function Header() {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
-                    onClick={() => signOut()}
-                    className="text-red-600 focus:text-red-600"
+                    onClick={async () => {
+                      const result = await signOut()
+                      if (result?.error) {
+                        console.error('Logout failed:', result.error)
+                      }
+                    }}
+                    className="text-red-600 focus:text-red-600 cursor-pointer"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>로그아웃</span>
@@ -251,7 +256,12 @@ function MobileNav() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={() => signOut()}
+              onClick={async () => {
+                const result = await signOut()
+                if (result?.error) {
+                  console.error('Logout failed:', result.error)
+                }
+              }}
               className="text-red-600"
             >
               로그아웃
