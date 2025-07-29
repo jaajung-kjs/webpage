@@ -25,6 +25,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { 
   Search, 
   Calendar, 
@@ -41,11 +48,16 @@ import {
   MessageCircle,
   HelpCircle,
   Loader2,
-  X
+  X,
+  MoreVertical,
+  Edit,
+  Trash2,
+  Lightbulb
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
-import { useContentList, useCreateContent } from '@/hooks/useSupabase'
+import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
+import { useRouter } from 'next/navigation'
 import { supabase, Views, TablesInsert } from '@/lib/supabase/client'
 
 const categoryLabels = {
@@ -85,6 +97,7 @@ const categoryIcons = {
 
 export default function CommunityPage() {
   const { user } = useAuth()
+  const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
@@ -105,6 +118,7 @@ export default function CommunityPage() {
     status: 'published'
   })
   const { createContent, loading: createLoading } = useCreateContent()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
 
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
@@ -378,6 +392,53 @@ export default function CommunityPage() {
                               {post.excerpt}
                             </CardDescription>
                           </div>
+                          {user && (user.id === post.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {user.id === post.author_id && (
+                                  <>
+                                    <DropdownMenuItem onClick={() => toast.info('수정 기능은 준비 중입니다.')}>
+                                      <Edit className="mr-2 h-4 w-4" />
+                                      수정
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                  </>
+                                )}
+                                <DropdownMenuItem 
+                                  onClick={async () => {
+                                    if (!confirm('정말로 이 게시글을 삭제하시겠습니까?')) {
+                                      return
+                                    }
+                                    if (!post.id) {
+                                      toast.error('게시글 ID를 찾을 수 없습니다.')
+                                      return
+                                    }
+                                    try {
+                                      const result = await deleteContent(post.id)
+                                      if (result.error) {
+                                        throw result.error
+                                      }
+                                      toast.success('게시글이 삭제되었습니다.')
+                                      refetch() // Refresh the list
+                                    } catch (error: any) {
+                                      console.error('Error deleting post:', error)
+                                      toast.error(error.message || '게시글 삭제에 실패했습니다.')
+                                    }
+                                  }}
+                                  disabled={deleteLoading}
+                                  className="text-red-600 focus:text-red-600"
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  삭제
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
                         </div>
                       </CardHeader>
                       <CardContent>

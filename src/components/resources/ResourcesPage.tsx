@@ -171,7 +171,6 @@ export default function ResourcesPage() {
         tags: formData.tags,
         author_id: user.id,
         status: 'published',
-        excerpt: formData.description.substring(0, 200),
         metadata: {
           url: formData.url,
           type: formData.type,
@@ -208,7 +207,6 @@ export default function ResourcesPage() {
         content: formData.description,
         category: formData.category,
         tags: formData.tags,
-        excerpt: formData.description.substring(0, 200),
         metadata: {
           ...metadata,
           url: formData.url,
@@ -442,7 +440,7 @@ export default function ResourcesPage() {
                     <div className="flex items-center space-x-2">
                       <TypeIcon className="h-4 w-4 text-muted-foreground" />
                       
-                      {user && (
+                      {user && (user.id === resource.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -450,14 +448,18 @@ export default function ResourcesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => openEditDialog(resource)}
-                              disabled={operationLoading}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
+                            {user.id === resource.author_id && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => openEditDialog(resource)}
+                                  disabled={operationLoading}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  수정
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem
                               onClick={() => handleDeleteResource(resource.id!)}
                               disabled={operationLoading}

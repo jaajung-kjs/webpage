@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -21,9 +22,20 @@ import {
   Flag,
   MoreHorizontal,
   Bookmark,
-  BookmarkCheck
+  BookmarkCheck,
+  MoreVertical,
+  Edit,
+  Trash2
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { supabase, Views } from '@/lib/supabase/client'
+import { useDeleteContent } from '@/hooks/useSupabase'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import PermissionGate from '@/components/shared/PermissionGate'
@@ -67,6 +79,8 @@ const categoryIcons = {
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
   const { user } = useAuth()
+  const router = useRouter()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
   const [announcementData, setAnnouncementData] = useState<Views<'content_with_author'> | null>(null)
   const [loading, setLoading] = useState(true)
   const [isBookmarked, setIsBookmarked] = useState(false)
@@ -178,6 +192,30 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     const url = window.location.href
     navigator.clipboard.writeText(url)
     toast.success('링크가 클립보드에 복사되었습니다.')
+  }
+
+  const handleEdit = () => {
+    toast.info('수정 기능은 준비 중입니다.')
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('정말로 이 공지사항을 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      const result = await deleteContent(announcementId)
+      
+      if (result.error) {
+        throw result.error
+      }
+
+      toast.success('공지사항이 삭제되었습니다.')
+      router.push('/announcements')
+    } catch (error: any) {
+      console.error('Error deleting announcement:', error)
+      toast.error(error.message || '공지사항 삭제에 실패했습니다.')
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -333,14 +371,44 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  <div className="flex items-center space-x-1">
-                    <Eye className="h-4 w-4" />
-                    <span>{announcementData.view_count || 0}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <MessageCircle className="h-4 w-4" />
-                    <span>{announcementData.comment_count || 0}</span>
+                <div className="flex items-center space-x-2">
+                  {user && (user.id === announcementData.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {user.id === announcementData.author_id && (
+                          <>
+                            <DropdownMenuItem onClick={handleEdit}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              수정
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={handleDelete}
+                          disabled={deleteLoading}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
+                    <div className="flex items-center space-x-1">
+                      <Eye className="h-4 w-4" />
+                      <span>{announcementData.view_count || 0}</span>
+                    </div>
+                    <div className="flex items-center space-x-1">
+                      <MessageCircle className="h-4 w-4" />
+                      <span>{announcementData.comment_count || 0}</span>
+                    </div>
                   </div>
                 </div>
               </div>

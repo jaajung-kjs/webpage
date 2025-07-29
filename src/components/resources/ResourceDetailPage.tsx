@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -24,14 +25,25 @@ import {
   Heart,
   Bookmark,
   BookmarkCheck,
-  Tag
+  Tag,
+  MoreVertical,
+  Edit,
+  Trash2
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { 
   useContent,
   useIsLiked,
   useToggleLike,
   useSupabaseMutation,
-  useUpdateContent
+  useUpdateContent,
+  useDeleteContent
 } from '@/hooks/useSupabase'
 import { Views } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -77,12 +89,14 @@ const typeIcons = {
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
   const { user, isMember } = useAuth()
+  const router = useRouter()
   
   // Use Supabase hooks
   const { data: resourceData, loading, error } = useContent(resourceId)
   const isBookmarked = useIsLiked(user?.id, resourceId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
   const { updateContent, loading: updateLoading } = useUpdateContent()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
   
   const [downloadCount, setDownloadCount] = useState(0)
 
@@ -179,6 +193,30 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     const url = window.location.href
     navigator.clipboard.writeText(url)
     toast.success('링크가 클립보드에 복사되었습니다.')
+  }
+
+  const handleEdit = () => {
+    toast.info('수정 기능은 준비 중입니다.')
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('정말로 이 학습자료를 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      const result = await deleteContent(resourceId)
+      
+      if (result.error) {
+        throw result.error
+      }
+
+      toast.success('학습자료가 삭제되었습니다.')
+      router.push('/resources')
+    } catch (error: any) {
+      console.error('Error deleting resource:', error)
+      toast.error(error.message || '학습자료 삭제에 실패했습니다.')
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -313,8 +351,36 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-2">
+                  {user && (user.id === resourceData.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {user.id === resourceData.author_id && (
+                          <>
+                            <DropdownMenuItem onClick={handleEdit}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              수정
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={handleDelete}
+                          disabled={deleteLoading}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                     <Download className="h-4 w-4" />
                     <span>{downloadCount}</span>
                   </div>

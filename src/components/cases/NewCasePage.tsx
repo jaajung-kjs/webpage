@@ -102,13 +102,13 @@ export default function NewCasePage() {
         tags: values.tags.split(',').map(tag => tag.trim()).filter(Boolean),
         author_id: user.id,
         status: 'published' as const,
-        excerpt: values.description,
         metadata: {
           subcategory: 'automation',
           tools: ['AI Assistant'],
           difficulty: 'beginner',
           time_required: '1-2시간',
-          is_featured: false
+          is_featured: false,
+          description: values.description
         }
       }
 

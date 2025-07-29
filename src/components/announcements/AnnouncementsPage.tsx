@@ -591,7 +591,7 @@ function AnnouncementsPage() {
                       </Avatar>
                       
                       {/* Admin Controls */}
-                      {user && (
+                      {user && (user.id === announcement.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -599,30 +599,39 @@ function AnnouncementsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => handleTogglePin(announcement.id!, metadata.is_pinned || false)}
-                              disabled={operationLoading}
-                            >
-                              {metadata.is_pinned ? (
-                                <>
-                                  <PinOff className="mr-2 h-4 w-4" />
-                                  고정 해제
-                                </>
-                              ) : (
-                                <>
-                                  <PinIcon className="mr-2 h-4 w-4" />
-                                  고정하기
-                                </>
-                              )}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={() => openEditDialog(announcement)}
-                              disabled={operationLoading}
-                            >
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
+                            {['admin', 'leader', 'vice-leader'].includes(user.role || '') && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => handleTogglePin(announcement.id!, metadata.is_pinned || false)}
+                                  disabled={operationLoading}
+                                >
+                                  {metadata.is_pinned ? (
+                                    <>
+                                      <PinOff className="mr-2 h-4 w-4" />
+                                      고정 해제
+                                    </>
+                                  ) : (
+                                    <>
+                                      <PinIcon className="mr-2 h-4 w-4" />
+                                      고정하기
+                                    </>
+                                  )}
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            {user.id === announcement.author_id && (
+                              <>
+                                <DropdownMenuItem
+                                  onClick={() => openEditDialog(announcement)}
+                                  disabled={operationLoading}
+                                >
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  수정
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
                             <DropdownMenuItem
                               onClick={() => handleDeleteAnnouncement(announcement.id!)}
                               disabled={operationLoading}

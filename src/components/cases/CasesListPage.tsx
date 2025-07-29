@@ -8,9 +8,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Search, Plus, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
+import { Search, Plus, ThumbsUp, MessageCircle, Eye, MoreVertical, Edit, Trash2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import { useContentList } from '@/hooks/useSupabase'
+import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { Views, type Enums } from '@/lib/supabase/client'
 
 type PostCategory = Enums<'post_category'>
@@ -36,6 +45,8 @@ export default function CasesListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
   const { user } = useAuth()
+  const router = useRouter()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
   
   // Use Supabase hook
   const { data: cases, loading } = useContentList({
@@ -194,9 +205,58 @@ export default function CasesListPage() {
                     >
                       {categoryLabels[caseItem.category as keyof typeof categoryLabels] || caseItem.category}
                     </Badge>
-                    <span className="text-sm text-muted-foreground">
-                      {caseItem.created_at ? new Date(caseItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">
+                        {caseItem.created_at ? new Date(caseItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
+                      </span>
+                      {user && (user.id === caseItem.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {user.id === caseItem.author_id && (
+                              <>
+                                <DropdownMenuItem onClick={() => toast.info('수정 기능은 준비 중입니다.')}>
+                                  <Edit className="mr-2 h-4 w-4" />
+                                  수정
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                              </>
+                            )}
+                            <DropdownMenuItem 
+                              onClick={async () => {
+                                if (!confirm('정말로 이 활용사례를 삭제하시겠습니까?')) {
+                                  return
+                                }
+                                if (!caseItem.id) {
+                                  toast.error('활용사례 ID를 찾을 수 없습니다.')
+                                  return
+                                }
+                                try {
+                                  const result = await deleteContent(caseItem.id)
+                                  if (result.error) {
+                                    throw result.error
+                                  }
+                                  toast.success('활용사례가 삭제되었습니다.')
+                                  window.location.reload() // Refresh the list
+                                } catch (error: any) {
+                                  console.error('Error deleting case:', error)
+                                  toast.error(error.message || '활용사례 삭제에 실패했습니다.')
+                                }
+                              }}
+                              disabled={deleteLoading}
+                              className="text-red-600 focus:text-red-600"
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              삭제
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                   <CardTitle className="line-clamp-2 text-xl leading-tight">
                     <Link 

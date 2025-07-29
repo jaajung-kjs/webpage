@@ -52,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAdmin: false,
     isLeader: false
   })
+  const [isInitialLoad, setIsInitialLoad] = useState(true)
 
   // Fetch user profile from database with caching
   const fetchProfile = useCallback(async (userId: string) => {
@@ -128,7 +129,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       updateAuthState(session)
 
       // Handle specific events
-      if (event === 'SIGNED_IN') {
+      // Skip toast on initial load or when event is INITIAL_SESSION
+      if (event === 'SIGNED_IN' && !isInitialLoad) {
         toast.success('로그인되었습니다.')
       } else if (event === 'SIGNED_OUT') {
         toast.success('로그아웃되었습니다.')
@@ -137,6 +139,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         router.push('/')
       } else if (event === 'USER_UPDATED') {
         toast.success('사용자 정보가 업데이트되었습니다.')
+      }
+      
+      // Set initial load to false after first auth state change
+      if (isInitialLoad && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        setIsInitialLoad(false)
       }
     })
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,6 +23,7 @@ import {
   ThumbsUp,
   Flag,
   MoreHorizontal,
+  MoreVertical,
   Edit,
   Trash2,
   Link as LinkIcon,
@@ -29,10 +31,18 @@ import {
   Bookmark,
   BookmarkCheck
 } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { 
   useContent,
   useIsLiked,
-  useToggleLike
+  useToggleLike,
+  useDeleteContent
 } from '@/hooks/useSupabase'
 import { Views } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
@@ -48,11 +58,13 @@ interface CaseDetailPageProps {
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { user, isMember } = useAuth()
+  const router = useRouter()
   
   // Use Supabase hooks
   const { data: caseData, loading, error } = useContent(caseId)
   const isLiked = useIsLiked(user?.id, caseId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
   
   const [likeCount, setLikeCount] = useState(0)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -126,6 +138,30 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     
     setIsBookmarked(!isBookmarked)
     toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+  }
+
+  const handleEdit = () => {
+    toast.info('수정 기능은 준비 중입니다.')
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('정말로 이 활용사례를 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      const result = await deleteContent(caseId)
+      
+      if (result.error) {
+        throw result.error
+      }
+
+      toast.success('활용사례가 삭제되었습니다.')
+      router.push('/cases')
+    } catch (error: any) {
+      console.error('Error deleting case:', error)
+      toast.error(error.message || '활용사례 삭제에 실패했습니다.')
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -241,12 +277,40 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                  <div className="flex items-center space-x-1">
+                <div className="flex items-center space-x-2">
+                  {user && (user.id === caseData.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {user.id === caseData.author_id && (
+                          <>
+                            <DropdownMenuItem onClick={handleEdit}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              수정
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                          </>
+                        )}
+                        <DropdownMenuItem 
+                          onClick={handleDelete}
+                          disabled={deleteLoading}
+                          className="text-red-600 focus:text-red-600"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
+                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                     <Eye className="h-4 w-4" />
                     <span>{caseData.view_count || 0}</span>
                   </div>
-                  <div className="flex items-center space-x-1">
+                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
                     <Heart className="h-4 w-4" />
                     <span>{likeCount}</span>
                   </div>
