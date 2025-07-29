@@ -27,8 +27,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useAuth } from '@/contexts/AuthContext'
-import api from "@/lib/api.modern"
+import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ArrowLeft, Save, Eye, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -56,6 +56,7 @@ export default function NewCasePage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(false)
   const { user } = useAuth()
+  const profile = useProfile()
   const router = useRouter()
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -111,25 +112,21 @@ export default function NewCasePage() {
         }
       }
 
-      // Validate case data
-      const validation = api.utils.validateContent(caseData)
-      if (!validation.valid) {
-        toast.error('입력 오류', {
-          description: validation.errors.join(', ')
-        })
-        return
-      }
-
-      const response = await api.content.createContent(caseData)
+      // Create case using Supabase
+      const { data, error } = await supabase
+        .from('content')
+        .insert(caseData)
+        .select()
+        .single()
       
-      if (response.success) {
-        toast.success('사례 등록 성공', {
-          description: '새로운 사례가 성공적으로 등록되었습니다.'
-        })
-        router.push('/cases')
-      } else {
-        throw new Error(response.error)
+      if (error) {
+        throw error
       }
+      
+      toast.success('사례 등록 성공', {
+        description: '새로운 사례가 성공적으로 등록되었습니다.'
+      })
+      router.push('/cases')
     } catch (error) {
       console.error('Error submitting case:', error)
       toast.error('사례 등록 실패', {
@@ -377,9 +374,9 @@ export default function NewCasePage() {
                   {user && (
                     <div className="border-t pt-4">
                       <div className="flex items-center space-x-2 text-sm text-muted-foreground">
-                        <span className="font-medium">{user.profile?.name}</span>
+                        <span className="font-medium">{profile?.name}</span>
                         <span>·</span>
-                        <span>{user.profile?.department}</span>
+                        <span>{profile?.department}</span>
                       </div>
                     </div>
                   )}

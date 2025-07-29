@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -48,7 +48,13 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
+import { 
+  useContentList, 
+  useCreateContent, 
+  useUpdateContent,
+  useDeleteContent
+} from '@/hooks/useSupabase'
+import { Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
 
 const categoryLabels = {
   all: '전체',
@@ -78,17 +84,24 @@ const categoryColors = {
 
 export default function ResourcesPage() {
   const { user } = useAuth()
-  const [resources, setResources] = useState<ContentWithAuthorNonNull[]>([])
-  const [filteredResources, setFilteredResources] = useState<ContentWithAuthorNonNull[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
-  const [loading, setLoading] = useState(true)
+  
+  // Use Supabase hooks
+  const { data: resources, loading, refetch } = useContentList({
+    type: 'resource',
+    status: 'published'
+  })
+  const { createContent, loading: createLoading } = useCreateContent()
+  const { updateContent, loading: updateLoading } = useUpdateContent()
+  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  
+  const operationLoading = createLoading || updateLoading || deleteLoading
 
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedResource, setSelectedResource] = useState<ContentWithAuthorNonNull | null>(null)
-  const [operationLoading, setOperationLoading] = useState(false)
+  const [selectedResource, setSelectedResource] = useState<Views<'content_with_author'> | null>(null)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -100,34 +113,27 @@ export default function ResourcesPage() {
     tags: [] as string[]
   })
 
-  useEffect(() => {
-    fetchResources()
-  }, [])
+  // Filter resources
+  const filteredResources = useMemo(() => {
+    if (!resources) return []
+    
+    let filtered = [...resources]
 
-  useEffect(() => {
-    filterResources(searchTerm, activeCategory)
-  }, [searchTerm, activeCategory, resources])
-
-  const fetchResources = async () => {
-    try {
-      setLoading(true)
-      // Fetch real data from DB using modern API
-      const response = await api.content.getContent({
-        type: 'resource',
-        status: 'published'
-      })
-      
-      if (!response.success) throw new Error(response.error || 'Failed to fetch resources')
-
-      setResources(response.data || [])
-      setFilteredResources(response.data || [])
-    } catch (error) {
-      console.error('Error fetching resources:', error)
-      toast.error('학습자료 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+    if (searchTerm) {
+      filtered = filtered.filter(resource =>
+        resource.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resource.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        resource.tags?.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
     }
-  }
+
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(resource => resource.category === activeCategory)
+    }
+
+    return filtered
+  }, [resources, searchTerm, activeCategory])
+
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
@@ -137,23 +143,6 @@ export default function ResourcesPage() {
     setActiveCategory(category)
   }
 
-  const filterResources = (term: string, category: string) => {
-    let filtered = resources
-
-    if (term) {
-      filtered = filtered.filter(resource =>
-        resource.title.toLowerCase().includes(term.toLowerCase()) ||
-        resource.content.toLowerCase().includes(term.toLowerCase()) ||
-        resource.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
-      )
-    }
-
-    if (category !== 'all') {
-      filtered = filtered.filter(resource => resource.category === category)
-    }
-
-    setFilteredResources(filtered)
-  }
 
   // Admin functions
   const resetForm = () => {
@@ -174,15 +163,14 @@ export default function ResourcesPage() {
     }
 
     try {
-      setOperationLoading(true)
-      const resourceData = {
+      const newResource: TablesInsert<'content'> = {
         title: formData.title,
         content: formData.description,
-        type: 'resource' as const,
+        type: 'resource',
         category: formData.category,
         tags: formData.tags,
         author_id: user.id,
-        status: 'published' as const,
+        status: 'published',
         excerpt: formData.description.substring(0, 200),
         metadata: {
           url: formData.url,
@@ -191,24 +179,19 @@ export default function ResourcesPage() {
         }
       }
       
-
-      const response = await api.content.createContent(resourceData)
-
-      if (!response.success) {
-        console.error('Create content failed:', response.error)
-        throw new Error(response.error || 'Failed to create resource')
+      const result = await createContent(newResource)
+      
+      if (result.error) {
+        throw new Error(result.error.message)
       }
 
       toast.success('학습자료가 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
-      fetchResources()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error creating resource:', error)
-      const message = error instanceof Error ? error.message : '학습자료 등록에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '학습자료 등록에 실패했습니다.')
     }
   }
 
@@ -219,9 +202,8 @@ export default function ResourcesPage() {
     }
 
     try {
-      setOperationLoading(true)
       const metadata = selectedResource.metadata as any
-      const updateData = {
+      const updates: TablesUpdate<'content'> = {
         title: formData.title,
         content: formData.description,
         category: formData.category,
@@ -233,25 +215,21 @@ export default function ResourcesPage() {
           type: formData.type
         }
       }
+      
+      const result = await updateContent(selectedResource.id!, updates)
 
-      const response = await api.content.updateContent(selectedResource.id, updateData)
-
-      if (!response.success) {
-        console.error('Update content failed:', response.error)
-        throw new Error(response.error || 'Failed to update resource')
+      if (result.error) {
+        throw result.error
       }
 
       toast.success('학습자료가 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedResource(null)
       resetForm()
-      fetchResources()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error updating resource:', error)
-      const message = error instanceof Error ? error.message : '학습자료 수정에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '학습자료 수정에 실패했습니다.')
     }
   }
 
@@ -259,31 +237,26 @@ export default function ResourcesPage() {
     if (!user) return
 
     try {
-      setOperationLoading(true)
-      const response = await api.content.deleteContent(resourceId)
+      const result = await deleteContent(resourceId)
 
-      if (!response.success) {
-        console.error('Delete content failed:', response.error)
-        throw new Error(response.error || 'Failed to delete resource')
+      if (result.error) {
+        throw result.error
       }
 
       toast.success('학습자료가 삭제되었습니다.')
-      fetchResources()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error deleting resource:', error)
-      const message = error instanceof Error ? error.message : '학습자료 삭제에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '학습자료 삭제에 실패했습니다.')
     }
   }
 
-  const openEditDialog = (resource: ContentWithAuthorNonNull) => {
+  const openEditDialog = (resource: Views<'content_with_author'>) => {
     setSelectedResource(resource)
     const metadata = resource.metadata as any
     setFormData({
-      title: resource.title,
-      description: resource.content,
+      title: resource.title || '',
+      description: resource.content || '',
       url: metadata?.url || '',
       category: resource.category as 'tutorial' | 'workshop' | 'template' | 'reference' | 'guideline',
       type: metadata?.type || 'guide',
@@ -486,7 +459,7 @@ export default function ResourcesPage() {
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDeleteResource(resource.id)}
+                              onClick={() => handleDeleteResource(resource.id!)}
                               disabled={operationLoading}
                               className="text-red-600 focus:text-red-600"
                             >
@@ -559,20 +532,19 @@ export default function ResourcesPage() {
         >
           <div className="mb-4 text-6xl">📚</div>
           <h3 className="mb-2 text-xl font-semibold">
-            {resources.length === 0 ? '아직 등록된 학습자료가 없습니다' : '검색 결과가 없습니다'}
+            {!resources || resources.length === 0 ? '아직 등록된 학습자료가 없습니다' : '검색 결과가 없습니다'}
           </h3>
           <p className="mb-4 text-muted-foreground">
-            {resources.length === 0 ? '첫 번째 학습자료를 등록해보세요!' : '다른 검색어나 카테고리를 시도해보세요'}
+            {!resources || resources.length === 0 ? '첫 번째 학습자료를 등록해보세요!' : '다른 검색어나 카테고리를 시도해보세요'}
           </p>
           <Button
             variant="outline"
             onClick={() => {
               setSearchTerm('')
               setActiveCategory('all')
-              filterResources('', 'all')
             }}
           >
-            {resources.length === 0 ? '새로고침' : '전체 보기'}
+            {!resources || resources.length === 0 ? '새로고침' : '전체 보기'}
           </Button>
         </motion.div>
       )}

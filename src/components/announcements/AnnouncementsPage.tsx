@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, memo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -51,8 +51,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import api from '@/lib/api.modern'
-import type { ContentWithAuthor } from '@/lib/types.core'
+import { useContentList, useCreateContent, useSupabaseMutation } from '@/hooks/useSupabase'
+import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
 
 const categoryLabels = {
   all: '전체',
@@ -90,19 +90,26 @@ const categoryIcons = {
 }
 
 function AnnouncementsPage() {
-  const { user } = useAuth()
-  const [announcements, setAnnouncements] = useState<ContentWithAuthor[]>([])
-  const [filteredAnnouncements, setFilteredAnnouncements] = useState<ContentWithAuthor[]>([])
+  const { user, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activePriority, setActivePriority] = useState('all')
-  const [loading, setLoading] = useState(true)
+  
+  // Use Supabase hooks
+  const { data: announcements, loading, refetch } = useContentList({
+    type: 'announcement',
+    status: 'published'
+  })
+  const { createContent, loading: createLoading } = useCreateContent()
+  const { mutate: updateContent, loading: updateLoading } = useSupabaseMutation()
+  const { mutate: deleteContent, loading: deleteLoading } = useSupabaseMutation()
+  
+  const operationLoading = createLoading || updateLoading || deleteLoading
 
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedAnnouncement, setSelectedAnnouncement] = useState<ContentWithAuthor | null>(null)
-  const [operationLoading, setOperationLoading] = useState(false)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Views<'content_with_author'> | null>(null)
   
   // Form state
   const [formData, setFormData] = useState({
@@ -114,39 +121,43 @@ function AnnouncementsPage() {
     tags: [] as string[]
   })
 
-  useEffect(() => {
-    fetchAnnouncements()
-  }, [])
+  // Filter announcements
+  const filteredAnnouncements = useMemo(() => {
+    if (!announcements) return []
+    
+    let filtered = [...announcements]
 
-  useEffect(() => {
-    filterAnnouncements(searchTerm, activeCategory, activePriority)
-  }, [searchTerm, activeCategory, activePriority, announcements])
-
-  const fetchAnnouncements = async () => {
-    try {
-      setLoading(true)
-      // Fetch announcements using unified content API
-      const response = await api.content.getContent({
-        type: 'announcement',
-        status: 'published',
-        sort: 'created_at',
-        order: 'desc'
-      })
-      
-      if (!response.success) {
-        console.error('Update content failed:', response.error)
-        throw new Error(response.error || 'Failed to update announcement')
-      }
-
-      setAnnouncements(response.data || [])
-      setFilteredAnnouncements(response.data || [])
-    } catch (error) {
-      console.error('Error fetching announcements:', error)
-      toast.error('공지사항 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+    if (searchTerm) {
+      filtered = filtered.filter(announcement =>
+        announcement.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        announcement.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        announcement.tags?.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
     }
-  }
+
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(announcement => announcement.category === activeCategory)
+    }
+
+    if (activePriority !== 'all') {
+      filtered = filtered.filter(announcement => 
+        (announcement.metadata as any)?.priority === activePriority
+      )
+    }
+
+    // Sort by pinned first, then by date
+    filtered.sort((a, b) => {
+      const aIsPinned = (a.metadata as any)?.is_pinned || false
+      const bIsPinned = (b.metadata as any)?.is_pinned || false
+      
+      if (aIsPinned && !bIsPinned) return -1
+      if (!aIsPinned && bIsPinned) return 1
+      
+      return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+    })
+    
+    return filtered
+  }, [announcements, searchTerm, activeCategory, activePriority])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
@@ -160,30 +171,6 @@ function AnnouncementsPage() {
     setActivePriority(priority)
   }
 
-  const filterAnnouncements = (term: string, category: string, priority: string) => {
-    let filtered = announcements
-
-    if (term) {
-      filtered = filtered.filter(announcement =>
-        announcement.title?.toLowerCase().includes(term.toLowerCase()) ||
-        announcement.content?.toLowerCase().includes(term.toLowerCase()) ||
-        announcement.tags?.some((tag: string) => tag.toLowerCase().includes(term.toLowerCase()))
-      )
-    }
-
-    if (category !== 'all') {
-      filtered = filtered.filter(announcement => announcement.category === category)
-    }
-
-    if (priority !== 'all') {
-      filtered = filtered.filter(announcement => 
-        (announcement.metadata as any)?.priority === priority
-      )
-    }
-
-    // Sort by pinned first, then by date (already handled by API)
-    setFilteredAnnouncements(filtered)
-  }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -225,8 +212,7 @@ function AnnouncementsPage() {
     }
 
     try {
-      setOperationLoading(true)
-      const response = await api.content.createContent({
+      const newAnnouncement: TablesInsert<'content'> = {
         title: formData.title,
         content: formData.content,
         type: 'announcement',
@@ -238,23 +224,21 @@ function AnnouncementsPage() {
           priority: formData.priority,
           is_pinned: formData.is_pinned
         }
-      })
-
-      if (!response.success) {
-        console.error('Create content failed:', response.error)
-        throw new Error(response.error || 'Failed to create announcement')
+      }
+      
+      const result = await createContent(newAnnouncement)
+      
+      if (result.error) {
+        throw new Error(result.error.message)
       }
 
       toast.success('공지사항이 성공적으로 작성되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
-      fetchAnnouncements()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error creating announcement:', error)
-      const message = error instanceof Error ? error.message : '공지사항 작성에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '공지사항 작성에 실패했습니다.')
     }
   }
 
@@ -265,8 +249,7 @@ function AnnouncementsPage() {
     }
 
     try {
-      setOperationLoading(true)
-      const response = await api.content.updateContent(selectedAnnouncement.id!, {
+      const updates: TablesUpdate<'content'> = {
         title: formData.title,
         content: formData.content,
         category: formData.category,
@@ -275,24 +258,29 @@ function AnnouncementsPage() {
           priority: formData.priority,
           is_pinned: formData.is_pinned
         }
-      })
+      }
+      
+      const result = await updateContent(async () =>
+        await supabase
+          .from('content')
+          .update(updates)
+          .eq('id', selectedAnnouncement.id!)
+          .select()
+          .single()
+      )
 
-      if (!response.success) {
-        console.error('Update content failed:', response.error)
-        throw new Error(response.error || 'Failed to update announcement')
+      if (result.error) {
+        throw result.error
       }
 
       toast.success('공지사항이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedAnnouncement(null)
       resetForm()
-      fetchAnnouncements()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error updating announcement:', error)
-      const message = error instanceof Error ? error.message : '공지사항 수정에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '공지사항 수정에 실패했습니다.')
     }
   }
 
@@ -300,22 +288,22 @@ function AnnouncementsPage() {
     if (!user) return
 
     try {
-      setOperationLoading(true)
-      const response = await api.content.deleteContent(announcementId)
+      const result = await deleteContent(async () =>
+        await supabase
+          .from('content')
+          .delete()
+          .eq('id', announcementId)
+      )
 
-      if (!response.success) {
-        console.error('Delete content failed:', response.error)
-        throw new Error(response.error || 'Failed to delete announcement')
+      if (result.error) {
+        throw result.error
       }
 
       toast.success('공지사항이 삭제되었습니다.')
-      fetchAnnouncements()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error deleting announcement:', error)
-      const message = error instanceof Error ? error.message : '공지사항 삭제에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '공지사항 삭제에 실패했습니다.')
     }
   }
 
@@ -323,35 +311,39 @@ function AnnouncementsPage() {
     if (!user) return
 
     try {
-      setOperationLoading(true)
       // Get current announcement to preserve other metadata
-      const announcement = announcements.find(a => a.id === announcementId)
+      const announcement = announcements?.find(a => a.id === announcementId)
       if (!announcement) throw new Error('Announcement not found')
       
-      const response = await api.content.updateContent(announcementId, {
+      const updates: TablesUpdate<'content'> = {
         metadata: {
           ...(announcement.metadata as any || {}),
           is_pinned: !currentPinStatus
         }
-      })
+      }
+      
+      const result = await updateContent(async () =>
+        await supabase
+          .from('content')
+          .update(updates)
+          .eq('id', announcementId)
+          .select()
+          .single()
+      )
 
-      if (!response.success) {
-        console.error('Update content failed:', response.error)
-        throw new Error(response.error || 'Failed to update announcement')
+      if (result.error) {
+        throw result.error
       }
 
       toast.success(currentPinStatus ? '고정이 해제되었습니다.' : '공지사항이 고정되었습니다.')
-      fetchAnnouncements()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error toggling pin:', error)
-      const message = error instanceof Error ? error.message : '고정 상태 변경에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '고정 상태 변경에 실패했습니다.')
     }
   }
 
-  const openEditDialog = (announcement: ContentWithAuthor) => {
+  const openEditDialog = (announcement: Views<'content_with_author'>) => {
     setSelectedAnnouncement(announcement)
     setFormData({
       title: announcement.title || '',
@@ -395,9 +387,9 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-red-600">
-                  {loading ? '-' : announcements.filter(a => 
+                  {loading ? '-' : announcements?.filter(a => 
                     (a.metadata as any)?.is_pinned === true
-                  ).length}
+                  ).length || 0}
                 </div>
                 <div className="text-sm text-muted-foreground">고정 공지</div>
               </CardContent>
@@ -405,7 +397,7 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-primary">
-                  {loading ? '-' : announcements.length}
+                  {loading ? '-' : announcements?.length || 0}
                 </div>
                 <div className="text-sm text-muted-foreground">전체 공지</div>
               </CardContent>
@@ -413,11 +405,11 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-green-600">
-                  {loading ? '-' : announcements.filter(a => {
+                  {loading ? '-' : announcements?.filter(a => {
                     const weekAgo = new Date()
                     weekAgo.setDate(weekAgo.getDate() - 7)
                     return a.created_at && new Date(a.created_at) > weekAgo
-                  }).length}
+                  }).length || 0}
                 </div>
                 <div className="text-sm text-muted-foreground">이번 주</div>
               </CardContent>
@@ -425,14 +417,14 @@ function AnnouncementsPage() {
             <Card className="text-center">
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-blue-600">
-                  {loading ? '-' : announcements.reduce((total, a) => total + (a.view_count || 0), 0)}
+                  {loading ? '-' : announcements?.reduce((total, a) => total + (a.view_count || 0), 0) || 0}
                 </div>
                 <div className="text-sm text-muted-foreground">총 조회수</div>
               </CardContent>
             </Card>
           </div>
           
-          {user && user.role === 'admin' && (
+          {user && profile?.role && ['admin', 'leader', 'vice-leader'].includes(profile.role) && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -716,10 +708,10 @@ function AnnouncementsPage() {
         >
           <div className="mb-4 text-6xl">📢</div>
           <h3 className="mb-2 text-xl font-semibold">
-            {announcements.length === 0 ? '아직 등록된 공지사항이 없습니다' : '검색 결과가 없습니다'}
+            {!announcements || announcements.length === 0 ? '아직 등록된 공지사항이 없습니다' : '검색 결과가 없습니다'}
           </h3>
           <p className="mb-4 text-muted-foreground">
-            {announcements.length === 0 ? '첫 번째 공지사항을 등록해보세요!' : '다른 검색어나 필터를 시도해보세요'}
+            {!announcements || announcements.length === 0 ? '첫 번째 공지사항을 등록해보세요!' : '다른 검색어나 필터를 시도해보세요'}
           </p>
           <Button
             variant="outline"
@@ -727,10 +719,9 @@ function AnnouncementsPage() {
               setSearchTerm('')
               setActiveCategory('all')
               setActivePriority('all')
-              filterAnnouncements('', 'all', 'all')
             }}
           >
-            {announcements.length === 0 ? '새로고침' : '전체 보기'}
+            {!announcements || announcements.length === 0 ? '새로고침' : '전체 보기'}
           </Button>
         </motion.div>
       )}

@@ -23,10 +23,10 @@ import {
   Bookmark,
   BookmarkCheck
 } from 'lucide-react'
-import api from '@/lib/api.modern'
+import { supabase, Views } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import type { ContentWithAuthor } from '@/lib/types.core'
+import PermissionGate from '@/components/shared/PermissionGate'
 
 interface AnnouncementDetailPageProps {
   announcementId: string
@@ -67,25 +67,35 @@ const categoryIcons = {
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
   const { user } = useAuth()
-  const [announcementData, setAnnouncementData] = useState<ContentWithAuthor | null>(null)
+  const [announcementData, setAnnouncementData] = useState<Views<'content_with_author'> | null>(null)
   const [loading, setLoading] = useState(true)
   const [isBookmarked, setIsBookmarked] = useState(false)
 
   const fetchAnnouncementDetail = async () => {
     try {
       setLoading(true)
-      const response = await api.content.getContentById(announcementId)
       
-      if (response.error) {
-        throw new Error(response.error)
-      }
+      // Get the announcement data
+      const { data, error } = await supabase
+        .from('content_with_author')
+        .select('*')
+        .eq('id', announcementId)
+        .eq('type', 'announcement')
+        .single()
       
-      if (response.data) {
-        // Check if it's an announcement
-        if (response.data.type !== 'announcement') {
-          throw new Error('Content is not an announcement')
-        }
-        setAnnouncementData(response.data)
+      if (error) throw error
+      
+      if (data) {
+        setAnnouncementData(data)
+        
+        // Increment view count
+        await supabase
+          .from('content')
+          .update({ 
+            view_count: (data.view_count || 0) + 1,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', announcementId)
       }
     } catch (error) {
       console.error('Error fetching announcement detail:', error)
@@ -107,16 +117,18 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
       if (!user || !announcementData) return
       
       try {
-        const response = await api.interactions.checkInteraction(
-          user.id,
-          announcementId,
-          'bookmark'
-        )
-        if (response.data !== undefined) {
-          setIsBookmarked(response.data)
-        }
+        const { data } = await supabase
+          .from('interactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('content_id', announcementId)
+          .eq('type', 'bookmark')
+          .single()
+          
+        setIsBookmarked(!!data)
       } catch (error) {
         console.error('Error checking bookmark:', error)
+        setIsBookmarked(false)
       }
     }
     
@@ -130,16 +142,31 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     }
 
     try {
-      const response = await api.interactions.toggleInteraction(
-        user.id,
-        announcementId,
-        'bookmark'
-      )
-      if (response.error) throw new Error(response.error)
-      
-      if (response.data) {
-        setIsBookmarked(response.data.isActive)
-        toast.success(response.data.isActive ? '북마크에 추가되었습니다.' : '북마크에서 제거되었습니다.')
+      if (isBookmarked) {
+        // Remove bookmark
+        const { error } = await supabase
+          .from('interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('content_id', announcementId)
+          .eq('type', 'bookmark')
+          
+        if (error) throw error
+        setIsBookmarked(false)
+        toast.success('북마크에서 제거되었습니다.')
+      } else {
+        // Add bookmark
+        const { error } = await supabase
+          .from('interactions')
+          .insert({
+            user_id: user.id,
+            content_id: announcementId,
+            type: 'bookmark'
+          })
+          
+        if (error) throw error
+        setIsBookmarked(true)
+        toast.success('북마크에 추가되었습니다.')
       }
     } catch (error) {
       console.error('Error toggling bookmark:', error)
@@ -225,8 +252,9 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const metadata = announcementData.metadata as any || {}
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
+    <PermissionGate requireMember={true}>
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-4xl mx-auto">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -407,5 +435,6 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
         </motion.div>
       </div>
     </div>
+    </PermissionGate>
   )
 }

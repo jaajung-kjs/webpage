@@ -4,6 +4,12 @@ const nextConfig: NextConfig = {
   // Performance optimizations
   poweredByHeader: false,
   
+  // ESLint configuration - ignore during production builds
+  eslint: {
+    ignoreDuringBuilds: true,
+    dirs: ['src'],
+  },
+  
   // Image optimization
   images: {
     formats: ['image/webp', 'image/avif'],

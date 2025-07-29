@@ -35,8 +35,10 @@ import {
   Star
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import api from '@/lib/api.modern'
+import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import PermissionGate from '@/components/shared/PermissionGate'
+import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 
 interface UserData {
   id: string
@@ -61,6 +63,13 @@ interface UserData {
     totalViews: number
     activitiesJoined: number
     resourcesShared: number
+  }
+  activityStats?: {
+    posts: number
+    cases: number
+    announcements: number
+    resources: number
+    comments: number
   }
   recentActivity: {
     type: 'post' | 'comment' | 'activity' | 'resource'
@@ -131,16 +140,42 @@ export default function ProfilePage() {
       try {
         setLoading(true)
         
-        // Parallel API calls for better performance
+        // Check cache first
+        const cacheKey = createCacheKey('profile', 'data', user.id)
+        const cachedData = HybridCache.get<UserData>(cacheKey)
+        
+        if (cachedData !== null) {
+          setUserData(cachedData)
+          setEditData(cachedData)
+          setLoading(false)
+          
+          // Still fetch fresh data in background
+          loadFreshUserData(true)
+          return
+        }
+        
+        await loadFreshUserData(false)
+      } catch (error) {
+        console.error('Error loading user data:', error)
+        toast.error('프로필 데이터를 불러오는데 실패했습니다.')
+        setLoading(false)
+      }
+    }
+
+    async function loadFreshUserData(isBackgroundUpdate: boolean) {
+      if (!user) return
+      
+      try {
+        // Parallel queries for better performance
         const [profileResult, statsResult, activityResult] = await Promise.allSettled([
-          api.users.getUser(user.id),
-          api.activities.getUserStats(user.id),
-          api.activities.getUserActivityLogs(user.id, 10)
+          supabase.from('users').select('*').eq('id', user.id).single(),
+          supabase.from('user_stats').select('*').eq('user_id', user.id).single(),
+          supabase.from('user_activity_logs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10)
         ])
         
         // Process profile data
         let profile = null
-        if (profileResult.status === 'fulfilled' && profileResult.value.success && profileResult.value.data) {
+        if (profileResult.status === 'fulfilled' && !profileResult.value.error && profileResult.value.data) {
           profile = profileResult.value.data
         }
         
@@ -178,23 +213,91 @@ export default function ProfilePage() {
           activitiesJoined: 0,
           resourcesShared: 0
         }
-        if (statsResult.status === 'fulfilled' && statsResult.value.success && statsResult.value.data) {
-          stats = statsResult.value.data
+        if (statsResult.status === 'fulfilled' && !statsResult.value.error && statsResult.value.data) {
+          const statsData = statsResult.value.data
+          stats = {
+            totalPosts: statsData.post_count || 0,
+            totalComments: statsData.comment_count || 0,
+            totalLikes: statsData.like_count || 0,
+            totalViews: 0, // Not available in user_stats view
+            activitiesJoined: 0, // Not available in user_stats view
+            resourcesShared: 0 // Not available in user_stats view
+          }
         }
 
-        // Process recent activity data
+        // Fetch comprehensive activity data using RPC (like ProfileDetailPage)
         let recentActivity: any[] = []
-        if (activityResult.status === 'fulfilled' && activityResult.value.success && activityResult.value.data) {
-          recentActivity = activityResult.value.data.map((log: any) => ({
-            type: log.activity_type.replace('_created', '').replace('_given', '').replace('_joined', '').replace('_shared', '') as 'post' | 'comment' | 'activity' | 'resource',
-            title: log.metadata?.title || getActivityTitle(log.activity_type, log.target_type),
-            date: log.created_at,
-            engagement: {
-              likes: log.metadata?.likes || 0,
-              comments: log.metadata?.comments || 0,
-              views: log.metadata?.views || 0
+        let activityStats: any = null
+        try {
+          const { data: activityData, error: activityError } = await supabase
+            .rpc('get_user_content_stats', { user_id_param: user.id })
+          
+          if (!activityError && activityData) {
+            const typedData = activityData as unknown as any
+            
+            // Set activity stats for better organization
+            if (typedData.stats) {
+              activityStats = typedData.stats
+              
+              // Update main stats with activity data
+              stats = {
+                totalPosts: typedData.stats.posts || 0,
+                totalComments: typedData.stats.comments || 0,
+                totalLikes: stats.totalLikes || 0,
+                totalViews: stats.totalViews || 0,
+                activitiesJoined: stats.activitiesJoined || 0,
+                resourcesShared: typedData.stats.resources || 0
+              }
             }
-          }))
+            
+            // Set recent activities from RPC
+            if (typedData.recent_activities) {
+              recentActivity = typedData.recent_activities.map((activity: any) => ({
+                type: activity.activity_type.replace('_created', '').replace('_given', '').replace('_joined', '').replace('_shared', '') as 'post' | 'comment' | 'activity' | 'resource',
+                title: activity.title || getActivityTitle(activity.activity_type, activity.target_type),
+                date: activity.created_at,
+                engagement: {
+                  likes: activity.metadata?.likes || 0,
+                  comments: activity.metadata?.comments || 0,
+                  views: activity.metadata?.views || 0
+                }
+              }))
+            } else {
+              recentActivity = []
+            }
+          } else {
+            console.warn('Failed to fetch user activity from RPC:', activityError)
+            
+            // Fallback to basic activity processing
+            if (activityResult.status === 'fulfilled' && !activityResult.value.error && activityResult.value.data) {
+              recentActivity = activityResult.value.data.map((log: any) => ({
+                type: log.activity_type.replace('_created', '').replace('_given', '').replace('_joined', '').replace('_shared', '') as 'post' | 'comment' | 'activity' | 'resource',
+                title: log.metadata?.title || getActivityTitle(log.activity_type, log.target_type),
+                date: log.created_at,
+                engagement: {
+                  likes: log.metadata?.likes || 0,
+                  comments: log.metadata?.comments || 0,
+                  views: log.metadata?.views || 0
+                }
+              }))
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching user activity from RPC:', error)
+          
+          // Fallback to basic activity processing
+          if (activityResult.status === 'fulfilled' && !activityResult.value.error && activityResult.value.data) {
+            recentActivity = activityResult.value.data.map((log: any) => ({
+              type: log.activity_type.replace('_created', '').replace('_given', '').replace('_joined', '').replace('_shared', '') as 'post' | 'comment' | 'activity' | 'resource',
+              title: log.metadata?.title || getActivityTitle(log.activity_type, log.target_type),
+              date: log.created_at,
+              engagement: {
+                likes: log.metadata?.likes || 0,
+                comments: log.metadata?.comments || 0,
+                views: log.metadata?.views || 0
+              }
+            }))
+          }
         }
 
         // Get user achievements from metadata
@@ -218,16 +321,25 @@ export default function ProfilePage() {
           achievements,
           activityScore: profile.activity_score || 0,
           stats,
+          activityStats,
           recentActivity
         }
         
-        setUserData(realUserData)
-        setEditData(realUserData)
+        // Cache the user data (10 minutes TTL)
+        const cacheKey = createCacheKey('profile', 'data', user.id)
+        HybridCache.set(cacheKey, realUserData, 600000) // 10 minutes
+        
+        if (!isBackgroundUpdate) {
+          setUserData(realUserData)
+          setEditData(realUserData)
+          setLoading(false)
+        }
       } catch (error) {
-        console.error('Error loading user data:', error)
-        toast.error('프로필 데이터를 불러오는데 실패했습니다.')
-      } finally {
-        setLoading(false)
+        console.error('Error loading fresh user data:', error)
+        if (!isBackgroundUpdate) {
+          toast.error('프로필 데이터를 불러오는데 실패했습니다.')
+          setLoading(false)
+        }
       }
     }
 
@@ -249,19 +361,26 @@ export default function ProfilePage() {
       setSaving(true)
       
       // Update user in DB
-      const response = await api.users.updateUser(user.id, {
-        name: editData.name,
-        bio: editData.bio,
-        department: editData.department,
-        metadata: {
-          phone: editData.phone,
-          location: editData.location,
-          job_position: editData.job_position
-        }
-      })
+      const { error } = await supabase
+        .from('users')
+        .update({
+          name: editData.name,
+          bio: editData.bio,
+          department: editData.department,
+          metadata: {
+            phone: editData.phone,
+            location: editData.location,
+            job_position: editData.job_position,
+            ai_expertise: editData.aiExpertise,
+            skill_level: editData.skillLevel,
+            achievements: editData.achievements
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
       
-      if (response.error) {
-        throw new Error(response.error)
+      if (error) {
+        throw error
       }
       
       // 업데이트된 프로필 데이터로 상태 업데이트
@@ -278,6 +397,10 @@ export default function ProfilePage() {
       setUserData(updatedUserData)
       setEditData(updatedUserData)
       setActiveTab('activity') // 저장 후 활동 탭으로 이동
+      
+      // Invalidate cache after update
+      const cacheKey = createCacheKey('profile', 'data', user.id)
+      HybridCache.invalidate(cacheKey)
       
       toast.success('프로필이 성공적으로 업데이트되었습니다.')
     } catch (error) {
@@ -323,24 +446,48 @@ export default function ProfilePage() {
       setUploadingAvatar(true)
       
       // Upload avatar to Supabase Storage
-      const uploadResult = await api.avatar.uploadAvatar(file, user.id)
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${user.id}-${Date.now()}.${fileExt}`
+      const filePath = `avatars/${fileName}`
       
-      if (!uploadResult.success || !uploadResult.data) {
-        throw new Error(uploadResult.error || 'Upload failed')
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false
+        })
+      
+      if (uploadError) {
+        throw uploadError
       }
       
-      // Update user avatar URL in database
-      const updateResult = await api.avatar.updateUserAvatar(user.id, uploadResult.data.url)
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath)
       
-      if (!updateResult.success) {
-        throw new Error(updateResult.error || 'Failed to update user avatar')
+      // Update user avatar URL in database
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+      
+      if (updateError) {
+        throw updateError
       }
       
       const successMessage = '프로필 사진이 업로드되었습니다.'
       
       // Update local state
-      setUserData(prev => prev ? { ...prev, avatar: uploadResult.data?.url || prev.avatar } : null)
-      setEditData(prev => prev ? { ...prev, avatar: uploadResult.data?.url || prev.avatar } : null)
+      setUserData(prev => prev ? { ...prev, avatar: publicUrl } : null)
+      setEditData(prev => prev ? { ...prev, avatar: publicUrl } : null)
+      
+      // Invalidate cache after avatar update
+      const cacheKey = createCacheKey('profile', 'data', user.id)
+      HybridCache.invalidate(cacheKey)
       
       toast.success(successMessage)
     } catch (error) {
@@ -398,7 +545,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <PermissionGate requireMember={true}>
+      <div className="container mx-auto px-4 py-8">
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Profile Card */}
         <div className="lg:col-span-1">
@@ -628,7 +776,7 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">총 게시글</span>
-                          <span className="font-semibold">{userData.stats.totalPosts}</span>
+                          <span className="font-semibold">{userData.activityStats?.posts || userData.stats.totalPosts}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">총 댓글</span>
@@ -658,7 +806,7 @@ export default function ProfilePage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">공유 자료</span>
-                          <span className="font-semibold">{userData.stats.resourcesShared}</span>
+                          <span className="font-semibold">{userData.activityStats?.resources || userData.stats.resourcesShared}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">활동 점수</span>
@@ -712,6 +860,46 @@ export default function ProfilePage() {
                     </div>
                   </CardContent>
                 </Card>
+
+                {/* Content Creation Stats */}
+                {userData.activityStats && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <TrendingUp className="h-5 w-5" />
+                        <span>콘텐츠 작성 현황</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                        <div className="text-center p-4 bg-muted rounded-lg">
+                          <div className="text-2xl font-bold text-primary">
+                            {userData.activityStats.posts}
+                          </div>
+                          <div className="text-sm text-muted-foreground">게시글</div>
+                        </div>
+                        <div className="text-center p-4 bg-muted rounded-lg">
+                          <div className="text-2xl font-bold text-primary">
+                            {userData.activityStats.cases}
+                          </div>
+                          <div className="text-sm text-muted-foreground">사례</div>
+                        </div>
+                        <div className="text-center p-4 bg-muted rounded-lg">
+                          <div className="text-2xl font-bold text-primary">
+                            {userData.activityStats.announcements}
+                          </div>
+                          <div className="text-sm text-muted-foreground">공지사항</div>
+                        </div>
+                        <div className="text-center p-4 bg-muted rounded-lg">
+                          <div className="text-2xl font-bold text-primary">
+                            {userData.activityStats.resources}
+                          </div>
+                          <div className="text-sm text-muted-foreground">자료</div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               {/* Settings Tab */}
@@ -841,5 +1029,6 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+    </PermissionGate>
   )
 }

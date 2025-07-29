@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 
 interface Stats {
   membersCount: number
@@ -27,47 +28,85 @@ export default function StatsSection() {
 
   const fetchStats = async () => {
     try {
-      // Direct DB query for real statistics
-      const { supabase } = await import('@/lib/api.modern')
+      // Check cache first
+      const cacheKey = createCacheKey('stats', 'home')
+      const cachedStats = HybridCache.get<Stats>(cacheKey)
       
-      const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
-        supabase.from('users').select('activity_score'),
-        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),
-        supabase.from('activities').select('*', { count: 'exact', head: true }),
-        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'resource')
-      ])
-
-      const users = usersResult.status === 'fulfilled' ? (usersResult.value.data || []) : []
-      const profilesCount = users.length
-      const casesCount = casesResult.status === 'fulfilled' ? (casesResult.value.count || 0) : 0
-      const activitiesCount = activitiesResult.status === 'fulfilled' ? (activitiesResult.value.count || 0) : 0
-      const resourcesCount = resourcesResult.status === 'fulfilled' ? (resourcesResult.value.count || 0) : 0
+      if (cachedStats !== null) {
+        setStats(cachedStats)
+        setLoading(false)
+        
+        // Still fetch fresh data in background
+        fetchFreshStats(true)
+        return
+      }
       
-      // Calculate real average activity score
-      const totalActivityScore = users.reduce((sum, user) => sum + (user.activity_score || 0), 0)
-      const avgScore = profilesCount > 0 ? Math.round(totalActivityScore / profilesCount) : 0
-      
-      // Use actual learning sessions count, fallback to resources count if activities table doesn't exist
-      const learningSessionsCount = activitiesCount > 0 ? activitiesCount : resourcesCount
-      
-      
-      setStats({
-        membersCount: profilesCount, // Show actual count
-        casesCount: casesCount,
-        activitiesCount: learningSessionsCount, // Use actual learning sessions or resources
-        avgScore: avgScore // Use real average
-      })
+      await fetchFreshStats(false)
     } catch (error) {
-      console.error('Error fetching real stats:', error)
-      // Fallback data on any error
+      console.error('Error fetching stats:', error)
       setStats({
         membersCount: 0,
         casesCount: 0,
         activitiesCount: 0,
         avgScore: 0
       })
-    } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchFreshStats = async (isBackgroundUpdate: boolean) => {
+    try {
+      // Direct DB query for real statistics
+      const { supabase } = await import('@/lib/supabase/client')
+      
+      const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
+        supabase.from('users').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
+        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),
+        supabase.from('activities').select('*', { count: 'exact', head: true }),
+        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'resource')
+      ])
+
+      // Filter only members (member role and above)
+      const members = usersResult.status === 'fulfilled' ? (usersResult.value.data || []) : []
+      const membersCount = members.length
+      const casesCount = casesResult.status === 'fulfilled' ? (casesResult.value.count || 0) : 0
+      const activitiesCount = activitiesResult.status === 'fulfilled' ? (activitiesResult.value.count || 0) : 0
+      const resourcesCount = resourcesResult.status === 'fulfilled' ? (resourcesResult.value.count || 0) : 0
+      
+      // Calculate real average activity score for members only
+      const totalActivityScore = members.reduce((sum, user) => sum + (user.activity_score || 0), 0)
+      const avgScore = membersCount > 0 ? Math.round(totalActivityScore / membersCount) : 0
+      
+      // Use actual learning sessions count, fallback to resources count if activities table doesn't exist
+      const learningSessionsCount = activitiesCount > 0 ? activitiesCount : resourcesCount
+      
+      const freshStats = {
+        membersCount: membersCount, // Show actual member count (member role and above)
+        casesCount: casesCount,
+        activitiesCount: learningSessionsCount, // Use actual learning sessions or resources
+        avgScore: avgScore // Use real average for members only
+      }
+      
+      // Cache the stats (30 minutes TTL)
+      const cacheKey = createCacheKey('stats', 'home')
+      HybridCache.set(cacheKey, freshStats, 1800000) // 30 minutes
+      
+      if (!isBackgroundUpdate) {
+        setStats(freshStats)
+        setLoading(false)
+      }
+    } catch (error) {
+      console.error('Error fetching fresh stats:', error)
+      if (!isBackgroundUpdate) {
+        // Fallback data on any error
+        setStats({
+          membersCount: 0,
+          casesCount: 0,
+          activitiesCount: 0,
+          avgScore: 0
+        })
+        setLoading(false)
+      }
     }
   }
 

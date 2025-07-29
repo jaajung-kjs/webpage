@@ -26,7 +26,14 @@ import {
   BookmarkCheck,
   Tag
 } from 'lucide-react'
-import api, { type ContentWithAuthorNonNull } from "@/lib/api.modern"
+import { 
+  useContent,
+  useIsLiked,
+  useToggleLike,
+  useSupabaseMutation,
+  useUpdateContent
+} from '@/hooks/useSupabase'
+import { Views } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
@@ -69,57 +76,44 @@ const typeIcons = {
 }
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
-  const { user } = useAuth()
-  const [resourceData, setResourceData] = useState<ContentWithAuthorNonNull | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isBookmarked, setIsBookmarked] = useState(false)
+  const { user, isMember } = useAuth()
+  
+  // Use Supabase hooks
+  const { data: resourceData, loading, error } = useContent(resourceId)
+  const isBookmarked = useIsLiked(user?.id, resourceId)
+  const { toggleLike, loading: likeLoading } = useToggleLike()
+  const { updateContent, loading: updateLoading } = useUpdateContent()
+  
   const [downloadCount, setDownloadCount] = useState(0)
 
+  // Update download count when resource data changes
   useEffect(() => {
-    const loadPageData = async () => {
-      try {
-        setLoading(true)
-        
-        // First get the resource data
-        const resourceResponse = await api.content.getContentById(resourceId)
-        
-        if (!resourceResponse.success) {
-          throw new Error(resourceResponse.error || 'Failed to fetch resource')
-        }
-        
-        if (resourceResponse.data) {
-          if (resourceResponse.data.type !== 'resource') {
-            throw new Error('Content is not a resource')
-          }
-          setResourceData(resourceResponse.data)
-          const metadata = resourceResponse.data.metadata as any
-          setDownloadCount(metadata?.downloads || 0)
-          
-          // If user is logged in, check bookmark status
-          if (user) {
-            const bookmarkResponse = await api.interactions.checkInteraction(
-              user.id,
-              resourceId,
-              'bookmark'
-            )
-            if (bookmarkResponse.data !== undefined) {
-              setIsBookmarked(bookmarkResponse.data)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading page data:', error)
-        toast.error('자료를 불러오는데 실패했습니다.')
-      } finally {
-        setLoading(false)
-      }
+    if (resourceData?.metadata) {
+      const metadata = resourceData.metadata as any
+      setDownloadCount(metadata?.downloads || 0)
     }
-    
-    loadPageData()
-  }, [resourceId, user])
+  }, [resourceData])
+
+  // Handle error state
+  useEffect(() => {
+    if (error) {
+      console.error('Error loading resource:', error)
+      toast.error('자료를 불러오는데 실패했습니다.')
+    }
+  }, [error])
 
   const handleDownload = async () => {
     if (!resourceData) return
+    
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 자료를 다운로드할 수 있습니다.')
+      return
+    }
 
     try {
       // Update download count in metadata
@@ -129,13 +123,12 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
         downloads: (metadata?.downloads || 0) + 1
       }
       
-      const response = await api.content.updateContent(resourceId, {
+      const result = await updateContent(resourceId, {
         metadata: newMetadata
       })
       
-      if (!response.success) {
-        console.error('Update download count failed:', response.error)
-        throw new Error(response.error || 'Failed to update download count')
+      if (result.error) {
+        throw result.error
       }
       
       setDownloadCount(prev => prev + 1)
@@ -151,9 +144,9 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       } else {
         toast.error('다운로드할 수 있는 자료가 없습니다.')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error handling download:', error)
-      toast.error('다운로드 처리에 실패했습니다.')
+      toast.error(error.message || '다운로드 처리에 실패했습니다.')
     }
   }
 
@@ -162,22 +155,23 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       toast.error('로그인이 필요합니다.')
       return
     }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 북마크할 수 있습니다.')
+      return
+    }
 
     try {
-      const response = await api.interactions.toggleInteraction(
-        user.id,
-        resourceId,
-        'bookmark'
-      )
-      if (response.error) throw new Error(response.error)
+      const result = await toggleLike(user.id, resourceId)
       
-      if (response.data) {
-        setIsBookmarked(response.data.isActive)
-        toast.success(response.data.isActive ? '북마크에 추가되었습니다.' : '북마크에서 제거되었습니다.')
+      if (result.error) {
+        throw result.error
       }
-    } catch (error) {
+      
+      toast.success(isBookmarked ? '북마크에서 제거되었습니다.' : '북마크에 추가되었습니다.')
+    } catch (error: any) {
       console.error('Error toggling bookmark:', error)
-      toast.error('북마크 처리에 실패했습니다.')
+      toast.error(error.message || '북마크 처리에 실패했습니다.')
     }
   }
 
@@ -334,7 +328,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
                 <div 
                   className="whitespace-pre-wrap text-base leading-relaxed"
                   dangerouslySetInnerHTML={{ 
-                    __html: resourceData.content.replace(/\n/g, '<br/>') 
+                    __html: (resourceData.content || '').replace(/\n/g, '<br/>') 
                   }}
                 />
               </div>
@@ -366,10 +360,17 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
                   onClick={handleDownload}
                   className="kepco-gradient"
                   size="lg"
+                  disabled={!isMember}
+                  title={!isMember ? "동아리 회원만 자료를 다운로드할 수 있습니다" : ""}
                 >
                   <Download className="mr-2 h-4 w-4" />
                   {metadata?.url ? '링크 열기' : '다운로드'}
                 </Button>
+                {!isMember && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    동아리 회원만 자료를 다운로드할 수 있습니다
+                  </p>
+                )}
               </div>
 
               {/* Action Buttons */}
@@ -384,6 +385,8 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
                     size="sm"
                     onClick={handleBookmark}
                     className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
+                    disabled={!isMember}
+                    title={!isMember ? "동아리 회원만 북마크할 수 있습니다" : ""}
                   >
                     {isBookmarked ? (
                       <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />

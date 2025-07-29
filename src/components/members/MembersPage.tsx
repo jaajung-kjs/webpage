@@ -47,9 +47,10 @@ import {
   User
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import api from '@/lib/api.modern'
+import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
+import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 
 interface MemberWithStats {
   id: string
@@ -75,6 +76,7 @@ interface MemberWithStats {
     activities_joined: number
     resources_shared: number
   }[] | null
+  metadata?: any
 }
 
 const roleLabels = {
@@ -137,13 +139,48 @@ function MembersPage() {
   const fetchMembers = async () => {
     try {
       setLoading(true)
-      // Fetch members using member management API
-      const response = await api.users.getAllMembers()
       
-      if (!response.success) throw new Error(response.error || 'Failed to fetch members')
+      // Check cache first
+      const cacheKey = createCacheKey('members', 'list')
+      const cachedMembers = HybridCache.get<MemberWithStats[]>(cacheKey)
+      
+      if (cachedMembers !== null) {
+        setMembers(cachedMembers)
+        setFilteredMembers(cachedMembers)
+        setLoading(false)
+        
+        // Still fetch fresh data in background
+        fetchMembersData(true)
+        return
+      }
+      
+      await fetchMembersData(false)
+    } catch (error) {
+      console.error('Error fetching members:', error)
+      toast.error('회원 목록을 불러오는데 실패했습니다.')
+      setLoading(false)
+    }
+  }
+
+  const fetchMembersData = async (isBackgroundUpdate: boolean) => {
+    try {
+      // Fetch members directly from users table
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select(`
+          *,
+          content:content!author_id(count),
+          comments:comments!author_id(count)
+        `)
+        .in('role', ['member', 'vice-leader', 'leader', 'admin'])
+      
+      if (error) throw error
+
+      // Filter to only show members with role 'member' or higher
+      const membersOnly = userData || []
 
       // Transform user data to MemberWithStats format
-      const transformedData: MemberWithStats[] = (response.data || []).map((userData: any) => {
+      const transformedData: MemberWithStats[] = membersOnly.map((userData: any) => {
         const metadata = (userData.metadata || {}) as any
         return {
           id: userData.id || '',
@@ -162,23 +199,32 @@ function MembersPage() {
           achievements: metadata.achievements || [],
           join_date: userData.created_at || new Date().toISOString(),
           user_stats: [{
-            total_posts: userData.post_count || 0,
-            total_comments: userData.comment_count || 0,
-            total_likes_received: userData.like_count || 0,
-            total_views: userData.view_count || 0,
-            activities_joined: userData.activity_count || 0,
-            resources_shared: userData.resource_count || 0
-          }]
+            total_posts: userData.content?.[0]?.count || 0,
+            total_comments: userData.comments?.[0]?.count || 0,
+            total_likes_received: 0, // Would need a separate query
+            total_views: 0, // Would need a separate query
+            activities_joined: 0, // Would need a separate query
+            resources_shared: 0 // Would need a separate query
+          }],
+          metadata: userData.metadata // Preserve the full metadata object
         }
       })
 
-      setMembers(transformedData)
-      setFilteredMembers(transformedData)
+      // Cache the members list (10 minutes TTL)
+      const cacheKey = createCacheKey('members', 'list')
+      HybridCache.set(cacheKey, transformedData, 600000) // 10 minutes
+
+      if (!isBackgroundUpdate) {
+        setMembers(transformedData)
+        setFilteredMembers(transformedData)
+        setLoading(false)
+      }
     } catch (error) {
-      console.error('Error fetching members:', error)
-      toast.error('회원 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+      console.error('Error fetching members data:', error)
+      if (!isBackgroundUpdate) {
+        toast.error('회원 목록을 불러오는데 실패했습니다.')
+        setLoading(false)
+      }
     }
   }
 
@@ -186,10 +232,17 @@ function MembersPage() {
     if (!user) return
     
     try {
-      const response = await api.users.getAssignableRoles(user.id)
-      if (response.success) {
-        setAssignableRoles(response.data || [])
+      // Define role hierarchy
+      const roleHierarchy: Record<string, string[]> = {
+        'admin': ['leader', 'vice-leader', 'member', 'guest'],
+        'leader': ['vice-leader', 'member', 'guest'],
+        'vice-leader': ['member', 'guest'],
+        'member': [],
+        'guest': []
       }
+      
+      const userRole = user.role || 'member'
+      setAssignableRoles(roleHierarchy[userRole] || [])
     } catch (error) {
       console.error('Error fetching assignable roles:', error)
     }
@@ -210,10 +263,7 @@ function MembersPage() {
   const filterMembers = (term: string, role: string, skill: string) => {
     let filtered = members
 
-    // Filter out removed members unless user is admin
-    if (!user) {
-      filtered = filtered.filter(member => member.role !== 'removed')
-    }
+    // No need to filter removed members as we now use guest role
 
     if (term) {
       filtered = filtered.filter(member =>
@@ -249,13 +299,17 @@ function MembersPage() {
 
     try {
       setOperationLoading(true)
-      const result = await api.users.removeUser(selectedMember.id, user.id, '회원 삭제')
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          role: 'guest' as Database['public']['Enums']['user_role'],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', selectedMember.id)
       
-      if (!result.success) {
-        throw new Error(result.error || '회원 제거에 실패했습니다.')
-      }
+      if (error) throw error
 
-      toast.success(`${selectedMember.name} 님을 회원 목록에서 제거했습니다.`)
+      toast.success(`${selectedMember.name} 님을 일반 회원에서 게스트로 변경했습니다.`)
       setRemoveDialogOpen(false)
       setSelectedMember(null)
       fetchMembers() // Refresh the list
@@ -272,11 +326,15 @@ function MembersPage() {
 
     try {
       setOperationLoading(true)
-      const result = await api.users.changeUserRole(memberId, newRole as Database['public']['Enums']['user_role'], user.id)
+      const { error } = await supabase
+        .from('users')
+        .update({ 
+          role: newRole as Database['public']['Enums']['user_role'],
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', memberId)
       
-      if (!result.success) {
-        throw new Error(result.error || '역할 변경에 실패했습니다.')
-      }
+      if (error) throw error
 
       const member = members.find(m => m.id === memberId)
       toast.success(`${member?.name} 님의 역할을 ${roleLabels[newRole as keyof typeof roleLabels] || newRole}로 변경했습니다.`)
@@ -295,7 +353,6 @@ function MembersPage() {
       case 'vice-leader': return Shield  
       case 'admin': return UserCog
       case 'moderator': return Shield
-      case 'removed': return UserMinus
       default: return UserCheck
     }
   }
@@ -377,7 +434,6 @@ function MembersPage() {
               </CardContent>
             </Card>
           </div>
-          
         </div>
       </motion.div>
 
@@ -491,7 +547,9 @@ function MembersPage() {
                         </AvatarFallback>
                       </Avatar>
                       <div className="min-w-0 flex-1">
-                        <CardTitle className="text-lg truncate">{member.name || '익명'}</CardTitle>
+                        <CardTitle className="text-lg truncate">
+                          {member.name || '익명'}
+                        </CardTitle>
                         <CardDescription className="truncate">
                           {member.department || '미상'} {member.job_position || ''}
                         </CardDescription>
@@ -506,57 +564,6 @@ function MembersPage() {
                         {roleLabels[member.role as keyof typeof roleLabels] || member.role}
                       </Badge>
                       
-                      {/* Admin Controls - Show only if user can manage this member */}
-                      {user && member.id !== user?.id && (user.role && ['leader', 'vice-leader'].includes(user.role) || assignableRoles.length > 0) && (
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            {assignableRoles.length > 0 && (
-                              <>
-                                <DropdownMenuItem 
-                                  className="text-sm font-medium text-muted-foreground cursor-default"
-                                  disabled
-                                >
-                                  역할 변경
-                                </DropdownMenuItem>
-                                {/* Show assignable roles based on user's permissions */}
-                                {assignableRoles.map((role) => {
-                                  const RoleIcon = getRoleIcon(role)
-                                  return (
-                                    <DropdownMenuItem
-                                      key={role}
-                                      onClick={() => handleChangeRole(member.id, role)}
-                                      disabled={operationLoading || member.role === role}
-                                      className="pl-6"
-                                    >
-                                      <RoleIcon className="mr-2 h-4 w-4" />
-                                      {roleLabels[role as keyof typeof roleLabels] || role}
-                                    </DropdownMenuItem>
-                                  )
-                                })}
-                                <DropdownMenuSeparator />
-                              </>
-                            )}
-                            {user.role && ['leader', 'vice-leader'].includes(user.role) && (
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setSelectedMember(member)
-                                  setRemoveDialogOpen(true)
-                                }}
-                                disabled={operationLoading}
-                                className="text-red-600 focus:text-red-600"
-                              >
-                                <UserMinus className="mr-2 h-4 w-4" />
-                                회원 제거
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -659,9 +666,14 @@ function MembersPage() {
                     </div>
                   </div>
 
+
                   {/* Contact Button */}
                   <div className="mt-4 flex space-x-2">
-                    <Button variant="outline" size="sm" className="flex-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      className="flex-1"
+                    >
                       <MessageCircle className="mr-2 h-4 w-4" />
                       메시지
                     </Button>
@@ -715,12 +727,12 @@ function MembersPage() {
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>회원 제거 확인</AlertDialogTitle>
+            <AlertDialogTitle>회원 권한 변경 확인</AlertDialogTitle>
             <AlertDialogDescription>
-              <strong>{selectedMember?.name}</strong> 님을 회원 목록에서 제거하시겠습니까?
+              <strong>{selectedMember?.name}</strong> 님을 일반 회원에서 게스트로 변경하시겠습니까?
               <br />
               <br />
-              제거된 회원은 다시 복구할 수 있지만, 현재 활동 기록은 유지됩니다.
+              게스트로 변경되면 동아리 활동이 제한되며, 다시 가입 신청을 해야 합니다.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -732,7 +744,7 @@ function MembersPage() {
               disabled={operationLoading}
               className="bg-red-600 hover:bg-red-700"
             >
-              {operationLoading ? '처리 중...' : '제거'}
+              {operationLoading ? '처리 중...' : '변경'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

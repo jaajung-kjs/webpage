@@ -1,5 +1,6 @@
 import MainLayout from '@/components/layout/MainLayout'
 import CaseDetailPage from '@/components/cases/CaseDetailPage'
+import PermissionGate from '@/components/shared/PermissionGate'
 
 interface CaseDetailProps {
   params: Promise<{
@@ -11,7 +12,9 @@ export default async function CaseDetail({ params }: CaseDetailProps) {
   const { id } = await params
   return (
     <MainLayout>
-      <CaseDetailPage caseId={id} />
+      <PermissionGate requireMember={true}>
+        <CaseDetailPage caseId={id} />
+      </PermissionGate>
     </MainLayout>
   )
 }

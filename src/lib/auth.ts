@@ -1,6 +1,6 @@
-import { supabase, AUTH_STORAGE_KEY } from './api.modern'
+import { supabase } from './supabase/client'
 import { Database } from './database.types'
-import { AUTH_CONSTANTS, authLog } from './constants/auth'
+import { AUTH_CONSTANTS, AUTH_STORAGE_KEY, authLog } from './constants/auth'
 import { AuthMonitorLite } from './utils/auth-monitor.lite'
 
 type User = Database['public']['Tables']['users']['Row']
@@ -175,7 +175,7 @@ export async function getCurrentUser(forceRefresh = false): Promise<AuthUser | n
                 email: session.user.email!,
                 name: userMetadata.name || session.user.email!.split('@')[0],
                 department: userMetadata.department || null,
-                role: 'member',
+                role: 'guest',
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
                 last_seen_at: new Date().toISOString()

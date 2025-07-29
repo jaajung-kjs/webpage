@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, memo } from 'react'
+import { useState, useMemo, useCallback, useEffect, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -47,8 +47,8 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import api from "@/lib/api.modern"
-import type { ActivityWithDetails } from "@/lib/types.core"
+import { useActivities, useSupabaseMutation } from '@/hooks/useSupabase'
+import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
 
 const categoryLabels = {
   all: '전체',
@@ -83,19 +83,25 @@ const statusColors = {
 }
 
 function ActivitiesPage() {
-  const { user } = useAuth()
-  const [activities, setActivities] = useState<ActivityWithDetails[]>([])
-  const [filteredActivities, setFilteredActivities] = useState<ActivityWithDetails[]>([])
+  const { user, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
-  const [loading, setLoading] = useState(true)
+  
+  // Use Supabase hooks
+  const { data: activities, loading, refetch } = useActivities()
+  const { mutate: createActivity, loading: createLoading } = useSupabaseMutation()
+  const { mutate: updateActivity, loading: updateLoading } = useSupabaseMutation()
+  const { mutate: deleteActivity, loading: deleteLoading } = useSupabaseMutation()
+  const { mutate: joinActivity, loading: joinLoading } = useSupabaseMutation()
+  const { mutate: leaveActivity, loading: leaveLoading } = useSupabaseMutation()
+  
+  const operationLoading = createLoading || updateLoading || deleteLoading || joinLoading || leaveLoading
 
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedActivity, setSelectedActivity] = useState<ActivityWithDetails | null>(null)
-  const [operationLoading, setOperationLoading] = useState(false)
+  const [selectedActivity, setSelectedActivity] = useState<Views<'activities_with_details'> | null>(null)
   const [participationStatus, setParticipationStatus] = useState<{ [key: string]: boolean }>({})
   
   // Form state
@@ -112,37 +118,61 @@ function ActivitiesPage() {
     tags: [] as string[]
   })
 
-  useEffect(() => {
-    fetchActivities()
-  }, [])
+  // Filter activities based on search and filters
+  const filteredActivities = useMemo(() => {
+    if (!activities) return []
+    
+    let filtered = [...activities]
 
-  useEffect(() => {
-    filterActivities(searchTerm, activeCategory, activeStatus)
-  }, [searchTerm, activeCategory, activeStatus, activities])
+    if (searchTerm) {
+      filtered = filtered.filter(activity =>
+        activity.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.content?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        activity.tags?.some((tag: string) => tag.toLowerCase().includes(searchTerm.toLowerCase()))
+      )
+    }
 
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(activity => activity.category === activeCategory)
+    }
+
+    if (activeStatus !== 'all') {
+      filtered = filtered.filter(activity => activity.status === activeStatus)
+    }
+
+    // Sort by scheduled_at (upcoming first)
+    filtered.sort((a, b) => new Date(a.scheduled_at || '').getTime() - new Date(b.scheduled_at || '').getTime())
+
+    return filtered
+  }, [activities, searchTerm, activeCategory, activeStatus])
+  
+  // Check participation status for all activities
   useEffect(() => {
-    // Check participation status for all activities when user changes
-    if (user && activities.length > 0) {
+    if (user && activities && activities.length > 0) {
       checkAllParticipationStatus()
     }
   }, [user, activities])
 
-  const fetchActivities = async () => {
-    try {
-      setLoading(true)
-      // Fetch real data from DB using modern API
-      const response = await api.activities.getActivities()
-      
-      if (!response.success) throw new Error(response.error)
-
-      setActivities(response.data || [])
-      setFilteredActivities(response.data || [])
-    } catch (error) {
-      console.error('Error fetching activities:', error)
-      toast.error('활동일정 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+  const checkAllParticipationStatus = async () => {
+    if (!user || !activities) return
+    
+    const status: { [key: string]: boolean } = {}
+    
+    for (const activity of activities) {
+      if (activity.id) {
+        const { data } = await supabase
+          .from('activity_participants')
+          .select('id')
+          .eq('activity_id', activity.id)
+          .eq('user_id', user.id)
+          .single()
+        
+        status[activity.id] = !!data
+      }
     }
+    
+    setParticipationStatus(status)
   }
 
   const handleSearch = (term: string) => {
@@ -157,34 +187,44 @@ function ActivitiesPage() {
     setActiveStatus(status)
   }
 
-  const filterActivities = useCallback((term: string, category: string, status: string) => {
-    let filtered = activities
-
-    if (term) {
-      filtered = filtered.filter(activity =>
-        activity.title?.toLowerCase().includes(term.toLowerCase()) ||
-        activity.content?.toLowerCase().includes(term.toLowerCase()) ||
-        activity.location?.toLowerCase().includes(term.toLowerCase()) ||
-        activity.tags?.some(tag => tag.toLowerCase().includes(term.toLowerCase()))
-      )
-    }
-
-    if (category !== 'all') {
-      filtered = filtered.filter(activity => activity.category === category)
-    }
-
-    if (status !== 'all') {
-      filtered = filtered.filter(activity => activity.status === status)
-    }
-
-    // Sort by scheduled_at (upcoming first)
-    filtered.sort((a, b) => new Date(a.scheduled_at || '').getTime() - new Date(b.scheduled_at || '').getTime())
-
-    setFilteredActivities(filtered)
-  }, [activities])
 
 
   // Admin functions
+  // Utility functions for formatting
+  const formatActivityDate = (dateStr: string | null) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'short'
+    })
+  }
+  
+  const formatActivityTime = (dateStr: string | null) => {
+    if (!dateStr) return ''
+    const date = new Date(dateStr)
+    return date.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    })
+  }
+  
+  const formatDuration = (minutes: number | null) => {
+    if (!minutes) return ''
+    const hours = Math.floor(minutes / 60)
+    const mins = minutes % 60
+    if (hours > 0 && mins > 0) {
+      return `${hours}시간 ${mins}분`
+    } else if (hours > 0) {
+      return `${hours}시간`
+    } else {
+      return `${mins}분`
+    }
+  }
+
   const resetForm = () => {
     setFormData({
       title: '',
@@ -207,25 +247,32 @@ function ActivitiesPage() {
     }
 
     try {
-      setOperationLoading(true)
-      
-      // Prepare content data for the content table
-      const contentData = {
+      // Create content first
+      const contentData: TablesInsert<'content'> = {
         title: formData.title,
         content: formData.description,
         category: formData.category,
         tags: formData.tags,
         author_id: user.id,
-        type: 'activity' as const,
-        status: 'published' as const
+        type: 'activity',
+        status: 'published'
       }
-
-      // Prepare activity data for the activities table
+      
+      const { data: contentResult, error: contentError } = await supabase
+        .from('content')
+        .insert(contentData)
+        .select()
+        .single()
+        
+      if (contentError) throw contentError
+      
+      // Then create activity
       const scheduledAt = formData.date && formData.time 
         ? new Date(`${formData.date}T${formData.time}`).toISOString()
         : new Date().toISOString()
 
-      const activityData = {
+      const activityData: TablesInsert<'activities'> = {
+        content_id: contentResult.id,
         scheduled_at: scheduledAt,
         duration_minutes: formData.duration,
         location: formData.location,
@@ -233,21 +280,24 @@ function ActivitiesPage() {
         status: formData.status,
         instructor_id: user.id
       }
+      
+      const result = await createActivity(async () =>
+        await supabase
+          .from('activities')
+          .insert(activityData)
+          .select()
+          .single()
+      )
 
-      const response = await api.activities.createActivity(contentData, activityData)
-
-      if (response.error) throw new Error(response.error)
+      if (result.error) throw result.error
 
       toast.success('활동이 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
-      fetchActivities()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error creating activity:', error)
-      const message = error instanceof Error ? error.message : '활동 등록에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '활동 등록에 실패했습니다.')
     }
   }
 
@@ -258,38 +308,49 @@ function ActivitiesPage() {
     }
 
     try {
-      setOperationLoading(true)
-      
-      const contentData = {
+      // Update content first
+      const contentUpdates: TablesUpdate<'content'> = {
         title: formData.title,
         content: formData.description,
         category: formData.category,
         tags: formData.tags
       }
       
-      const activityData = {
+      const { error: contentError } = await supabase
+        .from('content')
+        .update(contentUpdates)
+        .eq('id', selectedActivity.content_id!)
+      
+      if (contentError) throw contentError
+      
+      // Then update activity
+      const activityUpdates: TablesUpdate<'activities'> = {
         scheduled_at: new Date(`${formData.date}T${formData.time}`).toISOString(),
         duration_minutes: formData.duration,
         location: formData.location,
-        max_participants: formData.max_participants || null,
-        instructor_id: null
+        max_participants: formData.max_participants,
+        status: formData.status
       }
       
-      const response = await api.activities.updateActivity(selectedActivity.id, contentData, activityData)
-      if (response.success) {
-        toast.success('활동이 성공적으로 수정되었습니다.')
-        await fetchActivities()
-      }
+      const result = await updateActivity(async () =>
+        await supabase
+          .from('activities')
+          .update(activityUpdates)
+          .eq('id', selectedActivity.id!)
+          .select()
+          .single()
+      )
       
+      if (result.error) throw result.error
+      
+      toast.success('활동이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedActivity(null)
       resetForm()
-    } catch (error) {
+      refetch()
+    } catch (error: any) {
       console.error('Error updating activity:', error)
-      const message = error instanceof Error ? error.message : '활동 수정에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '활동 수정에 실패했습니다.')
     }
   }
 
@@ -297,22 +358,24 @@ function ActivitiesPage() {
     if (!user) return
 
     try {
-      setOperationLoading(true)
-      const response = await api.activities.deleteActivity(activityId)
-      if (response.success) {
-        toast.success('활동이 성공적으로 삭제되었습니다.')
-        await fetchActivities()
-      }
-    } catch (error) {
+      const result = await deleteActivity(async () =>
+        await supabase
+          .from('activities')
+          .delete()
+          .eq('id', activityId)
+      )
+      
+      if (result.error) throw result.error
+      
+      toast.success('활동이 성공적으로 삭제되었습니다.')
+      refetch()
+    } catch (error: any) {
       console.error('Error deleting activity:', error)
-      const message = error instanceof Error ? error.message : '활동 삭제에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setOperationLoading(false)
+      toast.error(error.message || '활동 삭제에 실패했습니다.')
     }
   }
 
-  const openEditDialog = (activity: ActivityWithDetails) => {
+  const openEditDialog = (activity: Views<'activities_with_details'>) => {
     setSelectedActivity(activity)
     
     // Extract date and time from scheduled_at
@@ -335,36 +398,6 @@ function ActivitiesPage() {
     setEditDialogOpen(true)
   }
 
-  const checkAllParticipationStatus = useCallback(async () => {
-    if (!user) return
-    
-    try {
-      // Check all participation statuses in parallel
-      const participationChecks = activities
-        .filter(activity => activity.id)
-        .map(activity => 
-          api.activities.checkActivityParticipation(user.id, activity.id!)
-            .then(response => ({ 
-              activityId: activity.id!, 
-              isParticipating: response.success ? (response.data || false) : false 
-            }))
-            .catch(() => ({ activityId: activity.id!, isParticipating: false }))
-        )
-      
-      const results = await Promise.allSettled(participationChecks)
-      
-      const statuses: { [key: string]: boolean } = {}
-      results.forEach(result => {
-        if (result.status === 'fulfilled') {
-          statuses[result.value.activityId] = result.value.isParticipating
-        }
-      })
-      
-      setParticipationStatus(statuses)
-    } catch (error) {
-      console.error('Error checking participation status:', error)
-    }
-  }, [user, activities])
 
   const handleActivityParticipation = async (activityId: string) => {
     if (!user) {
@@ -373,30 +406,42 @@ function ActivitiesPage() {
     }
 
     try {
-      setOperationLoading(true)
-      
       const isCurrentlyParticipating = participationStatus[activityId]
       
       if (isCurrentlyParticipating) {
-        const response = await api.activities.leaveActivity(user.id, activityId)
-        if (response.success) {
-          toast.success('활동에서 탈퇴하였습니다.')
-          await checkAllParticipationStatus()
-          await fetchActivities()
-        }
+        // Leave activity
+        const result = await leaveActivity(async () =>
+          await supabase
+            .from('activity_participants')
+            .delete()
+            .eq('activity_id', activityId)
+            .eq('user_id', user.id)
+        )
+        
+        if (result.error) throw result.error
+        
+        toast.success('활동에서 탈퇴하였습니다.')
       } else {
-        const response = await api.activities.joinActivity(user.id, activityId)
-        if (response.success) {
-          toast.success('활동에 참가하였습니다.')
-          await checkAllParticipationStatus()
-          await fetchActivities()
-        }
+        // Join activity
+        const result = await joinActivity(async () =>
+          await supabase
+            .from('activity_participants')
+            .insert({
+              activity_id: activityId,
+              user_id: user.id
+            })
+        )
+        
+        if (result.error) throw result.error
+        
+        toast.success('활동에 참가하였습니다.')
       }
+      
+      await checkAllParticipationStatus()
+      refetch()
     } catch (error: any) {
       console.error('Error handling activity participation:', error)
       toast.error(error.message || '참가 처리에 실패했습니다.')
-    } finally {
-      setOperationLoading(false)
     }
   }
 
@@ -418,7 +463,7 @@ function ActivitiesPage() {
               AI 학습동아리의 다양한 활동과 세미나에 참여해보세요
             </p>
           </div>
-          {user && user.role === 'admin' && (
+          {user && profile?.role && ['admin', 'leader', 'vice-leader'].includes(profile.role) && (
             <Button 
               className="kepco-gradient"
               onClick={() => {
@@ -444,7 +489,7 @@ function ActivitiesPage() {
           <Card className="text-center">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-primary">
-                {loading ? '-' : activities.filter(a => a.status === 'upcoming').length}
+                {loading ? '-' : activities?.filter(a => a.status === 'upcoming').length || 0}
               </div>
               <div className="text-sm text-muted-foreground">예정된 활동</div>
             </CardContent>
@@ -452,7 +497,7 @@ function ActivitiesPage() {
           <Card className="text-center">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-green-600">
-                {loading ? '-' : activities.filter(a => a.status === 'ongoing').length}
+                {loading ? '-' : activities?.filter(a => a.status === 'ongoing').length || 0}
               </div>
               <div className="text-sm text-muted-foreground">진행 중</div>
             </CardContent>
@@ -460,7 +505,7 @@ function ActivitiesPage() {
           <Card className="text-center">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-blue-600">
-                {loading ? '-' : activities.reduce((total, a) => total + (a.current_participants || 0), 0)}
+                {loading ? '-' : activities?.reduce((total, a) => total + (a.current_participants || 0), 0) || 0}
               </div>
               <div className="text-sm text-muted-foreground">총 참여자</div>
             </CardContent>
@@ -468,7 +513,7 @@ function ActivitiesPage() {
           <Card className="text-center">
             <CardContent className="p-4">
               <div className="text-2xl font-bold text-purple-600">
-                {loading ? '-' : activities.filter(a => a.status === 'completed').length}
+                {loading ? '-' : activities?.filter(a => a.status === 'completed').length || 0}
               </div>
               <div className="text-sm text-muted-foreground">완료된 활동</div>
             </CardContent>
@@ -595,11 +640,11 @@ function ActivitiesPage() {
                 <div className="mb-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{api.utils.formatActivityDate(activity.scheduled_at)} {api.utils.formatActivityTime(activity.scheduled_at)}</span>
+                    <span>{formatActivityDate(activity.scheduled_at)} {formatActivityTime(activity.scheduled_at)}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <Clock className="h-4 w-4" />
-                    <span>{api.utils.formatDuration(activity.duration_minutes)}</span>
+                    <span>{formatDuration(activity.duration_minutes)}</span>
                   </div>
                   <div className="flex items-center space-x-2">
                     <MapPin className="h-4 w-4" />
@@ -727,10 +772,10 @@ function ActivitiesPage() {
         >
           <div className="mb-4 text-6xl">📅</div>
           <h3 className="mb-2 text-xl font-semibold">
-            {activities.length === 0 ? '아직 등록된 활동이 없습니다' : '검색 결과가 없습니다'}
+            {!activities || activities.length === 0 ? '아직 등록된 활동이 없습니다' : '검색 결과가 없습니다'}
           </h3>
           <p className="mb-4 text-muted-foreground">
-            {activities.length === 0 ? '첫 번째 활동을 등록해보세요!' : '다른 검색어나 필터를 시도해보세요'}
+            {!activities || activities.length === 0 ? '첫 번째 활동을 등록해보세요!' : '다른 검색어나 필터를 시도해보세요'}
           </p>
           <Button
             variant="outline"
@@ -738,10 +783,9 @@ function ActivitiesPage() {
               setSearchTerm('')
               setActiveCategory('all')
               setActiveStatus('all')
-              filterActivities('', 'all', 'all')
             }}
           >
-            {activities.length === 0 ? '새로고침' : '전체 보기'}
+            {!activities || activities.length === 0 ? '새로고침' : '전체 보기'}
           </Button>
         </motion.div>
       )}

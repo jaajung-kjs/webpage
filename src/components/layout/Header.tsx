@@ -2,12 +2,13 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { Menu, User, LogOut, Settings, Zap } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { Menu, User, LogOut, Settings, Shield, Zap } from 'lucide-react'
+import { useAuth, useProfile } from '@/contexts/AuthContext'
 import LoginDialog from '@/components/auth/LoginDialog'
 
 const navigation = [
@@ -24,6 +25,8 @@ export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const { user, signOut, loading } = useAuth()
+  const profile = useProfile()
+  const router = useRouter()
   
   // Listen for login dialog open events
   useEffect(() => {
@@ -76,19 +79,19 @@ export default function Header() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={user.profile?.avatar_url || undefined} alt="사용자" />
+                      <AvatarImage src={profile?.avatar_url || undefined} alt="사용자" />
                       <AvatarFallback>
-                        {user.profile?.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                        {profile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
                       </AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end">
                   <div className="px-2 py-1.5 text-sm font-medium">
-                    {user.profile?.name || user.email}
+                    {profile?.name || user?.email || 'User'}
                   </div>
                   <div className="px-2 pb-1.5 text-xs text-muted-foreground">
-                    {user.profile?.department}
+                    {profile?.department}
                   </div>
                   <DropdownMenuItem asChild>
                     <Link href="/profile">
@@ -102,6 +105,26 @@ export default function Header() {
                       <span>설정</span>
                     </Link>
                   </DropdownMenuItem>
+                  {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
+                    <DropdownMenuItem 
+                      onClick={() => {
+                        console.log('Admin dashboard clicked, user role:', profile?.role)
+                        router.push('/admin')
+                      }} 
+                      className="text-primary cursor-pointer"
+                    >
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>관리자 대시보드</span>
+                    </DropdownMenuItem>
+                  )}
+                  {profile?.role === 'guest' && (
+                    <DropdownMenuItem asChild>
+                      <Link href="/membership/apply" className="text-primary">
+                        <User className="mr-2 h-4 w-4" />
+                        <span>동아리 가입 신청</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem
                     onClick={() => signOut()}
                     className="text-red-600 focus:text-red-600"
@@ -164,8 +187,10 @@ export default function Header() {
 
 function MobileNav() {
   const { user, signOut } = useAuth()
+  const profile = useProfile()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
+  const router = useRouter()
 
   return (
     <div className="my-4 h-[calc(100vh-8rem)] pb-10 px-6">
@@ -195,19 +220,34 @@ function MobileNav() {
           <>
             <div className="flex items-center space-x-2 p-2">
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user.profile?.avatar_url || undefined} alt="사용자" />
+                <AvatarImage src={profile?.avatar_url || undefined} alt="사용자" />
                 <AvatarFallback>
-                  {user.profile?.name?.charAt(0) || user.email.charAt(0).toUpperCase()}
+                  {profile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
                 </AvatarFallback>
               </Avatar>
               <div className="flex-1">
-                <div className="text-sm font-medium">{user.profile?.name || user.email}</div>
-                <div className="text-xs text-muted-foreground">{user.profile?.department}</div>
+                <div className="text-sm font-medium">{profile?.name || user?.email || 'User'}</div>
+                <div className="text-xs text-muted-foreground">{profile?.department}</div>
               </div>
             </div>
             <Button variant="outline" size="sm" asChild>
               <Link href="/profile">프로필</Link>
             </Button>
+            {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="text-primary"
+                onClick={() => router.push('/admin')}
+              >
+                관리자 대시보드
+              </Button>
+            )}
+            {profile?.role === 'guest' && (
+              <Button variant="outline" size="sm" asChild className="text-primary">
+                <Link href="/membership/apply">동아리 가입 신청</Link>
+              </Button>
+            )}
             <Button 
               variant="outline" 
               size="sm" 

@@ -18,8 +18,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import api from '@/lib/api.modern'
+import { supabase, Tables } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
+
+type ReportType = Tables<'report_types'>
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
@@ -30,14 +32,11 @@ interface ReportDialogProps {
   postId?: string
   commentId?: string
   title?: string
+  targetType?: 'content' | 'comment'
+  targetId?: string
+  parentContentId?: string
 }
 
-interface ReportType {
-  id: string
-  name: string
-  description: string
-  severity: 'low' | 'medium' | 'high' | 'critical'
-}
 
 export function ReportDialog({
   open,
@@ -45,7 +44,10 @@ export function ReportDialog({
   postType,
   postId,
   commentId,
-  title
+  title,
+  targetType,
+  targetId,
+  parentContentId
 }: ReportDialogProps) {
   const { user } = useAuth()
   const [reportTypes, setReportTypes] = useState<ReportType[]>([])
@@ -64,15 +66,19 @@ export function ReportDialog({
   const fetchReportTypes = async () => {
     try {
       setFetchingTypes(true)
-      // Report types are hardcoded for now
-      const reportTypes: ReportType[] = [
-        { id: 'spam', name: '스팸', description: '광고성 컨텐츠', severity: 'low' },
-        { id: 'inappropriate', name: '부적절한 내용', description: '욕설, 비방, 혐오 표현 등', severity: 'high' },
-        { id: 'false-info', name: '허위 정보', description: '잘못된 정보나 거짓 주장', severity: 'medium' },
-        { id: 'copyright', name: '저작권 침해', description: '무단 도용 또는 표절', severity: 'critical' },
-        { id: 'other', name: '기타', description: '기타 위반 사항', severity: 'medium' }
-      ]
-      setReportTypes(reportTypes)
+      const { data, error } = await supabase
+        .from('report_types')
+        .select('*')
+        .eq('is_active', true)
+        .order('name', { ascending: true })
+      
+      if (error) {
+        throw error
+      }
+      
+      if (data) {
+        setReportTypes(data)
+      }
     } catch (error) {
       console.error('Error fetching report types:', error)
       toast.error('신고 유형을 불러오는데 실패했습니다.')
@@ -85,19 +91,20 @@ export function ReportDialog({
     if (!user) return
 
     try {
-      const reportableId = commentId || postId
+      const reportableId = targetId || commentId || postId
+      const reportTargetType = targetType || (commentId ? 'comment' : 'content')
+      
       if (!reportableId) return
       
-      // Check existing report using interactions API
-      const response = await api.interactions.checkInteraction(
-        user.id,
-        reportableId,
-        'report'
-      )
+      // Check if user has already reported this content
+      const { data: existingReports, error } = await supabase
+        .from('reports')
+        .select('*')
+        .eq('reporter_id', user.id)
+        .eq('target_id', reportableId)
+        .eq('target_type', reportTargetType)
       
-      if (!response.success) throw new Error(response.error || 'Failed to check report')
-      
-      if (response.data === true) {
+      if (!error && existingReports && existingReports.length > 0) {
         toast.info('이미 신고한 내용입니다.')
         onOpenChange(false)
       }
@@ -119,22 +126,35 @@ export function ReportDialog({
 
     try {
       setLoading(true)
-      // Create report using the interactions API
-      const contentId = commentId || postId
-      if (!contentId) throw new Error('No content ID provided')
+      const reportableId = targetId || commentId || postId
+      const reportTargetType = targetType || (commentId ? 'comment' : 'content')
       
-      const response = await api.interactions.toggleInteraction(
-        user.id,
-        contentId,
-        'report',
-        {
-          report_type: selectedType,
-          title: `${postType} 신고`,
-          description: description.trim() || ''
-        }
-      )
+      if (!reportableId) throw new Error('No content ID provided')
+      
+      const selectedReportType = reportTypes.find(type => type.id === selectedType)
+      if (!selectedReportType) {
+        throw new Error('선택한 신고 유형을 찾을 수 없습니다.')
+      }
+      
+      const reportData: any = {
+        target_type: reportTargetType,
+        target_id: reportableId,
+        report_type_id: selectedType,
+        reason: selectedReportType.name,
+        description: description.trim() || null,
+        reporter_id: user.id
+      }
+      
+      // Add parent_content_id for comment reports
+      if (reportTargetType === 'comment' && parentContentId) {
+        reportData.parent_content_id = parentContentId
+      }
+      
+      const { error } = await supabase
+        .from('reports')
+        .insert(reportData)
 
-      if (!response.success) throw new Error(response.error || 'Failed to create report')
+      if (error) throw error
 
       toast.success('신고가 접수되었습니다. 검토 후 조치하겠습니다.')
       onOpenChange(false)
@@ -204,11 +224,16 @@ export function ReportDialog({
                 <SelectContent>
                   {reportTypes.map((type) => (
                     <SelectItem key={type.id} value={type.id}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{type.name}</span>
-                        <span className={`text-xs ml-2 ${getSeverityColor(type.severity)}`}>
-                          ({getSeverityLabel(type.severity)})
-                        </span>
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{type.name}</span>
+                          <span className={`text-xs ${getSeverityColor(type.severity)}`}>
+                            ({getSeverityLabel(type.severity)})
+                          </span>
+                        </div>
+                        {type.description && (
+                          <p className="text-xs text-muted-foreground">{type.description}</p>
+                        )}
                       </div>
                     </SelectItem>
                   ))}

@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Mail, ArrowLeft, RefreshCw, CheckCircle } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuthLegacy } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 
 export default function VerifyEmailPage() {
   const router = useRouter()
-  const { user, loading, signOut, resendEmailConfirmation } = useAuth()
+  const { user, loading, signOut, resendEmailConfirmation } = useAuthLegacy()
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [resendError, setResendError] = useState('')
@@ -19,7 +19,7 @@ export default function VerifyEmailPage() {
 
   // 이메일 인증 상태 확인
   useEffect(() => {
-    if (user?.emailConfirmed && !isVerified) {
+    if (user?.email_confirmed_at && !isVerified) {
       setIsVerified(true)
       toast.success('이메일 인증 완료!', {
         description: '홈페이지로 이동합니다.',
@@ -33,15 +33,15 @@ export default function VerifyEmailPage() {
 
   // 주기적으로 인증 상태 확인 (이메일 클릭 후 탭 전환 시를 위해)
   useEffect(() => {
-    if (!user?.emailConfirmed && user) {
+    if (!user?.email_confirmed_at && user) {
       const interval = setInterval(async () => {
         try {
           // 사용자 정보를 다시 가져와서 확인
-          const { getCurrentUser } = await import('@/lib/auth')
-          const updatedUser = await getCurrentUser()
+          const { supabase } = await import('@/lib/supabase/client')
+          const { data: { user: updatedUser } } = await supabase.auth.getUser()
           
 
-          if (updatedUser?.emailConfirmed && !isVerified) {
+          if (updatedUser?.email_confirmed_at && !isVerified) {
             setIsVerified(true)
             clearInterval(interval)
           }

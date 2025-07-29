@@ -22,7 +22,12 @@ import {
   Bookmark,
   BookmarkCheck
 } from 'lucide-react'
-import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
+import { 
+  useContent,
+  useIsLiked,
+  useToggleLike
+} from '@/hooks/useSupabase'
+import { Views } from '@/lib/supabase/client'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
@@ -60,88 +65,72 @@ const categoryIcons = {
 }
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
-  const { user } = useAuth()
-  const [postData, setPostData] = useState<ContentWithAuthorNonNull | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [isLiked, setIsLiked] = useState(false)
+  const { user, isMember } = useAuth()
+  
+  // Use Supabase hooks
+  const { data: postData, loading, error } = useContent(postId)
+  const isLiked = useIsLiked(user?.id, postId)
+  const { toggleLike, loading: likeLoading } = useToggleLike()
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
 
 
 
   // View count is incremented automatically by getContentById
 
+  // Update like count when data changes
   useEffect(() => {
-    const loadPageData = async () => {
-      try {
-        setLoading(true)
-        
-        // First get the post data
-        const postResponse = await api.content.getContentById(postId)
-        
-        if (postResponse.error) {
-          throw new Error(postResponse.error)
-        }
-        
-        if (postResponse.data) {
-          if (postResponse.data.type !== 'post') {
-            throw new Error('Content is not a community post')
-          }
-          setPostData(postResponse.data)
-          setLikeCount(postResponse.data.like_count || 0)
-          
-          // If user is logged in, check interactions in parallel
-          if (user) {
-            const [likeResult, bookmarkResult] = await Promise.allSettled([
-              api.interactions.checkInteraction(user.id, postId, 'like'),
-              api.interactions.checkInteraction(user.id, postId, 'bookmark')
-            ])
-            
-            if (likeResult.status === 'fulfilled' && likeResult.value.success && likeResult.value.data !== undefined) {
-              setIsLiked(likeResult.value.data)
-            }
-            
-            if (bookmarkResult.status === 'fulfilled' && bookmarkResult.value.success && bookmarkResult.value.data !== undefined) {
-              setIsBookmarked(bookmarkResult.value.data)
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error loading page data:', error)
-        toast.error('게시글을 불러오는데 실패했습니다.')
-      } finally {
-        setLoading(false)
+    if (postData?.like_count) {
+      setLikeCount(postData.like_count)
+    }
+  }, [postData])
+
+  // Listen for report dialog events
+  const [parentContentId, setParentContentId] = useState<string | undefined>()
+  
+  useEffect(() => {
+    const handleOpenReportDialog = (event: CustomEvent) => {
+      const { targetType, targetId, parentContentId } = event.detail
+      if (targetType && targetId) {
+        setReportTarget({ type: targetType, id: targetId })
+        setParentContentId(parentContentId)
+        setReportDialogOpen(true)
       }
     }
-    
-    loadPageData()
-  }, [postId, user])
+
+    window.addEventListener('openReportDialog', handleOpenReportDialog as any)
+    return () => {
+      window.removeEventListener('openReportDialog', handleOpenReportDialog as any)
+    }
+  }, [])
 
   const handleLike = async () => {
     if (!user) {
       toast.error('로그인이 필요합니다.')
       return
     }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
+      return
+    }
 
     try {
-      const response = await api.interactions.toggleInteraction(
-        user.id,
-        postId,
-        'like'
-      )
+      const result = await toggleLike(user.id, postId)
       
-      if (response.error) {
-        throw new Error(response.error)
+      if (result.error) {
+        throw result.error
       }
       
-      if (response.data) {
-        setIsLiked(response.data.isActive)
-        setLikeCount(prevCount => response.data!.isActive ? prevCount + 1 : prevCount - 1)
-      }
-    } catch (error) {
+      // Update local like count
+      setLikeCount(prev => isLiked ? prev - 1 : prev + 1)
+      
+      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
+    } catch (error: any) {
       console.error('Error toggling like:', error)
-      toast.error('좋아요 처리에 실패했습니다.')
+      toast.error(error.message || '좋아요 처리에 실패했습니다.')
     }
   }
 
@@ -150,23 +139,9 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       toast.error('로그인이 필요합니다.')
       return
     }
-
-    try {
-      const response = await api.interactions.toggleInteraction(
-        user.id,
-        postId,
-        'bookmark'
-      )
-      if (response.error) throw new Error(response.error)
-      
-      if (response.data) {
-        setIsBookmarked(response.data.isActive)
-        toast.success(response.data.isActive ? '북마크에 추가되었습니다.' : '북마크에서 제거되었습니다.')
-      }
-    } catch (error) {
-      console.error('Error toggling bookmark:', error)
-      toast.error('북마크 처리에 실패했습니다.')
-    }
+    
+    setIsBookmarked(!isBookmarked)
+    toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
   }
 
   const handleShare = () => {
@@ -174,7 +149,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     navigator.clipboard.writeText(url)
     toast.success('링크가 클립보드에 복사되었습니다.')
   }
-
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -185,17 +159,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       hour: '2-digit',
       minute: '2-digit'
     })
-  }
-
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return '방금 전'
-    if (diffInHours < 24) return `${diffInHours}시간 전`
-    if (diffInHours < 48) return '1일 전'
-    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
   }
 
   const getRoleLabel = (role: string) => {
@@ -243,7 +206,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     )
   }
 
-  const CategoryIcon = categoryIcons[postData.category as keyof typeof categoryIcons]
+  const CategoryIcon = categoryIcons[postData.category as keyof typeof categoryIcons] || MessageCircle
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -271,8 +234,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         >
           <Card>
             <CardHeader>
-              {/* Category and Tags */}
-              <div className="mb-4 flex flex-wrap items-center gap-2">
+              <div className="mb-4 flex items-center space-x-2">
                 <Badge 
                   variant="secondary" 
                   className={categoryColors[postData.category as keyof typeof categoryColors]}
@@ -280,24 +242,12 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                   <CategoryIcon className="mr-1 h-3 w-3" />
                   {categoryLabels[postData.category as keyof typeof categoryLabels]}
                 </Badge>
-                {(postData.metadata as any)?.is_pinned && (
-                  <Badge variant="destructive">
-                    고정
-                  </Badge>
-                )}
-                {postData.tags?.map((tag: string) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
-                    #{tag}
-                  </Badge>
-                ))}
               </div>
 
-              {/* Title */}
               <CardTitle className="text-2xl sm:text-3xl leading-tight">
                 {postData.title}
               </CardTitle>
 
-              {/* Author and Meta Info */}
               <div className="flex items-center justify-between pt-4">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-12 w-12">
@@ -325,97 +275,50 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                     <span>{postData.view_count || 0}</span>
                   </div>
                   <div className="flex items-center space-x-1">
-                    <MessageCircle className="h-4 w-4" />
-                    <span>{postData.comment_count || 0}</span>
+                    <Heart className="h-4 w-4" />
+                    <span>{likeCount}</span>
                   </div>
                 </div>
               </div>
             </CardHeader>
 
             <CardContent>
-              {/* Content */}
               <div className="prose max-w-none mb-8">
                 <div 
                   className="whitespace-pre-wrap text-base leading-relaxed"
                   dangerouslySetInnerHTML={{ 
-                    __html: postData.content.replace(/\n/g, '<br/>') 
+                    __html: (postData.content || '').replace(/\n/g, '<br/>') 
                   }}
                 />
               </div>
 
-              {/* Attachments */}
-              {(postData.metadata as any)?.attachments && Array.isArray((postData.metadata as any).attachments) && (postData.metadata as any).attachments.length > 0 && (
-                <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                    첨부파일 ({(postData.metadata as any).attachments.length})
-                  </h3>
-                  <div className="space-y-2">
-                    {((postData.metadata as any).attachments || []).map((attachment: any, index: number) => {
-                      if (!attachment || typeof attachment !== 'object') return null
-                      const attachmentObj = attachment as any
-                      const isImage = attachmentObj.name?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
-                      const fileSize = (attachmentObj.size / 1024).toFixed(1)
-                      
-                      return (
-                        <div key={index} className="flex items-center justify-between p-3 bg-white dark:bg-gray-700 rounded border">
-                          <div className="flex items-center space-x-3">
-                            {isImage ? (
-                              <div className="flex-shrink-0">
-                                <img 
-                                  src={attachmentObj.url} 
-                                  alt={attachmentObj.name}
-                                  className="w-12 h-12 object-cover rounded"
-                                />
-                              </div>
-                            ) : (
-                              <div className="flex-shrink-0 w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded flex items-center justify-center">
-                                <svg className="w-6 h-6 text-blue-600 dark:text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                                </svg>
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-xs">
-                                {attachmentObj.name}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {fileSize} KB
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => window.open(attachmentObj.url, '_blank')}
-                          >
-                            <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            다운로드
-                          </Button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Action Buttons */}
               <div className="flex items-center justify-between border-t pt-6">
                 <div className="flex items-center space-x-2">
-                  <Button
-                    variant={isLiked ? "default" : "outline"}
+                  <Button 
+                    variant={isLiked ? "default" : "outline"} 
                     size="sm"
                     onClick={handleLike}
-                    className={isLiked ? "bg-red-500 hover:bg-red-600" : ""}
+                    disabled={likeLoading || !isMember}
+                    className={isLiked ? "bg-red-500 hover:bg-red-600 text-white" : ""}
+                    title={!isMember ? "동아리 회원만 좋아요를 누를 수 있습니다" : ""}
                   >
                     <Heart className={`mr-2 h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-                    좋아요 ({likeCount})
+                    좋아요 {likeCount > 0 && `(${likeCount})`}
                   </Button>
                   <Button variant="outline" size="sm" onClick={handleShare}>
                     <Share2 className="mr-2 h-4 w-4" />
                     공유
                   </Button>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setReportTarget({ type: 'content', id: postId })
+                    setReportDialogOpen(true)
+                  }}>
+                    <Flag className="mr-2 h-4 w-4" />
+                    신고
+                  </Button>
+                </div>
+
+                <div className="flex items-center space-x-2">
                   <Button 
                     variant={isBookmarked ? "default" : "outline"} 
                     size="sm"
@@ -430,20 +333,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
                     북마크
                   </Button>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    onClick={() => setReportDialogOpen(true)}
-                  >
-                    <Flag className="mr-2 h-4 w-4" />
-                    신고
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </div>
               </div>
             </CardContent>
           </Card>
@@ -456,19 +345,27 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           transition={{ duration: 0.5, delay: 0.2 }}
           className="mt-8"
         >
-          <CommentSection contentId={postId} contentType="post" />
+          <CommentSection contentId={postId} />
         </motion.div>
-      </div>
 
-      {/* Report Dialog */}
-      <ReportDialog
-        open={reportDialogOpen}
-        onOpenChange={setReportDialogOpen}
-        postType="community"
-        postId={postId}
-        title={postData?.title}
-      />
+        {/* Report Dialog */}
+        <ReportDialog
+          open={reportDialogOpen}
+          onOpenChange={(open) => {
+            setReportDialogOpen(open)
+            if (!open) {
+              setReportTarget(null)
+              setParentContentId(undefined)
+            }
+          }}
+          postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
+          commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
+          targetType={reportTarget?.type}
+          targetId={reportTarget?.id}
+          parentContentId={parentContentId}
+          postType={reportTarget?.type === 'comment' ? 'comment' : 'community'}
+        />
+      </div>
     </div>
   )
 }
-

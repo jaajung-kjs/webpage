@@ -3,6 +3,9 @@
  * 중앙 집중식 상수 관리로 유지보수성 향상
  */
 
+// Storage key for auth state
+export const AUTH_STORAGE_KEY = 'sb-auth-token'
+
 // Auth 타이밍 관련 상수
 export const AUTH_CONSTANTS = {
   // 재시도 관련

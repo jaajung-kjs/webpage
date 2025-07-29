@@ -32,7 +32,7 @@ import {
   Megaphone,
   Loader2
 } from 'lucide-react'
-import api from '@/lib/api.modern'
+import { supabase, Views } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
 const contentTypeLabels = {
@@ -102,13 +102,22 @@ export default function SearchPage() {
       setLoading(true)
       
       if (activeTab === 'all') {
-        const response = await api.content.searchContent(query, ['post', 'case', 'resource', 'announcement'], 20)
-        if (!response.success) throw new Error(response.error || 'Search failed')
+        // Search all content types
+        const { data, error } = await supabase
+          .from('content_with_author')
+          .select('*')
+          .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+          .in('type', ['post', 'case', 'resource', 'announcement'])
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(20)
+        
+        if (error) throw error
         
         // Transform results into expected format
         const results = { community: [], cases: [], resources: [], announcements: [], total: 0 } as any
-        if (response.data?.results) {
-          response.data.results.forEach((item: any) => {
+        if (data) {
+          data.forEach((item: any) => {
             switch (item.type) {
               case 'post':
                 results.community.push(item)
@@ -124,19 +133,27 @@ export default function SearchPage() {
                 break
             }
           })
-          results.total = response.data.total || 0
+          results.total = data.length
         }
         setSearchResults(results)
       } else {
         const contentType = activeTab === 'community' ? 'post' : activeTab
-        const response = await api.content.searchContent(query, [contentType as any], 20)
-        if (!response.success) throw new Error(response.error || 'Search failed')
+        const { data, error } = await supabase
+          .from('content_with_author')
+          .select('*')
+          .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
+          .eq('type', contentType)
+          .eq('is_published', true)
+          .order('created_at', { ascending: false })
+          .limit(20)
+        
+        if (error) throw error
         
         // 결과를 적절한 카테고리에 배치
         const results = { community: [], cases: [], resources: [], announcements: [], total: 0 } as any
         const key = activeTab === 'case' ? 'cases' : activeTab === 'resource' ? 'resources' : activeTab === 'announcement' ? 'announcements' : activeTab
-        results[key] = response.data?.results || []
-        results.total = response.data?.total || 0
+        results[key] = data || []
+        results.total = data?.length || 0
         setSearchResults(results)
       }
     } catch (error) {

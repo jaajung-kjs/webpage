@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -10,8 +10,10 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, Plus, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
-import api, { type ContentWithAuthorNonNull } from '@/lib/api.modern'
-import { type PostCategory } from '@/lib/types.core'
+import { useContentList } from '@/hooks/useSupabase'
+import { Views, type Enums } from '@/lib/supabase/client'
+
+type PostCategory = Enums<'post_category'>
 
 const categoryLabels = {
   all: '전체',
@@ -31,56 +33,29 @@ const categoryColors = {
 }
 
 export default function CasesListPage() {
-  const [cases, setCases] = useState<ContentWithAuthorNonNull[]>([])
-  const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
   const { user } = useAuth()
-
-  useEffect(() => {
-    fetchCases()
-  }, [searchTerm, activeCategory])
-
-  const fetchCases = async () => {
-    try {
-      setLoading(true)
-      const response = await api.content.getContent({
-        type: 'case',
-        category: activeCategory !== 'all' ? activeCategory : undefined,
-        search: searchTerm || undefined,
-        limit: 50
-      })
-
-      if (response.success && response.data) {
-        // Filter to ensure we only have cases and transform to non-null type
-        const casesData = response.data
-          .filter(item => item.type === 'case')
-          .map(item => ({
-            ...item,
-            id: item.id || crypto.randomUUID(),
-            title: item.title || '',
-            content: item.content || '',
-            author_name: item.author_name || '익명',
-            author_avatar: item.author_avatar || '',
-            author_department: item.author_department || '부서 미지정',
-            author_role: item.author_role || 'member',
-            created_at: item.created_at || new Date().toISOString(),
-            tags: item.tags || [],
-            view_count: item.view_count || 0,
-            like_count: item.like_count || 0,
-            comment_count: item.comment_count || 0,
-            metadata: item.metadata || {}
-          } as ContentWithAuthorNonNull))
-        setCases(casesData)
-      } else {
-        console.error('Error fetching cases:', response.error)
-      }
-    } catch (error) {
-      console.error('Error fetching cases:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
+  
+  // Use Supabase hook
+  const { data: cases, loading } = useContentList({
+    type: 'case',
+    category: activeCategory !== 'all' ? activeCategory : undefined,
+    status: 'published'
+  })
+  
+  // Filter cases based on search term
+  const filteredCases = useMemo(() => {
+    if (!cases) return []
+    if (!searchTerm) return cases
+    
+    const lowerSearch = searchTerm.toLowerCase()
+    return cases.filter(item => 
+      item.title?.toLowerCase().includes(lowerSearch) ||
+      item.content?.toLowerCase().includes(lowerSearch) ||
+      item.tags?.some(tag => tag.toLowerCase().includes(lowerSearch))
+    )
+  }, [cases, searchTerm])
 
 
 
@@ -151,7 +126,7 @@ export default function CasesListPage() {
         className="mb-6"
       >
         <p className="text-sm text-muted-foreground">
-          {loading ? '로딩 중...' : `총 ${cases.length}개의 활용사례가 있습니다`}
+          {loading ? '로딩 중...' : `총 ${filteredCases.length}개의 활용사례가 있습니다`}
         </p>
       </motion.div>
 
@@ -190,7 +165,7 @@ export default function CasesListPage() {
               </CardContent>
             </Card>
           ))
-        ) : cases.length === 0 ? (
+        ) : filteredCases.length === 0 ? (
           <div className="col-span-full text-center py-12">
             <p className="text-muted-foreground mb-4">검색 결과가 없습니다.</p>
             {user && (
@@ -203,7 +178,7 @@ export default function CasesListPage() {
             )}
           </div>
         ) : (
-          cases.map((caseItem, index) => (
+          filteredCases.map((caseItem, index) => (
             <motion.div
               key={caseItem.id}
               initial={{ opacity: 0, y: 20 }}
@@ -228,47 +203,47 @@ export default function CasesListPage() {
                       href={`/cases/${caseItem.id}`}
                       className="hover:text-primary transition-colors"
                     >
-                      {caseItem.title}
+                      {caseItem.title || '제목 없음'}
                     </Link>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                    {caseItem.excerpt || caseItem.content.substring(0, 150) + '...'}
+                    {caseItem.excerpt || (caseItem.content ? caseItem.content.substring(0, 150) + '...' : '')}
                   </CardDescription>
                   
                   {/* Tags */}
                   <div className="mb-4 flex flex-wrap gap-1">
-                    {caseItem.tags && caseItem.tags.slice(0, 3).map((tag) => (
+                    {caseItem.tags?.slice(0, 3).map((tag) => (
                       <Badge key={tag} variant="outline" className="text-xs">
                         {tag}
                       </Badge>
                     ))}
-                    {caseItem.tags && caseItem.tags.length > 3 && (
+                    {(caseItem.tags?.length || 0) > 3 && (
                       <Badge variant="outline" className="text-xs">
-                        +{caseItem.tags.length - 3}
+                        +{(caseItem.tags?.length || 0) - 3}
                       </Badge>
                     )}
                   </div>
                   
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center space-x-1">
-                      <span className="font-medium">{caseItem.author_name}</span>
+                      <span className="font-medium">{caseItem.author_name || '익명'}</span>
                       <span>·</span>
-                      <span>{caseItem.author_department}</span>
+                      <span>{caseItem.author_department || '부서 미지정'}</span>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="flex items-center space-x-1">
                         <Eye className="h-4 w-4" />
-                        <span>{caseItem.view_count}</span>
+                        <span>{caseItem.view_count || 0}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <ThumbsUp className="h-4 w-4" />
-                        <span>{caseItem.like_count}</span>
+                        <span>{caseItem.like_count || 0}</span>
                       </div>
                       <div className="flex items-center space-x-1">
                         <MessageCircle className="h-4 w-4" />
-                        <span>{caseItem.comment_count}</span>
+                        <span>{caseItem.comment_count || 0}</span>
                       </div>
                   </div>
                 </div>

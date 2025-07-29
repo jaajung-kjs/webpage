@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { ArrowRight, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import api from '@/lib/api.modern'
+import { supabase, Views } from '@/lib/supabase/client'
 
 interface PostWithAuthor {
   id: string
@@ -73,30 +73,35 @@ export default function RecentPostsSection() {
   const fetchRecentPosts = async () => {
     try {
       // Fetch recent cases from DB
-      const response = await api.content.getContent({ 
-        type: 'case', 
-        limit: 3,
-        sort: 'created_at',
-        order: 'desc'
-      })
+      const { data, error } = await supabase
+        .from('content_with_author')
+        .select('*')
+        .eq('type', 'case')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(3)
       
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to fetch recent cases')
+      if (error) {
+        throw error
       }
       
-      // Transform data to match expected type
-      const transformedData = (response.data || []).map(caseItem => ({
-        id: caseItem.id,
-        title: caseItem.title,
-        content: caseItem.content || '',
-        category: caseItem.category,
-        view_count: caseItem.view_count || 0,
-        like_count: caseItem.like_count || 0,
-        comment_count: caseItem.comment_count || 0,
-        created_at: caseItem.created_at,
-        author_id: caseItem.author_id,
-        author_name: caseItem.author_name
-      }))
+      // Transform data to match expected type, filtering out items with null IDs or titles
+      const transformedData = (data || [])
+        .filter((item): item is Views<'content_with_author'> & { id: string; title: string; author_id: string } => 
+          item.id !== null && item.title !== null && item.author_id !== null
+        )
+        .map((caseItem) => ({
+          id: caseItem.id,
+          title: caseItem.title,
+          content: caseItem.content || '',
+          category: caseItem.category,
+          view_count: caseItem.view_count || 0,
+          like_count: caseItem.like_count || 0,
+          comment_count: caseItem.comment_count || 0,
+          created_at: caseItem.created_at,
+          author_id: caseItem.author_id,
+          author_name: caseItem.author_name
+        }))
       
       setRecentPosts(transformedData)
     } catch (error) {

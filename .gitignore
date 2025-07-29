@@ -41,3 +41,26 @@ dev.log
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+*.py
+__pycache__/
+*.pyc
+
+# Backup files
+*.old
+*.backup
+*.bak
+
+# SQL files (using Supabase MCP for migrations)
+*.sql
+
+# Temporary files
+*.tmp
+*.temp

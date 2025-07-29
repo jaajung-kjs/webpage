@@ -29,10 +29,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import api, { type CommentWithAuthorNonNull } from '@/lib/api.modern'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { 
+  useComments, 
+  useCreateComment, 
+  useUpdateComment, 
+  useDeleteComment,
+  useToggleCommentLike,
+  useSupabaseMutation
+} from '@/hooks/useSupabase'
+import { Views, supabase } from '@/lib/supabase/client'
 
 interface CommentSectionProps {
   contentId: string
@@ -49,10 +57,16 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user } = useAuth()
-  const [comments, setComments] = useState<CommentWithAuthorNonNull[]>([])
-  const [loading, setLoading] = useState(true)
-  const [commentLoading, setCommentLoading] = useState(false)
+  const { user, isMember } = useAuth()
+  
+  // Use Supabase hooks
+  const { data: commentsData, loading, refetch } = useComments(contentId)
+  const { createComment, loading: createLoading } = useCreateComment()
+  const { updateComment, loading: updateLoading } = useUpdateComment()
+  const { deleteComment, loading: deleteLoading } = useDeleteComment()
+  const { toggleCommentLike, loading: likeLoading } = useToggleCommentLike()
+  
+  const [comments, setComments] = useState<Views<'comments_with_author'>[]>([])
   const [newComment, setNewComment] = useState('')
   const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
   const [replyingTo, setReplyingTo] = useState<string | null>(null)
@@ -63,68 +77,51 @@ export default function CommentSection({
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popular'>('newest')
   const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
 
+  const commentLoading = createLoading || updateLoading || deleteLoading || likeLoading
+
+  // Update local state when comments data changes
   useEffect(() => {
-    fetchComments()
-  }, [contentId])
-  
-  useEffect(() => {
-    // Resort comments when sort option changes
-    if (comments.length > 0) {
-      const sortedComments = sortComments(comments, sortBy)
+    if (commentsData) {
+      const sortedComments = sortComments(commentsData, sortBy)
       setComments(sortedComments)
+      // Check like status for all comments
+      checkCommentLikeStatus(commentsData)
     }
-  }, [sortBy])
+  }, [commentsData, sortBy])
 
   const fetchComments = async () => {
     try {
-      setLoading(true)
-      const response = await api.comments.getThreadedComments(contentId)
-      
-      if (response.error) {
-        throw new Error(response.error)
-      }
-      
-      const commentsData = response.data || []
-      
-      // Sort comments based on current sort option
-      const sortedComments = sortComments(commentsData, sortBy)
-      setComments(sortedComments)
-      
-      // Auto-collapse deep threads
-      if (autoCollapseDepth > 0) {
-        const toCollapse = new Set<string>()
-        commentsData.forEach(comment => {
-          if (getCommentDepth(comment, commentsData) >= autoCollapseDepth) {
-            toCollapse.add(comment.id)
-          }
-        })
-        setCollapsedThreads(toCollapse)
-      }
-      
-      // Check comment like status for logged in user
-      if (user && response.data) {
-        checkCommentLikeStatus(response.data)
-      }
+      // Refetch comments using the hook
+      await refetch()
     } catch (error) {
       console.error('Error fetching comments:', error)
-    } finally {
-      setLoading(false)
+      toast.error('댓글을 불러오는데 실패했습니다.')
     }
   }
 
-  const checkCommentLikeStatus = async (comments: CommentWithAuthorNonNull[]) => {
+  const checkCommentLikeStatus = async (comments: Views<'comments_with_author'>[]) => {
     if (!user) return
 
     try {
       const likesStatus: { [key: string]: boolean } = {}
       
-      // Check like status for all comments (including replies)
-      for (const comment of comments) {
-        const response = await api.comments.checkCommentLike(comment.id, user.id)
-        if (response.success) {
-          likesStatus[comment.id] = response.data || false
-        }
-      }
+      // Check like status for all comments in batch
+      const commentIds = comments.map(c => c.id).filter((id): id is string => id !== null)
+      
+      const { data: likes } = await supabase
+        .from('interactions')
+        .select('comment_id')
+        .eq('user_id', user.id)
+        .eq('type', 'like')
+        .in('comment_id', commentIds)
+      
+      // Create lookup map
+      const likedCommentIds = new Set(likes?.map(l => l.comment_id).filter(id => id !== null) || [])
+      
+      // Set like status for each comment
+      commentIds.forEach(id => {
+        likesStatus[id] = likedCommentIds.has(id)
+      })
       
       setCommentLikes(likesStatus)
     } catch (error) {
@@ -137,6 +134,11 @@ export default function CommentSection({
       toast.error('로그인이 필요합니다.')
       return
     }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 댓글을 작성할 수 있습니다.')
+      return
+    }
 
     if (!newComment.trim()) {
       toast.error('댓글 내용을 입력해주세요.')
@@ -144,15 +146,14 @@ export default function CommentSection({
     }
 
     try {
-      setCommentLoading(true)
-      const response = await api.comments.createComment({
+      const result = await createComment({
         content_id: contentId,
         author_id: user.id,
         comment: newComment.trim()
       })
       
-      if (response.error) {
-        throw new Error(response.error)
+      if (result.error) {
+        throw result.error
       }
       
       setNewComment('')
@@ -161,8 +162,6 @@ export default function CommentSection({
     } catch (error) {
       console.error('Error creating comment:', error)
       toast.error('댓글 작성에 실패했습니다.')
-    } finally {
-      setCommentLoading(false)
     }
   }
 
@@ -171,28 +170,39 @@ export default function CommentSection({
       toast.error('로그인이 필요합니다.')
       return
     }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
+      return
+    }
+
+    if (likeLoading) return
 
     try {
-      const response = await api.comments.toggleCommentLike(commentId, user.id)
+      const wasLiked = commentLikes[commentId] || false
       
-      if (response.error) {
-        throw new Error(response.error)
+      const result = await toggleCommentLike(user.id, commentId, contentId)
+      
+      if (result.error) {
+        throw result.error
       }
       
-      if (response.data) {
-        const isLiked = response.data.isLiked
-        setCommentLikes(prev => ({
-          ...prev,
-          [commentId]: isLiked
-        }))
-        
-        // Update likes count in comments array
-        setComments(prev => prev.map(comment => 
-          comment.id === commentId 
-            ? { ...comment, like_count: (comment.like_count || 0) + (isLiked ? 1 : -1) }
-            : comment
-        ))
-      }
+      // Update local state optimistically
+      setCommentLikes(prev => ({
+        ...prev,
+        [commentId]: !wasLiked
+      }))
+      
+      // Update likes count in comments array
+      setComments(prev => prev.map(comment => {
+        if (comment.id === commentId) {
+          return { 
+            ...comment, 
+            like_count: (comment.like_count || 0) + (wasLiked ? -1 : 1) 
+          }
+        }
+        return comment
+      }))
     } catch (error) {
       console.error('Error toggling comment like:', error)
       toast.error('좋아요 처리에 실패했습니다.')
@@ -200,13 +210,21 @@ export default function CommentSection({
   }
 
   // Helper functions
-  const sortComments = (comments: CommentWithAuthorNonNull[], sort: 'newest' | 'oldest' | 'popular') => {
+  const sortComments = (comments: Views<'comments_with_author'>[], sort: 'newest' | 'oldest' | 'popular') => {
     const sorted = [...comments]
     switch (sort) {
       case 'newest':
-        return sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        return sorted.sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateB - dateA
+        })
       case 'oldest':
-        return sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        return sorted.sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateA - dateB
+        })
       case 'popular':
         return sorted.sort((a, b) => (b.like_count || 0) - (a.like_count || 0))
       default:
@@ -214,7 +232,7 @@ export default function CommentSection({
     }
   }
 
-  const getCommentDepth = (comment: CommentWithAuthorNonNull, allComments: CommentWithAuthorNonNull[]): number => {
+  const getCommentDepth = (comment: Views<'comments_with_author'>, allComments: Views<'comments_with_author'>[]): number => {
     if (!comment.parent_id) return 0
     const parent = allComments.find(c => c.id === comment.parent_id)
     if (!parent) return 0
@@ -246,9 +264,14 @@ export default function CommentSection({
     if (!user || !editContent.trim()) return
 
     try {
-      setCommentLoading(true)
-      // API call to update comment would go here
-      // await api.comments.updateComment(commentId, editContent)
+      const result = await updateComment(commentId, {
+        comment: editContent.trim(),
+        updated_at: new Date().toISOString()
+      }, contentId)
+      
+      if (result.error) {
+        throw result.error
+      }
       
       setEditingComment(null)
       setEditContent('')
@@ -257,8 +280,6 @@ export default function CommentSection({
     } catch (error) {
       console.error('Error editing comment:', error)
       toast.error('댓글 수정에 실패했습니다.')
-    } finally {
-      setCommentLoading(false)
     }
   }
 
@@ -268,8 +289,11 @@ export default function CommentSection({
     if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) return
 
     try {
-      // API call to delete comment would go here
-      // await api.comments.deleteComment(commentId)
+      const result = await deleteComment(commentId, contentId)
+      
+      if (result.error) {
+        throw result.error
+      }
       
       await fetchComments()
       toast.success('댓글이 삭제되었습니다.')
@@ -284,6 +308,11 @@ export default function CommentSection({
       toast.error('로그인이 필요합니다.')
       return
     }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 답글을 작성할 수 있습니다.')
+      return
+    }
 
     if (!replyContent.trim()) {
       toast.error('답글 내용을 입력해주세요.')
@@ -291,16 +320,15 @@ export default function CommentSection({
     }
 
     try {
-      setCommentLoading(true)
-      const response = await api.comments.createReply(
-        contentId,
-        parentId,
-        replyContent.trim(),
-        user.id
-      )
+      const result = await createComment({
+        content_id: contentId,
+        parent_id: parentId,
+        author_id: user.id,
+        comment: replyContent.trim()
+      })
       
-      if (response.error) {
-        throw new Error(response.error)
+      if (result.error) {
+        throw result.error
       }
       
       setReplyContent('')
@@ -310,8 +338,6 @@ export default function CommentSection({
     } catch (error) {
       console.error('Error creating reply:', error)
       toast.error('답글 작성에 실패했습니다.')
-    } finally {
-      setCommentLoading(false)
     }
   }
 
@@ -337,9 +363,9 @@ export default function CommentSection({
   }
 
   // Organize comments into tree structure
-  const organizeComments = (comments: CommentWithAuthorNonNull[]) => {
+  const organizeComments = (comments: Views<'comments_with_author'>[]) => {
     const rootComments = comments.filter(c => !c.parent_id)
-    const commentMap = new Map<string, CommentWithAuthorNonNull[]>()
+    const commentMap = new Map<string, Views<'comments_with_author'>[]>()
     
     comments.forEach(comment => {
       if (comment.parent_id) {
@@ -349,7 +375,11 @@ export default function CommentSection({
         const replies = commentMap.get(comment.parent_id)!
         replies.push(comment)
         // Sort replies by date
-        replies.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
+        replies.sort((a, b) => {
+          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+          return dateA - dateB
+        })
       }
     })
     
@@ -402,29 +432,51 @@ export default function CommentSection({
       
       <CardContent>
         {/* New Comment Form */}
-        <div className="mb-6">
-          <Textarea
-            placeholder="댓글을 작성해보세요..."
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            className="mb-3"
-            rows={3}
-          />
-          <div className="flex justify-end">
-            <Button 
-              onClick={handleCommentSubmit} 
-              className="kepco-gradient"
-              disabled={commentLoading || !newComment.trim()}
-            >
-              {commentLoading ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-2 h-4 w-4" />
-              )}
-              댓글 작성
-            </Button>
+        {isMember ? (
+          <div className="mb-6">
+            <Textarea
+              placeholder="댓글을 작성해보세요..."
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              className="mb-3"
+              rows={3}
+            />
+            <div className="flex justify-end">
+              <Button 
+                onClick={handleCommentSubmit} 
+                className="kepco-gradient"
+                disabled={commentLoading || !newComment.trim()}
+              >
+                {commentLoading ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4" />
+                )}
+                댓글 작성
+              </Button>
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
+            <MessageCircle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+            <p className="text-gray-600 dark:text-gray-400 mb-2">
+              동아리 회원만 댓글을 작성할 수 있습니다.
+            </p>
+            {!user && (
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('openLoginDialog', { 
+                    detail: { tab: 'login' } 
+                  }))
+                }}
+              >
+                로그인하기
+              </Button>
+            )}
+          </div>
+        )}
 
         <Separator className="mb-6" />
 
@@ -439,12 +491,12 @@ export default function CommentSection({
               <CommentThread
                 key={comment.id}
                 comment={comment}
-                replies={commentMap.get(comment.id) || []}
+                replies={comment.id ? (commentMap.get(comment.id) || []) : []}
                 onLike={handleCommentLike}
                 onReply={handleReply}
                 onEdit={handleEdit}
                 onDelete={handleDelete}
-                isLiked={commentLikes[comment.id] || false}
+                isLiked={comment.id ? (commentLikes[comment.id] || false) : false}
                 replyingTo={replyingTo}
                 setReplyingTo={setReplyingTo}
                 replyContent={replyContent}
@@ -462,6 +514,8 @@ export default function CommentSection({
                 commentRefs={commentRefs}
                 currentUserId={user?.id}
                 commentMap={commentMap}
+                isMember={isMember}
+                contentId={contentId}
               />
             ))}
           </div>
@@ -473,8 +527,8 @@ export default function CommentSection({
 
 // Comment Thread Component
 interface CommentThreadProps {
-  comment: CommentWithAuthorNonNull
-  replies: CommentWithAuthorNonNull[]
+  comment: Views<'comments_with_author'>
+  replies: Views<'comments_with_author'>[]
   onLike: (commentId: string) => void
   onReply: (parentId: string) => void
   onEdit: (commentId: string) => void
@@ -496,7 +550,9 @@ interface CommentThreadProps {
   maxDepth: number
   commentRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>
   currentUserId?: string
-  commentMap?: Map<string, CommentWithAuthorNonNull[]>
+  commentMap?: Map<string, Views<'comments_with_author'>[]>
+  isMember: boolean
+  contentId: string
 }
 
 function CommentThread({
@@ -523,21 +579,25 @@ function CommentThread({
   maxDepth,
   commentRefs,
   currentUserId,
-  commentMap
+  commentMap,
+  isMember,
+  contentId
 }: CommentThreadProps) {
   const hasReplies = replies.length > 0
   const isMaxDepth = depth >= maxDepth
   return (
-    <div ref={el => { if (el) commentRefs.current[comment.id] = el }}>
+    <div ref={el => { if (el && comment.id) commentRefs.current[comment.id] = el }}>
       <CommentItem
         comment={comment}
         onLike={onLike}
-        onReply={() => !isMaxDepth && setReplyingTo(comment.id)}
+        onReply={() => !isMaxDepth && comment.id && setReplyingTo(comment.id)}
         onEdit={() => {
-          setEditingComment(comment.id)
-          setEditContent(comment.comment)
+          if (comment.id) {
+            setEditingComment(comment.id)
+            setEditContent(comment.comment || '')
+          }
         }}
-        onDelete={() => onDelete(comment.id)}
+        onDelete={() => comment.id && onDelete(comment.id)}
         isLiked={isLiked}
         replyingTo={replyingTo}
         setReplyingTo={setReplyingTo}
@@ -547,7 +607,7 @@ function CommentThread({
         editingComment={editingComment}
         editContent={editContent}
         setEditContent={setEditContent}
-        handleEdit={() => onEdit(comment.id)}
+        handleEdit={() => comment.id && onEdit(comment.id)}
         setEditingComment={setEditingComment}
         commentLoading={commentLoading}
         getRoleLabel={getRoleLabel}
@@ -555,9 +615,11 @@ function CommentThread({
         hasReplies={hasReplies}
         isCollapsed={false}
         onToggleCollapse={undefined}
-        canReply={!isMaxDepth}
+        canReply={!isMaxDepth && isMember}
         depth={depth}
         isOwner={currentUserId === comment.author_id}
+        isMember={isMember}
+        contentId={contentId}
       />
       
       {/* Replies */}
@@ -574,7 +636,7 @@ function CommentThread({
         >
           {replies.map((reply) => {
             // 재귀적으로 대댓글의 대댓글도 찾기
-            const subReplies = commentMap ? (commentMap.get(reply.id) || []) : []
+            const subReplies = commentMap && reply.id ? (commentMap.get(reply.id) || []) : []
             return (
               <CommentThread
                 key={reply.id}
@@ -584,7 +646,7 @@ function CommentThread({
                 onReply={onReply}
                 onEdit={onEdit}
                 onDelete={onDelete}
-                isLiked={commentLikes[reply.id] || false}
+                isLiked={reply.id ? (commentLikes[reply.id] || false) : false}
                 replyingTo={replyingTo}
                 setReplyingTo={setReplyingTo}
                 replyContent={replyContent}
@@ -602,6 +664,8 @@ function CommentThread({
                 commentRefs={commentRefs}
                 currentUserId={currentUserId}
                 commentMap={commentMap}
+                isMember={isMember}
+                contentId={contentId}
               />
             )
           })}
@@ -623,7 +687,7 @@ function CommentThread({
 
 // Comment Item Component
 interface CommentItemProps {
-  comment: CommentWithAuthorNonNull
+  comment: Views<'comments_with_author'>
   onLike: (commentId: string) => void
   onReply: () => void
   onEdit?: () => void
@@ -648,6 +712,8 @@ interface CommentItemProps {
   canReply?: boolean
   depth?: number
   isOwner?: boolean
+  isMember?: boolean
+  contentId?: string
 }
 
 function CommentItem({ 
@@ -675,7 +741,9 @@ function CommentItem({
   onToggleCollapse,
   canReply = true,
   depth = 0,
-  isOwner = false
+  isOwner = false,
+  isMember = false,
+  contentId
 }: CommentItemProps) {
   const isEditing = editingComment === comment.id
   return (
@@ -787,8 +855,9 @@ function CommentItem({
                 variant="ghost" 
                 size="sm" 
                 className="h-auto p-0 text-xs hover:text-primary"
-                onClick={() => onLike(comment.id)}
-                disabled={commentLoading}
+                onClick={() => comment.id && onLike(comment.id)}
+                disabled={commentLoading || !isMember}
+                title={!isMember ? "동아리 회원만 좋아요를 누를 수 있습니다" : ""}
               >
                 <ThumbsUp className={cn(
                   "mr-1 h-3 w-3 transition-all",
@@ -803,6 +872,8 @@ function CommentItem({
                   size="sm" 
                   className="h-auto p-0 text-xs hover:text-primary" 
                   onClick={onReply}
+                  disabled={!isMember}
+                  title={!isMember ? "동아리 회원만 답글을 작성할 수 있습니다" : ""}
                 >
                   <Reply className="mr-1 h-3 w-3" />
                   답글
@@ -813,6 +884,24 @@ function CommentItem({
                 variant="ghost" 
                 size="sm" 
                 className="h-auto p-0 text-xs hover:text-primary"
+                onClick={async () => {
+                  if (!isMember) {
+                    toast.error('동아리 회원만 신고할 수 있습니다.')
+                    return
+                  }
+                  
+                  // Open report dialog for comment
+                  window.dispatchEvent(new CustomEvent('openReportDialog', { 
+                    detail: { 
+                      targetType: 'comment',
+                      targetId: comment.id,
+                      postType: 'comment',
+                      parentContentId: contentId
+                    } 
+                  }))
+                }}
+                disabled={!isMember}
+                title={!isMember ? "동아리 회원만 신고할 수 있습니다" : ""}
               >
                 <Flag className="mr-1 h-3 w-3" />
                 신고
@@ -862,7 +951,7 @@ function CommentItem({
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => handleReply(comment.id)}
+                  onClick={() => comment.id && handleReply(comment.id)}
                   disabled={commentLoading || !replyContent.trim()}
                   className="kepco-gradient"
                 >
