@@ -241,7 +241,13 @@ function MembersPage() {
         'guest': []
       }
       
-      const userRole = user.role || 'member'
+      const { data: profile } = await supabase
+        .from('users')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+      
+      const userRole = profile?.role || 'member'
       setAssignableRoles(roleHierarchy[userRole] || [])
     } catch (error) {
       console.error('Error fetching assignable roles:', error)

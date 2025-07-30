@@ -23,7 +23,7 @@ import {
   BookOpen,
   Target
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, useProfile } from '@/contexts/AuthContext'
 import { supabase, Tables, TablesInsert } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
@@ -48,6 +48,7 @@ const experienceLevels = [
 
 export default function MembershipApplicationPage() {
   const { user } = useAuth()
+  const profile = useProfile()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
@@ -61,7 +62,7 @@ export default function MembershipApplicationPage() {
   
   useEffect(() => {
     checkApplicationStatus()
-  }, [user])
+  }, [user, profile])
   
   const checkApplicationStatus = async () => {
     if (!user) {
@@ -69,15 +70,20 @@ export default function MembershipApplicationPage() {
       return
     }
     
+    // Wait for profile to load
+    if (!profile) {
+      return
+    }
+    
     // Check if user is already a member
-    if (user.role && ['member', 'admin', 'leader', 'vice-leader'].includes(user.role)) {
+    if (profile.role && ['member', 'admin', 'leader', 'vice-leader'].includes(profile.role)) {
       toast.info('이미 동아리 회원입니다.')
       router.push('/profile')
       return
     }
     
     // Check if user is not a guest
-    if (user.role !== 'guest') {
+    if (profile.role !== 'guest') {
       toast.error('가입 신청 권한이 없습니다.')
       router.push('/')
       return

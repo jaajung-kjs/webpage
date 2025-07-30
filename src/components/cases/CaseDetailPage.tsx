@@ -45,7 +45,7 @@ import {
   useDeleteContent
 } from '@/hooks/useSupabase'
 import { Views } from '@/lib/supabase/client'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, useProfile } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
@@ -58,6 +58,7 @@ interface CaseDetailPageProps {
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { user, isMember } = useAuth()
+  const profile = useProfile()
   const router = useRouter()
   
   // Use Supabase hooks
@@ -278,7 +279,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  {user && (user.id === caseData.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                  {user && (user.id === caseData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

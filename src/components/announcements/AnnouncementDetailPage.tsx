@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { supabase, Views } from '@/lib/supabase/client'
 import { useDeleteContent } from '@/hooks/useSupabase'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth, useProfile } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import PermissionGate from '@/components/shared/PermissionGate'
 
@@ -79,6 +79,7 @@ const categoryIcons = {
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
   const { user } = useAuth()
+  const profile = useProfile()
   const router = useRouter()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   const [announcementData, setAnnouncementData] = useState<Views<'content_with_author'> | null>(null)
@@ -372,7 +373,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
                 </div>
 
                 <div className="flex items-center space-x-2">
-                  {user && (user.id === announcementData.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                  {user && (user.id === announcementData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

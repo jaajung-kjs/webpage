@@ -591,7 +591,7 @@ function AnnouncementsPage() {
                       </Avatar>
                       
                       {/* Admin Controls */}
-                      {user && (user.id === announcement.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                      {user && (user.id === announcement.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -599,7 +599,7 @@ function AnnouncementsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            {['admin', 'leader', 'vice-leader'].includes(user.role || '') && (
+                            {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
                               <>
                                 <DropdownMenuItem
                                   onClick={() => handleTogglePin(announcement.id!, metadata.is_pinned || false)}
