@@ -1,5 +1,7 @@
 import type { NextConfig } from "next";
 
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 const nextConfig: NextConfig = {
   // Performance optimizations
   poweredByHeader: false,
@@ -49,6 +51,16 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Development cache control to prevent chunk conflicts
+      ...(isDevelopment ? [{
+        source: '/_next/static/chunks/(.*)',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'no-store, must-revalidate',
+          },
+        ],
+      }] : []),
     ]
   },
 
@@ -56,6 +68,14 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
+
+  // Development-specific configuration
+  ...(isDevelopment && {
+    // Generate consistent build IDs in development
+    generateBuildId: async () => {
+      return 'development-build-' + Date.now();
+    },
+  }),
 };
 
 export default nextConfig;

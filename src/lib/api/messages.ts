@@ -65,12 +65,23 @@ export class MessagesAPI {
       // 통합 캐시 매니저 사용
       const cacheKey = createCacheKey('message', 'inbox', userId)
       
-      const inbox = await CacheManager.get(
+      const inbox = await CacheManager.get<InboxMessage[]>(
         cacheKey,
         async () => {
-          const { data, error } = await supabase.rpc('get_message_inbox', {})
+          const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
           if (error) throw error
-          return data || []
+          
+          // Map the database response to InboxMessage type
+          return (data || []).map(item => ({
+            conversation_id: item.conversation_id,
+            other_user_id: item.other_user_id,
+            other_user_name: item.other_user_name,
+            other_user_avatar: item.other_user_avatar,
+            last_message_content: item.last_message, // DB returns 'last_message'
+            last_message_time: item.last_message_time,
+            unread_count: item.unread_count,
+            is_sender: item.is_last_message_read !== undefined ? !item.is_last_message_read : false // Determine based on read status
+          }))
         },
         { 
           ttl: 300000, // 5분
@@ -178,8 +189,9 @@ export class MessagesAPI {
 
       // DB에 실제 메시지 전송
       const { data, error } = await supabase.rpc('send_message', {
+        p_sender_id: senderId,
         p_recipient_id: recipientId,
-        p_content: content
+        p_message: content
       })
 
       if (error) {
@@ -244,7 +256,8 @@ export class MessagesAPI {
     
     try {
       const { error } = await supabase.rpc('mark_conversation_messages_as_read', {
-        p_conversation_id: conversationId
+        p_conversation_id: conversationId,
+        p_user_id: userId
       })
 
       if (error) {

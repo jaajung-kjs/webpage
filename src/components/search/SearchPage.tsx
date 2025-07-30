@@ -108,7 +108,7 @@ export default function SearchPage() {
           .select('*')
           .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
           .in('type', ['post', 'case', 'resource', 'announcement'])
-          .eq('is_published', true)
+          .eq('status', 'published')
           .order('created_at', { ascending: false })
           .limit(20)
         
@@ -143,7 +143,7 @@ export default function SearchPage() {
           .select('*')
           .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
           .eq('type', contentType)
-          .eq('is_published', true)
+          .eq('status', 'published')
           .order('created_at', { ascending: false })
           .limit(20)
         
@@ -347,16 +347,16 @@ export default function SearchPage() {
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-1">
                     <Eye className="h-3 w-3" />
-                    <span>{item.views || 0}</span>
+                    <span>{item.view_count || 0}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <MessageCircle className="h-3 w-3" />
-                    <span>{item.comments_count || 0}</span>
+                    <span>{item.comment_count || 0}</span>
                   </div>
-                  {item.likes_count !== undefined && (
+                  {item.like_count !== undefined && (
                     <div className="flex items-center space-x-1">
                       <Heart className="h-3 w-3" />
-                      <span>{item.likes_count}</span>
+                      <span>{item.like_count}</span>
                     </div>
                   )}
                 </div>

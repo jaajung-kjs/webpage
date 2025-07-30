@@ -592,7 +592,7 @@ function AnnouncementsPage() {
                     
                     <div className="flex items-center space-x-2">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={announcement.author_avatar || ''} alt={announcement.author_name || ''} />
+                        <AvatarImage src={announcement.author_avatar_url || ''} alt={announcement.author_name || ''} />
                         <AvatarFallback>
                           {announcement.author_name?.charAt(0) || 'U'}
                         </AvatarFallback>

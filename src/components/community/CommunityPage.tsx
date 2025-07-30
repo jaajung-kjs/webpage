@@ -447,7 +447,7 @@ export default function CommunityPage() {
                           <div className="flex items-center gap-4">
                             <div className="flex items-center gap-2">
                               <Avatar className="h-6 w-6">
-                                <AvatarImage src={post.author_avatar || undefined} />
+                                <AvatarImage src={post.author_avatar_url || undefined} />
                                 <AvatarFallback>{post.author_name?.charAt(0) || 'U'}</AvatarFallback>
                               </Avatar>
                               <span>{post.author_name}</span>

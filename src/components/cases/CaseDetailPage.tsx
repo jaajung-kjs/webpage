@@ -259,7 +259,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
               <div className="flex items-center justify-between pt-4">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={caseData.author_avatar || ''} alt={caseData.author_name || ''} />
+                    <AvatarImage src={caseData.author_avatar_url || ''} alt={caseData.author_name || ''} />
                     <AvatarFallback>
                       {caseData.author_name?.charAt(0) || 'U'}
                     </AvatarFallback>

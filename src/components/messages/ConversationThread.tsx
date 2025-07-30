@@ -74,6 +74,12 @@ export function ConversationThread({
     
     if (!user || !newMessage.trim() || sending) return
 
+    // 자기 자신에게 메시지 보내기 방지
+    if (user.id === recipientId) {
+      toast.error('자기 자신에게는 메시지를 보낼 수 없습니다.')
+      return
+    }
+
     const messageContent = newMessage.trim()
     setNewMessage('')
     setSending(true)

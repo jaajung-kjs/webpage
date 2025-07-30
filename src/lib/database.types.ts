@@ -297,6 +297,7 @@ export type Database = {
           created_at: string
           excerpt: string | null
           id: string
+          is_pinned: boolean
           like_count: number
           metadata: Json
           status: Database["public"]["Enums"]["content_status"]
@@ -314,6 +315,7 @@ export type Database = {
           created_at?: string
           excerpt?: string | null
           id?: string
+          is_pinned?: boolean
           like_count?: number
           metadata?: Json
           status?: Database["public"]["Enums"]["content_status"]
@@ -331,6 +333,7 @@ export type Database = {
           created_at?: string
           excerpt?: string | null
           id?: string
+          is_pinned?: boolean
           like_count?: number
           metadata?: Json
           status?: Database["public"]["Enums"]["content_status"]
@@ -1201,7 +1204,7 @@ export type Database = {
       }
       comments_with_author: {
         Row: {
-          author_avatar: string | null
+          author_avatar_url: string | null
           author_email: string | null
           author_id: string | null
           author_name: string | null
@@ -1268,7 +1271,7 @@ export type Database = {
       }
       content_with_author: {
         Row: {
-          author_avatar: string | null
+          author_avatar_url: string | null
           author_department: string | null
           author_email: string | null
           author_id: string | null
@@ -1280,6 +1283,7 @@ export type Database = {
           created_at: string | null
           excerpt: string | null
           id: string | null
+          is_pinned: boolean | null
           like_count: number | null
           metadata: Json | null
           status: Database["public"]["Enums"]["content_status"] | null
@@ -1406,16 +1410,16 @@ export type Database = {
         Returns: Json
       }
       get_message_inbox: {
-        Args: { p_limit?: number; p_offset?: number }
+        Args: { p_user_id: string }
         Returns: {
           conversation_id: string
           other_user_id: string
           other_user_name: string
           other_user_avatar: string
-          last_message_content: string
+          last_message: string
           last_message_time: string
+          is_last_message_read: boolean
           unread_count: number
-          is_sender: boolean
         }[]
       }
       get_or_create_conversation: {
@@ -1494,11 +1498,11 @@ export type Database = {
         Returns: boolean
       }
       mark_conversation_messages_as_read: {
-        Args: { p_conversation_id: string }
+        Args: { p_conversation_id: string; p_user_id: string }
         Returns: number
       }
       mark_messages_as_read: {
-        Args: { p_sender_id: string }
+        Args: { p_user_id: string }
         Returns: number
       }
       search_content: {
@@ -1518,7 +1522,7 @@ export type Database = {
         }[]
       }
       send_message: {
-        Args: { p_recipient_id: string; p_content: string }
+        Args: { p_sender_id: string; p_recipient_id: string; p_message: string }
         Returns: string
       }
       update_activity_score: {

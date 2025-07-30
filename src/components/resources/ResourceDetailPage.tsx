@@ -333,7 +333,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
               <div className="flex items-center justify-between pt-4">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={resourceData.author_avatar || ''} alt={resourceData.author_name || ''} />
+                    <AvatarImage src={resourceData.author_avatar_url || ''} alt={resourceData.author_name || ''} />
                     <AvatarFallback>
                       {resourceData.author_name?.charAt(0) || 'U'}
                     </AvatarFallback>

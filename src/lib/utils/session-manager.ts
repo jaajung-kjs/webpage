@@ -210,8 +210,8 @@ export class SessionManager {
       this.profileSubscription = null
     }
     
-    // 캐시 정리
-    CacheManager.invalidate('auth:')
+    // 로그아웃 시 모든 캐시 완전 정리
+    CacheManager.invalidate()
     
     this.updateState({
       session: null,
@@ -299,6 +299,11 @@ export class SessionManager {
   async signOut(): Promise<void> {
     await supabase.auth.signOut()
     this.cleanup()
+    
+    // 페이지 새로고침으로 모든 상태 완전 초기화
+    if (typeof window !== 'undefined') {
+      window.location.reload()
+    }
   }
   
   /**

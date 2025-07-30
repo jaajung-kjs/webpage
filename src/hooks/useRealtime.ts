@@ -368,7 +368,7 @@ export function useRealtimeMessageInbox(userId: string) {
     const fetchInbox = async () => {
       try {
         setLoading(true)
-        const { data, error } = await supabase.rpc('get_message_inbox', {})
+        const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
 
         if (error) throw error
         
@@ -403,7 +403,7 @@ export function useRealtimeMessageInbox(userId: string) {
         async () => {
           // Refetch inbox to get updated data with sender info
           try {
-            const { data, error } = await supabase.rpc('get_message_inbox', {})
+            const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
 
             if (error) throw error
             setMessages(data || [])
@@ -423,7 +423,7 @@ export function useRealtimeMessageInbox(userId: string) {
         async () => {
           // Refetch inbox for read status updates
           try {
-            const { data, error } = await supabase.rpc('get_message_inbox', {})
+            const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
 
             if (error) throw error
             setMessages(data || [])

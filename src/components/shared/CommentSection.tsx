@@ -761,7 +761,7 @@ function CommentItem({
           "transition-all",
           depth > 0 ? "h-8 w-8" : "h-10 w-10"
         )}>
-          <AvatarImage src={comment.author_avatar || ''} alt={comment.author_name || '익명'} />
+          <AvatarImage src={comment.author_avatar_url || ''} alt={comment.author_name || '익명'} />
           <AvatarFallback>
             {(comment.author_name || '익명').charAt(0)}
           </AvatarFallback>

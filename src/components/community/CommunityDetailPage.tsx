@@ -289,7 +289,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
               <div className="flex items-center justify-between pt-4">
                 <div className="flex items-center space-x-3">
                   <Avatar className="h-12 w-12">
-                    <AvatarImage src={postData.author_avatar || ''} alt={postData.author_name || ''} />
+                    <AvatarImage src={postData.author_avatar_url || ''} alt={postData.author_name || ''} />
                     <AvatarFallback>
                       {postData.author_name?.charAt(0) || 'U'}
                     </AvatarFallback>
