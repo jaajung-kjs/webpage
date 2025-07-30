@@ -139,7 +139,7 @@ export default function MemberManagement() {
       department: userData.department === '미지정' ? null : userData.department,
       created_at: userData.created_at || '',
       activity_score: userData.activity_score || 0,
-      post_count: userData.post_count || 0,
+      post_count: userData.content_count || 0,
       comment_count: userData.comment_count || 0,
       metadata: userData.metadata || {}
     }))

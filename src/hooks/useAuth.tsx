@@ -153,6 +153,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }, 100)
       } else if (event === 'USER_UPDATED') {
         toast.success('사용자 정보가 업데이트되었습니다.')
+      } else if (event === 'SIGNED_IN' && session?.user) {
+        // 로그인 성공 시 알림 권한 요청 (멤버인 경우만)
+        const profile = await fetchProfile(session.user.id)
+        const isMemberRole = profile?.role ? ['member', 'vice-leader', 'leader', 'admin'].includes(profile.role) : false
+        
+        if (isMemberRole) {
+          // 5초 후에 알림 권한 요청 (사용자 경험 고려)
+          setTimeout(async () => {
+            const { MessageNotifications } = await import('@/lib/api/messages')
+            const status = MessageNotifications.getNotificationStatus()
+            
+            if (status.supported && status.permission === 'default') {
+              const granted = await MessageNotifications.requestNotificationPermission()
+              if (granted) {
+                toast.success('메시지 알림이 활성화되었습니다.')
+              }
+            }
+          }, 5000)
+        }
       }
       
       // Set initial load to false after first auth state change
@@ -164,7 +183,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe()
     }
-  }, [updateAuthState, router])
+  }, [updateAuthState, router, fetchProfile])
 
   // Subscribe to profile changes
   useEffect(() => {

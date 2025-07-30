@@ -364,6 +364,83 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_activity_at: string
+          last_message_id: string | null
+          participant1_id: string
+          participant2_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_activity_at?: string
+          last_message_id?: string | null
+          participant1_id: string
+          participant2_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_activity_at?: string
+          last_message_id?: string | null
+          participant1_id?: string
+          participant2_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_last_message_id_fkey"
+            columns: ["last_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant1_id_fkey"
+            columns: ["participant1_id"]
+            isOneToOne: false
+            referencedRelation: "members_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant1_id_fkey"
+            columns: ["participant1_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant1_id_fkey"
+            columns: ["participant1_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant2_id_fkey"
+            columns: ["participant2_id"]
+            isOneToOne: false
+            referencedRelation: "members_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant2_id_fkey"
+            columns: ["participant2_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_participant2_id_fkey"
+            columns: ["participant2_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_verification_attempts: {
         Row: {
           attempt_type: string
@@ -642,6 +719,92 @@ export type Database = {
           },
         ]
       }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string | null
+          created_at: string
+          id: string
+          is_read: boolean
+          read_at: string | null
+          recipient_id: string
+          sender_id: string
+          updated_at: string
+        }
+        Insert: {
+          content: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          read_at?: string | null
+          recipient_id: string
+          sender_id: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string | null
+          created_at?: string
+          id?: string
+          is_read?: boolean
+          read_at?: string | null
+          recipient_id?: string
+          sender_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "members_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "members_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       report_types: {
         Row: {
           category: string
@@ -786,6 +949,55 @@ export type Database = {
           },
         ]
       }
+      user_message_stats: {
+        Row: {
+          last_checked_at: string
+          received_count: number
+          sent_count: number
+          unread_count: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          last_checked_at?: string
+          received_count?: number
+          sent_count?: number
+          unread_count?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          last_checked_at?: string
+          received_count?: number
+          sent_count?: number
+          unread_count?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_message_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "members_with_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_message_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_stats"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_message_stats_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_settings: {
         Row: {
           community_updates: boolean
@@ -917,18 +1129,16 @@ export type Database = {
           duration_minutes: number | null
           id: string | null
           instructor_avatar: string | null
+          instructor_email: string | null
           instructor_id: string | null
           instructor_name: string | null
           location: string | null
           max_participants: number | null
-          participant_count: number | null
-          participant_ids: string[] | null
           scheduled_at: string | null
           status: Database["public"]["Enums"]["activity_status"] | null
           tags: string[] | null
           title: string | null
           updated_at: string | null
-          view_count: number | null
         }
         Relationships: [
           {
@@ -992,7 +1202,6 @@ export type Database = {
       comments_with_author: {
         Row: {
           author_avatar: string | null
-          author_department: string | null
           author_email: string | null
           author_id: string | null
           author_name: string | null
@@ -1003,7 +1212,6 @@ export type Database = {
           id: string | null
           like_count: number | null
           parent_id: string | null
-          reply_count: number | null
           updated_at: string | null
         }
         Relationships: [
@@ -1068,7 +1276,6 @@ export type Database = {
           author_role: Database["public"]["Enums"]["user_role"] | null
           category: string | null
           comment_count: number | null
-          comments_count: number | null
           content: string | null
           created_at: string | null
           excerpt: string | null
@@ -1112,27 +1319,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           comment_count: number | null
-          created_at: string | null
-          department: string | null
-          email: string | null
-          id: string | null
-          last_seen_at: string | null
-          metadata: Json | null
-          name: string | null
-          post_count: number | null
-          role: Database["public"]["Enums"]["user_role"] | null
-          updated_at: string | null
-        }
-        Relationships: []
-      }
-      user_stats: {
-        Row: {
-          activity_count: number | null
-          activity_score: number | null
-          avatar_url: string | null
-          bio: string | null
-          case_count: number | null
-          comment_count: number | null
+          content_count: number | null
           created_at: string | null
           department: string | null
           email: string | null
@@ -1141,10 +1328,24 @@ export type Database = {
           like_count: number | null
           metadata: Json | null
           name: string | null
-          post_count: number | null
-          resource_count: number | null
           role: Database["public"]["Enums"]["user_role"] | null
-          view_count: number | null
+          updated_at: string | null
+        }
+        Relationships: []
+      }
+      user_stats: {
+        Row: {
+          activity_score: number | null
+          comments_count: number | null
+          created_at: string | null
+          department: string | null
+          email: string | null
+          id: string | null
+          last_seen_at: string | null
+          likes_received: number | null
+          name: string | null
+          posts_count: number | null
+          role: Database["public"]["Enums"]["user_role"] | null
         }
         Relationships: []
       }
@@ -1173,10 +1374,6 @@ export type Database = {
           p_target_id: string
         }
         Returns: boolean
-      }
-      check_email_exists: {
-        Args: { check_email: string }
-        Returns: Json
       }
       cleanup_unverified_accounts: {
         Args: { age_hours?: number }
@@ -1207,6 +1404,23 @@ export type Database = {
       get_homepage_stats: {
         Args: Record<PropertyKey, never>
         Returns: Json
+      }
+      get_message_inbox: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: {
+          conversation_id: string
+          other_user_id: string
+          other_user_name: string
+          other_user_avatar: string
+          last_message_content: string
+          last_message_time: string
+          unread_count: number
+          is_sender: boolean
+        }[]
+      }
+      get_or_create_conversation: {
+        Args: { p_user1_id: string; p_user2_id: string }
+        Returns: string
       }
       get_reports_with_pagination: {
         Args: { p_limit?: number; p_offset?: number; p_status?: string }
@@ -1279,6 +1493,14 @@ export type Database = {
         Args: { user_id?: string }
         Returns: boolean
       }
+      mark_conversation_messages_as_read: {
+        Args: { p_conversation_id: string }
+        Returns: number
+      }
+      mark_messages_as_read: {
+        Args: { p_sender_id: string }
+        Returns: number
+      }
       search_content: {
         Args: {
           search_query: string
@@ -1294,6 +1516,10 @@ export type Database = {
           created_at: string
           rank: number
         }[]
+      }
+      send_message: {
+        Args: { p_recipient_id: string; p_content: string }
+        Returns: string
       }
       update_activity_score: {
         Args: { user_id: string }

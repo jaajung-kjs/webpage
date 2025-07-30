@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { Menu, User, LogOut, Settings, Shield, Zap } from 'lucide-react'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { Menu, User, LogOut, Settings, Shield, Zap, MessageCircle } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
 import LoginDialog from '@/components/auth/LoginDialog'
 
 const navigation = [
@@ -24,8 +25,8 @@ const navigation = [
 export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
-  const { user, signOut, loading } = useAuth()
-  const profile = useProfile()
+  const { user, profile, signOut, loading, isMember } = useAuth()
+  const { openModal, modalProps } = useMessageModal()
   const router = useRouter()
   
   // Listen for login dialog open events
@@ -75,17 +76,31 @@ export default function Header() {
                 <div className="h-8 w-20 bg-muted rounded animate-pulse" />
               </div>
             ) : user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                    <Avatar className="h-8 w-8">
-                      <AvatarImage src={profile?.avatar_url || undefined} alt="사용자" />
-                      <AvatarFallback>
-                        {profile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
-                      </AvatarFallback>
-                    </Avatar>
+              <>
+                {/* Message Button - Only for members */}
+                {isMember && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openModal()}
+                    className="relative hidden sm:flex"
+                  >
+                    <MessageCircle className="h-4 w-4" />
+                    <MessageNotificationBadge className="-top-1 -right-1" />
                   </Button>
-                </DropdownMenuTrigger>
+                )}
+                
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                      <Avatar className="h-8 w-8">
+                        <AvatarImage src={profile?.avatar_url || undefined} alt="사용자" />
+                        <AvatarFallback>
+                          {profile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
                 <DropdownMenuContent className="w-56" align="end">
                   <div className="px-2 py-1.5 text-sm font-medium">
                     {profile?.name || user?.email || 'User'}
@@ -99,6 +114,12 @@ export default function Header() {
                       <span>프로필</span>
                     </Link>
                   </DropdownMenuItem>
+                  {isMember && (
+                    <DropdownMenuItem onClick={() => openModal()}>
+                      <MessageCircle className="mr-2 h-4 w-4" />
+                      <span>메시지</span>
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem asChild>
                     <Link href="/settings">
                       <Settings className="mr-2 h-4 w-4" />
@@ -139,6 +160,7 @@ export default function Header() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              </>
             ) : (
               <div className="hidden sm:flex sm:items-center sm:space-x-2">
                 <Button variant="ghost" size="sm" onClick={() => {
@@ -186,13 +208,16 @@ export default function Header() {
         onOpenChange={setLoginDialogOpen}
         defaultTab={loginDialogTab}
       />
+      
+      {/* Message Modal */}
+      <MessageModal {...modalProps} />
     </header>
   )
 }
 
 function MobileNav() {
-  const { user, signOut } = useAuth()
-  const profile = useProfile()
+  const { user, profile, signOut, isMember } = useAuth()
+  const { openModal } = useMessageModal()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const router = useRouter()
@@ -238,6 +263,12 @@ function MobileNav() {
             <Button variant="outline" size="sm" asChild>
               <Link href="/profile">프로필</Link>
             </Button>
+            {isMember && (
+              <Button variant="outline" size="sm" onClick={() => openModal()}>
+                <MessageCircle className="h-4 w-4 mr-2" />
+                메시지
+              </Button>
+            )}
             {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
               <Button 
                 variant="outline" 

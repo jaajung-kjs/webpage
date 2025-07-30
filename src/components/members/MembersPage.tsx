@@ -46,11 +46,12 @@ import {
   UserCheck,
   User
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useAuth } from '@/hooks/useAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { MessageButton } from '@/components/messages'
 
 interface MemberWithStats {
   id: string
@@ -111,7 +112,7 @@ const skillColors = {
 }
 
 function MembersPage() {
-  const { user } = useAuth()
+  const { user, isMember } = useAuth()
   const [members, setMembers] = useState<MemberWithStats[]>([])
   const [filteredMembers, setFilteredMembers] = useState<MemberWithStats[]>([])
   const [searchTerm, setSearchTerm] = useState('')
@@ -675,18 +676,21 @@ function MembersPage() {
 
                   {/* Contact Button */}
                   <div className="mt-4 flex space-x-2">
+                    {isMember && user?.id !== member.id && (
+                      <MessageButton
+                        recipientId={member.id}
+                        recipientName={member.name}
+                        recipientAvatar={member.avatar_url}
+                        recipientRole={member.role}
+                        variant="outline"
+                        size="sm"
+                        className="flex-1"
+                      />
+                    )}
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className="flex-1"
-                    >
-                      <MessageCircle className="mr-2 h-4 w-4" />
-                      메시지
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      className="flex-1"
+                      className={isMember && user?.id !== member.id ? "flex-1" : "w-full"}
                       onClick={() => {
                         window.location.href = `/profile/${member.id}`
                       }}

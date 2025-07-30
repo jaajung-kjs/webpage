@@ -196,9 +196,9 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
         
         if (!statsError && userStatsData) {
           setStats({
-            totalPosts: userStatsData.post_count || 0,
-            totalComments: userStatsData.comment_count || 0,
-            totalLikes: userStatsData.like_count || 0,
+            totalPosts: userStatsData.posts_count || 0,
+            totalComments: userStatsData.comments_count || 0,
+            totalLikes: userStatsData.likes_received || 0,
             totalViews: 0, // Not available in user_stats view
             activitiesJoined: 0, // Not available in user_stats view
             resourcesShared: 0 // Not available in user_stats view

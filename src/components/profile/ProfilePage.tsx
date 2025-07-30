@@ -215,9 +215,9 @@ export default function ProfilePage() {
         if (statsResult.status === 'fulfilled' && !statsResult.value.error && statsResult.value.data) {
           const statsData = statsResult.value.data
           stats = {
-            totalPosts: statsData.post_count || 0,
-            totalComments: statsData.comment_count || 0,
-            totalLikes: statsData.like_count || 0,
+            totalPosts: statsData.posts_count || 0,
+            totalComments: statsData.comments_count || 0,
+            totalLikes: statsData.likes_received || 0,
             totalViews: 0, // Not available in user_stats view
             activitiesJoined: 0, // Not available in user_stats view
             resourcesShared: 0 // Not available in user_stats view
