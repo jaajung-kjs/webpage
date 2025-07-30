@@ -162,21 +162,31 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
         
         let signupErrorMessage = '회원가입 중 오류가 발생했습니다.'
         let shouldSwitchToLogin = false
+        let shouldShowResendEmail = false
         
         if (error.message) {
           if (error.message.includes('User already exists') || error.code === 'user_already_exists') {
             signupErrorMessage = '이미 가입된 회원입니다. 로그인해주세요.'
             shouldSwitchToLogin = true
+          } else if (error.message.includes('Email not verified') || error.code === 'email_not_verified') {
+            signupErrorMessage = '이미 회원가입한 이메일입니다. 이메일 인증을 확인해주세요.'
+            shouldShowResendEmail = true
+            setEmailForVerification(values.email)
           } else if (error.message.includes('User already registered')) {
-            signupErrorMessage = '이미 등록된 이메일 주소입니다.'
+            signupErrorMessage = '이미 회원가입한 이메일입니다. 이메일 인증을 확인해주세요.'
+            shouldShowResendEmail = true
+            setEmailForVerification(values.email)
+          } else if (error.message.includes('Email address') && error.message.includes('is invalid')) {
+            // Supabase returns this message for duplicate emails
+            signupErrorMessage = '이미 회원가입한 이메일입니다. 이메일 인증을 확인해주세요.'
+            shouldShowResendEmail = true
+            setEmailForVerification(values.email)
           } else if (error.message.includes('Password should be at least')) {
             signupErrorMessage = '비밀번호는 6자 이상이어야 합니다.'
           } else if (error.message.includes('Invalid email')) {
             signupErrorMessage = '올바른 이메일 주소를 입력해주세요.'
           } else if (error.message.includes('weak_password')) {
             signupErrorMessage = '더 강한 비밀번호를 입력해주세요. 문자와 숫자를 조합해주세요.'
-          } else if (error.message.includes('email_not_confirmed')) {
-            signupErrorMessage = '이메일 인증을 완료해주세요.'
           }
         }
         
@@ -190,6 +200,11 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
           setActiveTab('login')
           // Optionally, pre-fill the email in login form
           loginForm.setValue('email', values.email)
+        }
+        
+        // Show email verification modal if needed
+        if (shouldShowResendEmail) {
+          setShowEmailVerificationModal(true)
         }
         
         return

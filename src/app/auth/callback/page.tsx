@@ -43,6 +43,22 @@ export default function AuthCallbackPage() {
           }
           
           if (data.user && data.user.email_confirmed_at) {
+            // 이메일 인증이 완료되었으므로 public.users에 프로필 생성
+            const { error: profileError } = await supabase
+              .from('users')
+              .insert({
+                id: data.user.id,
+                email: data.user.email!,
+                name: data.user.user_metadata?.name || data.user.email!.split('@')[0],
+                department: data.user.user_metadata?.department || '미지정',
+                role: 'guest'
+              })
+              
+            if (profileError && profileError.code !== '23505') { // 23505 = duplicate key error
+              console.error('Profile creation error:', profileError)
+              // 프로필 생성 실패해도 인증은 성공이므로 계속 진행
+            }
+            
             setStatus('success')
             setMessage('이메일 인증이 완료되었습니다! 환영합니다.')
             

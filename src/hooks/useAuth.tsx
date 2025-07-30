@@ -237,20 +237,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     name: string, 
     department?: string
   ) => {
-    // Check if user already exists in the database
-    const { data: existingUser, error: checkError } = await supabase
+    // First check if user exists in public.users (verified users)
+    const { data: publicUser, error: publicError } = await supabase
       .from('users')
-      .select('id, email')
+      .select('id')
       .eq('email', email)
-      .single()
+      .maybeSingle()  // Use maybeSingle() instead of single() to avoid error when no record found
 
-    if (checkError && checkError.code !== 'PGRST116') {
-      // PGRST116 means no rows found, which is what we want
-      return { error: checkError }
-    }
-
-    if (existingUser) {
-      // User already exists - return custom error
+    if (publicUser) {
+      // User is fully registered and verified
       return { 
         error: {
           message: 'User already exists',
@@ -260,7 +255,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
-    // 1. Create auth user
+    // Try to sign up - this will fail if user exists in auth.users
     const { error: authError } = await supabase.auth.signUp({
       email,
       password,
@@ -273,12 +268,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (authError) {
-      // Don't show toast here - let the component handle it
+      // Check if it's a "User already registered" error
+      if (authError.message?.includes('User already registered')) {
+        // User exists in auth but not verified
+        return { 
+          error: {
+            message: 'Email not verified',
+            status: 400,
+            code: 'email_not_verified'
+          } as any
+        }
+      }
+      // Return other errors as-is
       return { error: authError }
     }
-
-    // 2. Create user profile (will be handled by trigger in DB)
-    // The database trigger automatically creates a user profile with 'guest' role
 
     // Don't show toast here - let the component handle it
     return { error: null }

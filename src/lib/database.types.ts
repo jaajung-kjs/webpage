@@ -364,6 +364,33 @@ export type Database = {
           },
         ]
       }
+      email_verification_attempts: {
+        Row: {
+          attempt_type: string
+          created_at: string
+          email: string
+          id: string
+          ip_address: unknown | null
+          user_agent: string | null
+        }
+        Insert: {
+          attempt_type: string
+          created_at?: string
+          email: string
+          id?: string
+          ip_address?: unknown | null
+          user_agent?: string | null
+        }
+        Update: {
+          attempt_type?: string
+          created_at?: string
+          email?: string
+          id?: string
+          ip_address?: unknown | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       interactions: {
         Row: {
           comment_id: string | null
@@ -1147,6 +1174,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      check_email_exists: {
+        Args: { check_email: string }
+        Returns: Json
+      }
+      cleanup_unverified_accounts: {
+        Args: { age_hours?: number }
+        Returns: number
+      }
       create_report: {
         Args: {
           p_target_type: string
@@ -1259,6 +1294,10 @@ export type Database = {
           created_at: string
           rank: number
         }[]
+      }
+      update_activity_score: {
+        Args: { user_id: string }
+        Returns: undefined
       }
       update_report_status: {
         Args: {
