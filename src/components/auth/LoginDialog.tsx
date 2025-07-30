@@ -130,6 +130,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
       }
 
       // 로그인 성공
+      toast.success('로그인되었습니다.')
       onOpenChange(false)
       loginForm.reset()
     } catch (error) {
@@ -160,9 +161,13 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
         }
         
         let signupErrorMessage = '회원가입 중 오류가 발생했습니다.'
+        let shouldSwitchToLogin = false
         
         if (error.message) {
-          if (error.message.includes('User already registered')) {
+          if (error.message.includes('User already exists') || error.code === 'user_already_exists') {
+            signupErrorMessage = '이미 가입된 회원입니다. 로그인해주세요.'
+            shouldSwitchToLogin = true
+          } else if (error.message.includes('User already registered')) {
             signupErrorMessage = '이미 등록된 이메일 주소입니다.'
           } else if (error.message.includes('Password should be at least')) {
             signupErrorMessage = '비밀번호는 6자 이상이어야 합니다.'
@@ -179,6 +184,14 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
           description: signupErrorMessage,
           duration: 4000
         })
+        
+        // Switch to login tab if user already exists
+        if (shouldSwitchToLogin) {
+          setActiveTab('login')
+          // Optionally, pre-fill the email in login form
+          loginForm.setValue('email', values.email)
+        }
+        
         return
       }
 

@@ -131,9 +131,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       // Handle specific events
       // Skip toast on initial load or when event is INITIAL_SESSION
-      if (event === 'SIGNED_IN' && !isInitialLoad) {
-        toast.success('로그인되었습니다.')
-      } else if (event === 'SIGNED_OUT') {
+      // Don't show toast for SIGNED_IN - let the component handle it
+      if (event === 'SIGNED_OUT') {
         toast.success('로그아웃되었습니다.')
         // Ensure state is cleared
         setState({
@@ -227,10 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       password
     })
 
-    if (error) {
-      toast.error(handleSupabaseError(error))
-    }
-
+    // Don't show toast here - let the component handle it
     return { error }
   }, [])
 
@@ -241,8 +237,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     name: string, 
     department?: string
   ) => {
+    // Check if user already exists in the database
+    const { data: existingUser, error: checkError } = await supabase
+      .from('users')
+      .select('id, email')
+      .eq('email', email)
+      .single()
+
+    if (checkError && checkError.code !== 'PGRST116') {
+      // PGRST116 means no rows found, which is what we want
+      return { error: checkError }
+    }
+
+    if (existingUser) {
+      // User already exists - return custom error
+      return { 
+        error: {
+          message: 'User already exists',
+          status: 400,
+          code: 'user_already_exists'
+        } as any
+      }
+    }
+
     // 1. Create auth user
-    const { data: authData, error: authError } = await supabase.auth.signUp({
+    const { error: authError } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -254,14 +273,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
 
     if (authError) {
-      toast.error(handleSupabaseError(authError))
+      // Don't show toast here - let the component handle it
       return { error: authError }
     }
 
     // 2. Create user profile (will be handled by trigger in DB)
     // The database trigger automatically creates a user profile with 'guest' role
 
-    toast.success('회원가입이 완료되었습니다. 이메일을 확인해주세요.')
+    // Don't show toast here - let the component handle it
     return { error: null }
   }, [])
 
