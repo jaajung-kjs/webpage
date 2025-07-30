@@ -405,6 +405,12 @@ function ActivitiesPage() {
       return
     }
 
+    // 권한 체크 추가
+    if (!profile || !['member', 'vice-leader', 'leader', 'admin'].includes(profile.role)) {
+      toast.error('정회원 이상만 활동에 참가할 수 있습니다.')
+      return
+    }
+
     try {
       const isCurrentlyParticipating = participationStatus[activityId]
       
@@ -697,7 +703,8 @@ function ActivitiesPage() {
 
                 {/* Admin Controls and Action Button */}
                 <div className="flex items-center gap-2">
-                  {activity.status === 'upcoming' ? (
+                  {activity.status === 'upcoming' && profile && 
+                   ['member', 'vice-leader', 'leader', 'admin'].includes(profile.role) ? (
                     <Button 
                       className="flex-1 kepco-gradient"
                       onClick={() => activity.id && handleActivityParticipation(activity.id)}
@@ -720,6 +727,11 @@ function ActivitiesPage() {
                         </>
                       )}
                     </Button>
+                  ) : activity.status === 'upcoming' && (!profile || profile.role === 'guest' || profile.role === 'pending') ? (
+                    <Button className="flex-1" variant="outline" disabled>
+                      <UserCheck className="mr-2 h-4 w-4" />
+                      회원만 참가 가능
+                    </Button>
                   ) : (
                     <Button className="flex-1" variant="outline">
                       <UserCheck className="mr-2 h-4 w-4" />
@@ -728,7 +740,8 @@ function ActivitiesPage() {
                     </Button>
                   )}
                   
-                  {user && (
+                  {user && profile && (profile.role === 'admin' || profile.role === 'leader' || 
+                   profile.role === 'vice-leader' || activity.author_id === user.id) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

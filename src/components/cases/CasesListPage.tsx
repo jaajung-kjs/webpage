@@ -44,7 +44,7 @@ const categoryColors = {
 export default function CasesListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const router = useRouter()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   
@@ -209,7 +209,8 @@ export default function CasesListPage() {
                       <span className="text-sm text-muted-foreground">
                         {caseItem.created_at ? new Date(caseItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
                       </span>
-                      {user && (user.id === caseItem.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                      {user && profile && (profile.role === 'admin' || profile.role === 'leader' || 
+                       profile.role === 'vice-leader' || caseItem.author_id === user.id) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

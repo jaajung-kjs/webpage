@@ -37,7 +37,6 @@ import {
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import PermissionGate from '@/components/shared/PermissionGate'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 
 interface UserData {
@@ -458,6 +457,7 @@ export default function ProfilePage() {
         })
       
       if (uploadError) {
+        console.error('Upload error details:', uploadError)
         throw uploadError
       }
       
@@ -545,8 +545,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <PermissionGate requireMember={true}>
-      <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-8">
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Profile Card */}
         <div className="lg:col-span-1">
@@ -1029,6 +1028,5 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
-    </PermissionGate>
   )
 }

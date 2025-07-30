@@ -1,7 +1,6 @@
 import dynamic from 'next/dynamic'
 import MainLayout from '@/components/layout/MainLayout'
 import { PageLoadingFallback } from '@/components/ui/lazy-loader'
-import PermissionGate from '@/components/shared/PermissionGate'
 
 // Dynamic import for better performance
 const ProfileDetailPage = dynamic(
@@ -17,9 +16,7 @@ export default async function ProfileDetail({ params }: { params: Promise<{ id: 
   
   return (
     <MainLayout>
-      <PermissionGate requireMember={true}>
-        <ProfileDetailPage userId={resolvedParams.id} />
-      </PermissionGate>
+      <ProfileDetailPage userId={resolvedParams.id} />
     </MainLayout>
   )
 }

@@ -28,8 +28,8 @@ export default function AuthCallbackPage() {
         const accessToken = urlParams.get('access_token')
         const refreshToken = urlParams.get('refresh_token')
         
-        // 이메일 인증 토큰이 있는 경우
-        if (type === 'email' && accessToken && refreshToken) {
+        // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등)
+        if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken) {
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken

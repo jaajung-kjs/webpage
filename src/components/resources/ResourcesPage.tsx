@@ -83,7 +83,7 @@ const categoryColors = {
 }
 
 export default function ResourcesPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   
@@ -440,7 +440,8 @@ export default function ResourcesPage() {
                     <div className="flex items-center space-x-2">
                       <TypeIcon className="h-4 w-4 text-muted-foreground" />
                       
-                      {user && (user.id === resource.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                      {user && profile && (profile.role === 'admin' || profile.role === 'leader' || 
+                       profile.role === 'vice-leader' || resource.author_id === user.id) && (
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

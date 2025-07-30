@@ -96,7 +96,7 @@ const categoryIcons = {
 }
 
 export default function CommunityPage() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
@@ -392,7 +392,8 @@ export default function CommunityPage() {
                               {post.excerpt}
                             </CardDescription>
                           </div>
-                          {user && (user.id === post.author_id || ['admin', 'leader', 'vice-leader'].includes(user.role || '')) && (
+                          {user && profile && (profile.role === 'admin' || profile.role === 'leader' || 
+                           profile.role === 'vice-leader' || post.author_id === user.id) && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="sm" className="h-8 w-8 p-0">

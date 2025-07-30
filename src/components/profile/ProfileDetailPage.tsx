@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
   MapPin,
   Calendar,
@@ -126,17 +127,27 @@ const skillColors = {
 
 export default function ProfileDetailPage({ userId }: { userId: string }) {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, profile: userProfile } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [recentActivities, setRecentActivities] = useState<ActivityData[]>([])
   const [loading, setLoading] = useState(true)
   const [activityStats, setActivityStats] = useState<UserActivityResponse['stats'] | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  const [hasPermission, setHasPermission] = useState(false)
 
   useEffect(() => {
+    // Check permissions
+    if (user) {
+      const isOwnProfile = user.id === userId
+      const isMember = userProfile && ['member', 'vice-leader', 'leader', 'admin'].includes(userProfile.role)
+      setHasPermission(isOwnProfile || isMember || false)
+    } else {
+      setHasPermission(false)
+    }
+    
     fetchProfileData()
-  }, [userId])
+  }, [userId, user, userProfile])
 
   const fetchProfileData = async () => {
     try {
@@ -372,6 +383,74 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
             돌아가기
           </Button>
         </div>
+      </div>
+    )
+  }
+
+  // Permission check - show limited info for non-members viewing other profiles
+  if (!hasPermission && !loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="max-w-2xl mx-auto">
+          <CardHeader className="text-center">
+            <div className="flex justify-center mb-4">
+              <div className="h-16 w-16 rounded-full bg-red-100 dark:bg-red-950 flex items-center justify-center">
+                <Shield className="h-8 w-8 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+            <CardTitle className="text-2xl">접근 권한이 없습니다</CardTitle>
+            <CardDescription>
+              {user ? '동아리 회원만 다른 회원의 프로필을 볼 수 있습니다.' : '로그인이 필요한 페이지입니다.'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {userProfile?.role === 'guest' && (
+              <>
+                <Alert>
+                  <Shield className="h-4 w-4" />
+                  <AlertDescription>
+                    현재 회원님은 <strong>게스트</strong> 상태입니다.
+                    동아리의 모든 기능을 이용하시려면 가입 신청을 해주세요.
+                  </AlertDescription>
+                </Alert>
+                <div className="flex gap-3">
+                  <Button
+                    variant="outline"
+                    onClick={() => router.push('/')}
+                    className="flex-1"
+                  >
+                    홈으로 돌아가기
+                  </Button>
+                  <Button
+                    onClick={() => router.push('/membership/apply')}
+                    className="flex-1 kepco-gradient"
+                  >
+                    동아리 가입 신청
+                  </Button>
+                </div>
+              </>
+            )}
+            
+            {userProfile?.role === 'pending' && (
+              <>
+                <Alert className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800">
+                  <Users className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800 dark:text-yellow-200">
+                    현재 회원님의 가입 신청이 <strong>검토 중</strong>입니다.
+                    운영진의 승인을 기다려주세요.
+                  </AlertDescription>
+                </Alert>
+                <Button
+                  variant="outline"
+                  onClick={() => router.push('/')}
+                  className="w-full"
+                >
+                  홈으로 돌아가기
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }
