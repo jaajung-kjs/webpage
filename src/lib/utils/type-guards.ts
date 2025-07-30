@@ -2,7 +2,6 @@
  * 타입 가드 유틸리티
  */
 
-import type { AuthUser } from '@/lib/auth'
 import type { 
   Tables,
   Enums
@@ -13,18 +12,6 @@ type User = Tables<'users'>
 type Content = Tables<'content'>
 type ContentType = Enums<'content_type'>
 type UserRole = Enums<'user_role'>
-
-/**
- * AuthUser 타입 가드
- */
-export function isAuthUser(user: any): user is AuthUser {
-  return user !== null &&
-    typeof user === 'object' &&
-    typeof user.id === 'string' &&
-    typeof user.email === 'string' &&
-    typeof user.emailConfirmed === 'boolean' &&
-    (user.profile === null || isUserProfile(user.profile))
-}
 
 /**
  * User 프로필 타입 가드

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/contexts/AuthContext";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { PerformanceProvider } from "@/components/providers/performance-provider";
 
@@ -52,11 +51,9 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <PerformanceProvider>
-            <AuthProvider>
-              <div className="relative flex min-h-screen flex-col">
-                {children}
-              </div>
-            </AuthProvider>
+            <div className="relative flex min-h-screen flex-col">
+              {children}
+            </div>
           </PerformanceProvider>
         </ErrorBoundary>
       </body>

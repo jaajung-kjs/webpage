@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, memo } from 'react'
+import { useState, useMemo, memo, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
@@ -49,10 +49,10 @@ import {
   PinIcon,
   PinOff
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
-import { useContentList, useCreateContent, useSupabaseMutation } from '@/hooks/useSupabase'
-import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
+import { ContentAPI } from '@/lib/api/content'
+import { Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
 
 const categoryLabels = {
   all: '전체',
@@ -90,21 +90,36 @@ const categoryIcons = {
 }
 
 function AnnouncementsPage() {
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activePriority, setActivePriority] = useState('all')
   
-  // Use Supabase hooks
-  const { data: announcements, loading, refetch } = useContentList({
-    type: 'announcement',
-    status: 'published'
-  })
-  const { createContent, loading: createLoading } = useCreateContent()
-  const { mutate: updateContent, loading: updateLoading } = useSupabaseMutation()
-  const { mutate: deleteContent, loading: deleteLoading } = useSupabaseMutation()
+  // 상태 관리
+  const [announcements, setAnnouncements] = useState<Views<'content_with_author'>[]>([])
+  const [loading, setLoading] = useState(true)
+  const [operationLoading, setOperationLoading] = useState(false)
   
-  const operationLoading = createLoading || updateLoading || deleteLoading
+  // 공지사항 가져오기
+  const fetchAnnouncements = async () => {
+    setLoading(true)
+    const result = await ContentAPI.getList({
+      type: 'announcement',
+      status: 'published'
+    })
+    
+    if (result.success && result.data) {
+      setAnnouncements(result.data)
+    } else {
+      toast.error('공지사항을 불러오는데 실패했습니다.')
+    }
+    setLoading(false)
+  }
+  
+  // 컴포넌트 마운트 시 데이터 로드
+  useEffect(() => {
+    fetchAnnouncements()
+  }, [])
 
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -211,6 +226,7 @@ function AnnouncementsPage() {
       return
     }
 
+    setOperationLoading(true)
     try {
       const newAnnouncement: TablesInsert<'content'> = {
         title: formData.title,
@@ -226,19 +242,21 @@ function AnnouncementsPage() {
         }
       }
       
-      const result = await createContent(newAnnouncement)
+      const result = await ContentAPI.create(newAnnouncement)
       
-      if (result.error) {
-        throw new Error(result.error.message)
+      if (!result.success) {
+        throw new Error(result.error || '알 수 없는 오류')
       }
 
       toast.success('공지사항이 성공적으로 작성되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
-      refetch()
+      await fetchAnnouncements()
     } catch (error: any) {
       console.error('Error creating announcement:', error)
       toast.error(error.message || '공지사항 작성에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
     }
   }
 
@@ -248,6 +266,7 @@ function AnnouncementsPage() {
       return
     }
 
+    setOperationLoading(true)
     try {
       const updates: TablesUpdate<'content'> = {
         title: formData.title,
@@ -260,56 +279,50 @@ function AnnouncementsPage() {
         }
       }
       
-      const result = await updateContent(async () =>
-        await supabase
-          .from('content')
-          .update(updates)
-          .eq('id', selectedAnnouncement.id!)
-          .select()
-          .single()
-      )
+      const result = await ContentAPI.update(selectedAnnouncement.id!, updates)
 
-      if (result.error) {
-        throw result.error
+      if (!result.success) {
+        throw new Error(result.error || '알 수 없는 오류')
       }
 
       toast.success('공지사항이 성공적으로 수정되었습니다.')
       setEditDialogOpen(false)
       setSelectedAnnouncement(null)
       resetForm()
-      refetch()
+      await fetchAnnouncements()
     } catch (error: any) {
       console.error('Error updating announcement:', error)
       toast.error(error.message || '공지사항 수정에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
     }
   }
 
   const handleDeleteAnnouncement = async (announcementId: string) => {
     if (!user) return
 
+    setOperationLoading(true)
     try {
-      const result = await deleteContent(async () =>
-        await supabase
-          .from('content')
-          .delete()
-          .eq('id', announcementId)
-      )
+      const result = await ContentAPI.delete(announcementId)
 
-      if (result.error) {
-        throw result.error
+      if (!result.success) {
+        throw new Error(result.error || '알 수 없는 오류')
       }
 
       toast.success('공지사항이 삭제되었습니다.')
-      refetch()
+      await fetchAnnouncements()
     } catch (error: any) {
       console.error('Error deleting announcement:', error)
       toast.error(error.message || '공지사항 삭제에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
     }
   }
 
   const handleTogglePin = async (announcementId: string, currentPinStatus: boolean) => {
     if (!user) return
 
+    setOperationLoading(true)
     try {
       // Get current announcement to preserve other metadata
       const announcement = announcements?.find(a => a.id === announcementId)
@@ -322,24 +335,19 @@ function AnnouncementsPage() {
         }
       }
       
-      const result = await updateContent(async () =>
-        await supabase
-          .from('content')
-          .update(updates)
-          .eq('id', announcementId)
-          .select()
-          .single()
-      )
+      const result = await ContentAPI.update(announcementId, updates)
 
-      if (result.error) {
-        throw result.error
+      if (!result.success) {
+        throw new Error(result.error || '알 수 없는 오류')
       }
 
       toast.success(currentPinStatus ? '고정이 해제되었습니다.' : '공지사항이 고정되었습니다.')
-      refetch()
+      await fetchAnnouncements()
     } catch (error: any) {
       console.error('Error toggling pin:', error)
       toast.error(error.message || '고정 상태 변경에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
     }
   }
 

@@ -8,7 +8,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { MessagesAPI } from '@/lib/api/messages'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -46,7 +46,7 @@ export function MessageButton({
   disabled,
   onMessageSent
 }: MessageButtonProps) {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useOptimizedAuth()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)

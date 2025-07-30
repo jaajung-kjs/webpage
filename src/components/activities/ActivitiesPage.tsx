@@ -45,7 +45,7 @@ import {
   UserPlus,
   UserMinus
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { useActivities, useSupabaseMutation } from '@/hooks/useSupabase'
 import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
@@ -83,7 +83,7 @@ const statusColors = {
 }
 
 function ActivitiesPage() {
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')

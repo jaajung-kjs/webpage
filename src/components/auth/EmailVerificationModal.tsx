@@ -11,7 +11,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Mail, RefreshCw, X, CheckCircle } from 'lucide-react'
-import { useAuthLegacy } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 
 interface EmailVerificationModalProps {
@@ -25,7 +25,7 @@ export default function EmailVerificationModal({
   onOpenChange, 
   email 
 }: EmailVerificationModalProps) {
-  const { resendEmailConfirmation } = useAuthLegacy()
+  const { resendEmailConfirmation } = useOptimizedAuth()
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
 

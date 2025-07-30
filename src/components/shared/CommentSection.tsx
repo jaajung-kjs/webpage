@@ -29,7 +29,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { 
@@ -57,7 +57,7 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useOptimizedAuth()
   
   // Use Supabase hooks
   const { data: commentsData, loading, refetch } = useComments(contentId)

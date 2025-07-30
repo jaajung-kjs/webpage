@@ -55,7 +55,7 @@ import {
   Lightbulb
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
 import { useRouter } from 'next/navigation'
 import { supabase, Views, TablesInsert } from '@/lib/supabase/client'
@@ -96,7 +96,7 @@ const categoryIcons = {
 }
 
 export default function CommunityPage() {
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')

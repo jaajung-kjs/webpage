@@ -2,14 +2,14 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 
 interface EmailVerificationGuardProps {
   children: React.ReactNode
 }
 
 export default function EmailVerificationGuard({ children }: EmailVerificationGuardProps) {
-  const { user, loading } = useAuth()
+  const { user, loading } = useOptimizedAuth()
   const router = useRouter()
 
   useEffect(() => {

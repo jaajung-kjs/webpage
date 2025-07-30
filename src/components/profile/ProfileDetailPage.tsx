@@ -36,7 +36,7 @@ import {
   Eye,
   Heart
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { supabase, Tables, Views } from '@/lib/supabase/client'
 
@@ -127,7 +127,7 @@ const skillColors = {
 
 export default function ProfileDetailPage({ userId }: { userId: string }) {
   const router = useRouter()
-  const { user, profile: userProfile } = useAuth()
+  const { user, profile: userProfile } = useOptimizedAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [recentActivities, setRecentActivities] = useState<ActivityData[]>([])

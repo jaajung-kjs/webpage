@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { supabase, Views } from '@/lib/supabase/client'
 import { useDeleteContent } from '@/hooks/useSupabase'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import PermissionGate from '@/components/shared/PermissionGate'
 
@@ -78,8 +78,7 @@ const categoryIcons = {
 }
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
-  const { user } = useAuth()
-  const profile = useProfile()
+  const { user, profile } = useOptimizedAuth()
   const router = useRouter()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   const [announcementData, setAnnouncementData] = useState<Views<'content_with_author'> | null>(null)

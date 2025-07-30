@@ -46,7 +46,7 @@ import {
   UserCheck,
   User
 } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
@@ -112,7 +112,7 @@ const skillColors = {
 }
 
 function MembersPage() {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useOptimizedAuth()
   const [members, setMembers] = useState<MemberWithStats[]>([])
   const [filteredMembers, setFilteredMembers] = useState<MemberWithStats[]>([])
   const [searchTerm, setSearchTerm] = useState('')

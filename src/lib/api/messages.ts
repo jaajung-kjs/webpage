@@ -6,7 +6,8 @@
  */
 
 import { supabase, handleSupabaseError, Tables, TablesInsert } from '@/lib/supabase/client'
-import { MessageCache, HybridCache, optimisticUpdate, createCacheKey } from '@/lib/utils/cache'
+import { createCacheKey } from '@/lib/utils/cache'
+import { CacheManager } from '@/lib/utils/cache-manager'
 import { measurePerformance } from '@/lib/utils/performance-monitor'
 import { toast } from 'sonner'
 
@@ -55,35 +56,33 @@ interface ApiResult<T> {
 
 export class MessagesAPI {
   /**
-   * 사용자의 받은 메시지함 조회 (캐싱 적용)
+   * 사용자의 받은 메시지함 조회 (통합 캐싱 적용)
    */
   static async getInbox(userId: string): Promise<ApiResult<InboxMessage[]>> {
     const stopMeasure = measurePerformance('messages.getInbox')
     
     try {
-      // 캐시 확인
-      const cachedInbox = MessageCache.getInbox(userId)
-      if (cachedInbox) {
-        stopMeasure()
-        return { success: true, data: cachedInbox }
-      }
-
-      // DB에서 조회
-      const { data, error } = await supabase.rpc('get_message_inbox', {})
-
-      if (error) {
-        throw error
-      }
-
-      const inbox = data || []
+      // 통합 캐시 매니저 사용
+      const cacheKey = createCacheKey('message', 'inbox', userId)
       
-      // 캐시에 저장
-      MessageCache.setInbox(userId, inbox)
+      const inbox = await CacheManager.get(
+        cacheKey,
+        async () => {
+          const { data, error } = await supabase.rpc('get_message_inbox', {})
+          if (error) throw error
+          return data || []
+        },
+        { 
+          ttl: 300000, // 5분
+          realtime: true,
+          staleWhileRevalidate: true 
+        }
+      )
       
       stopMeasure()
       return { success: true, data: inbox }
     } catch (error) {
-      console.error('Error fetching inbox:', error)
+      console.error('Error fetching inbox:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -93,44 +92,43 @@ export class MessagesAPI {
   }
 
   /**
-   * 대화방 메시지 조회 (캐싱 적용)
+   * 대화방 메시지 조회 (통합 캐싱 적용)
    */
   static async getConversation(conversationId: string): Promise<ApiResult<MessageWithSender[]>> {
     const stopMeasure = measurePerformance('messages.getConversation')
     
     try {
-      // 캐시 확인
-      const cachedMessages = MessageCache.getConversation(conversationId)
-      if (cachedMessages) {
-        stopMeasure()
-        return { success: true, data: cachedMessages }
-      }
-
-      // DB에서 조회
-      const { data, error } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:users!messages_sender_id_fkey (
-            id, name, avatar_url
-          )
-        `)
-        .eq('conversation_id', conversationId)
-        .order('created_at', { ascending: true })
-
-      if (error) {
-        throw error
-      }
-
-      const messages = data || []
+      // 통합 캐시 매니저 사용
+      const cacheKey = createCacheKey('message', 'conversation', conversationId)
       
-      // 캐시에 저장
-      MessageCache.setConversation(conversationId, messages)
+      const messages = await CacheManager.get(
+        cacheKey,
+        async () => {
+          const { data, error } = await supabase
+            .from('messages')
+            .select(`
+              *,
+              sender:users!messages_sender_id_fkey (
+                id, name, avatar_url
+              )
+            `)
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true })
+          
+          if (error) throw error
+          return data || []
+        },
+        { 
+          ttl: 600000, // 10분
+          realtime: true,
+          staleWhileRevalidate: true 
+        }
+      )
       
       stopMeasure()
       return { success: true, data: messages }
     } catch (error) {
-      console.error('Error fetching conversation:', error)
+      console.error('Error fetching conversation:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -171,7 +169,11 @@ export class MessagesAPI {
 
       // 기존 대화가 있다면 캐시에 낙관적 업데이트
       if (conversationId) {
-        MessageCache.addMessageToConversation(conversationId, optimisticMessage)
+        const cacheKey = createCacheKey('message', 'conversation', conversationId)
+        const cached = await CacheManager.get<MessageWithSender[]>(cacheKey, async () => [])
+        if (cached) {
+          CacheManager.set(cacheKey, [...cached, optimisticMessage])
+        }
       }
 
       // DB에 실제 메시지 전송
@@ -183,7 +185,7 @@ export class MessagesAPI {
       if (error) {
         // 실패 시 캐시에서 제거
         if (conversationId) {
-          MessageCache.invalidateConversation(conversationId)
+          CacheManager.invalidate(createCacheKey('message', 'conversation', conversationId))
         }
         throw error
       }
@@ -192,14 +194,14 @@ export class MessagesAPI {
       const messageId = data as string
       
       // 관련 캐시 무효화
+      CacheManager.invalidate(createCacheKey('message', 'inbox', recipientId))
+      CacheManager.invalidate(createCacheKey('message', 'unread', recipientId))
+      CacheManager.invalidate(createCacheKey('message', 'user-conversations', senderId))
+      CacheManager.invalidate(createCacheKey('message', 'user-conversations', recipientId))
+      
       if (conversationId) {
-        MessageCache.onNewMessage(senderId, recipientId, conversationId)
-      } else {
-        // 새로운 대화방의 경우 기본적인 캐시 무효화만 수행
-        MessageCache.invalidateInbox(recipientId)
-        MessageCache.invalidateUnreadCount(recipientId)
-        MessageCache.invalidateUserConversations(senderId)
-        MessageCache.invalidateUserConversations(recipientId)
+        CacheManager.invalidate(createCacheKey('message', 'conversation', conversationId))
+        CacheManager.invalidate(createCacheKey('message', 'meta', conversationId))
       }
       
       stopMeasure()
@@ -218,7 +220,7 @@ export class MessagesAPI {
       
       return { success: true, data: actualMessage || optimisticMessage }
     } catch (error) {
-      console.error('Error sending message:', error)
+      console.error('Error sending message:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       
       const errorMessage = handleSupabaseError(error)
@@ -250,12 +252,14 @@ export class MessagesAPI {
       }
 
       // 관련 캐시 무효화
-      MessageCache.onMessagesRead(userId, conversationId)
+      CacheManager.invalidate(createCacheKey('message', 'unread', userId))
+      CacheManager.invalidate(createCacheKey('message', 'inbox', userId))
+      CacheManager.invalidate(createCacheKey('message', 'conversation', conversationId))
       
       stopMeasure()
       return { success: true }
     } catch (error) {
-      console.error('Error marking messages as read:', error)
+      console.error('Error marking messages as read:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -265,45 +269,45 @@ export class MessagesAPI {
   }
 
   /**
-   * 안읽은 메시지 개수 조회 (캐싱 적용)
+   * 안읽은 메시지 개수 조회 (통합 캐싱 적용)
    */
   static async getUnreadCount(userId: string): Promise<ApiResult<number>> {
     const stopMeasure = measurePerformance('messages.getUnreadCount')
     
     try {
-      // 캐시 확인
-      const cachedCount = MessageCache.getUnreadCount(userId)
-      if (cachedCount !== null) {
-        stopMeasure()
-        return { success: true, data: cachedCount }
-      }
-
-      // DB에서 조회
-      const { data, error } = await supabase
-        .from('user_message_stats')
-        .select('unread_count')
-        .eq('user_id', userId)
-        .single()
-
-      if (error) {
-        // 레코드가 없으면 0개
-        if (error.code === 'PGRST116') {
-          MessageCache.setUnreadCount(userId, 0)
-          stopMeasure()
-          return { success: true, data: 0 }
-        }
-        throw error
-      }
-
-      const count = data.unread_count
+      // 통합 캐시 매니저 사용
+      const cacheKey = createCacheKey('message', 'unread', userId)
       
-      // 캐시에 저장
-      MessageCache.setUnreadCount(userId, count)
+      const count = await CacheManager.get(
+        cacheKey,
+        async () => {
+          const { data, error } = await supabase
+            .from('user_message_stats')
+            .select('unread_count')
+            .eq('user_id', userId)
+            .single()
+          
+          if (error) {
+            // 레코드가 없으면 0개
+            if (error.code === 'PGRST116') {
+              return 0
+            }
+            throw error
+          }
+          
+          return data.unread_count
+        },
+        { 
+          ttl: 60000, // 1분 (자주 업데이트)
+          realtime: true,
+          staleWhileRevalidate: true 
+        }
+      )
       
       stopMeasure()
       return { success: true, data: count }
     } catch (error) {
-      console.error('Error fetching unread count:', error)
+      console.error('Error fetching unread count:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -326,54 +330,48 @@ export class MessagesAPI {
       const sortedIds = [user1Id, user2Id].sort()
       const cacheKey = createCacheKey('conversation', 'between', sortedIds[0], sortedIds[1])
       
-      // 캐시 확인
-      const cachedConversationId = HybridCache.get<string>(cacheKey)
-      if (cachedConversationId) {
-        stopMeasure()
-        return { success: true, data: cachedConversationId }
-      }
+      // 통합 캐시 매니저 사용
+      const cachedConversationId = await CacheManager.get<string>(
+        cacheKey,
+        async () => {
+          // 기존 대화방 찾기
+          const { data: existingConversation, error: findError } = await supabase
+            .from('conversations')
+            .select('id')
+            .or(`and(participant1_id.eq.${user1Id},participant2_id.eq.${user2Id}),and(participant1_id.eq.${user2Id},participant2_id.eq.${user1Id})`)
+            .single()
 
-      // 기존 대화방 찾기
-      const { data: existingConversation, error: findError } = await supabase
-        .from('conversations')
-        .select('id')
-        .or(`and(participant1_id.eq.${user1Id},participant2_id.eq.${user2Id}),and(participant1_id.eq.${user2Id},participant2_id.eq.${user1Id})`)
-        .single()
+          if (findError && findError.code !== 'PGRST116') {
+            throw findError
+          }
 
-      if (findError && findError.code !== 'PGRST116') {
-        throw findError
-      }
+          if (existingConversation) {
+            return existingConversation.id
+          }
 
-      let conversationId: string
+          // 새 대화방 생성
+          const { data: newConversation, error: createError } = await supabase
+            .from('conversations')
+            .insert({
+              participant1_id: user1Id,
+              participant2_id: user2Id
+            })
+            .select('id')
+            .single()
 
-      if (existingConversation) {
-        // 기존 대화방 사용
-        conversationId = existingConversation.id
-      } else {
-        // 새 대화방 생성
-        const { data: newConversation, error: createError } = await supabase
-          .from('conversations')
-          .insert({
-            participant1_id: user1Id,
-            participant2_id: user2Id
-          })
-          .select('id')
-          .single()
+          if (createError) {
+            throw createError
+          }
 
-        if (createError) {
-          throw createError
-        }
-
-        conversationId = newConversation.id
-      }
-
-      // 캐시에 저장 (30분)
-      HybridCache.set(cacheKey, conversationId, 1800000)
+          return newConversation.id
+        },
+        { ttl: 1800000 } // 30분
+      )
       
       stopMeasure()
-      return { success: true, data: conversationId }
+      return { success: true, data: cachedConversationId }
     } catch (error) {
-      console.error('Error finding/creating conversation:', error)
+      console.error('Error finding/creating conversation:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -386,14 +384,16 @@ export class MessagesAPI {
    * 사용자별 캐시 무효화 (로그아웃 시 등)
    */
   static invalidateUserCache(userId: string): void {
-    MessageCache.invalidateUserCache(userId)
+    CacheManager.invalidate(createCacheKey('message', 'inbox', userId))
+    CacheManager.invalidate(createCacheKey('message', 'unread', userId))
+    CacheManager.invalidate(createCacheKey('message', 'user-conversations', userId))
   }
 
   /**
    * 전체 메시지 캐시 무효화
    */
   static invalidateAllCache(): void {
-    HybridCache.invalidate('messages:')
+    CacheManager.invalidate('message:')
   }
 }
 

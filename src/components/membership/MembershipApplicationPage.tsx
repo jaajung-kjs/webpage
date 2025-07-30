@@ -23,7 +23,7 @@ import {
   BookOpen,
   Target
 } from 'lucide-react'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables, TablesInsert } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 
@@ -47,8 +47,7 @@ const experienceLevels = [
 ]
 
 export default function MembershipApplicationPage() {
-  const { user } = useAuth()
-  const profile = useProfile()
+  const { user, profile } = useOptimizedAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)

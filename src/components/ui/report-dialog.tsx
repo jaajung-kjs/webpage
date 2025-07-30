@@ -19,7 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { supabase, Tables } from '@/lib/supabase/client'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 
 type ReportType = Tables<'report_types'>
 import { toast } from 'sonner'
@@ -49,7 +49,7 @@ export function ReportDialog({
   targetId,
   parentContentId
 }: ReportDialogProps) {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [reportTypes, setReportTypes] = useState<ReportType[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
   const [description, setDescription] = useState('')

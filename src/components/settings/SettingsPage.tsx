@@ -26,7 +26,7 @@ import {
   Download,
   Upload
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { useSupabaseMutation, useUpdateProfile } from '@/hooks/useSupabase'
 import { Tables, supabase } from '@/lib/supabase/client'
@@ -34,7 +34,7 @@ import { ChangePasswordDialog } from './ChangePasswordDialog'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 
 export default function SettingsPage() {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const { updateProfile, loading: profileLoading } = useUpdateProfile()
   const { mutate: updateSettings, loading: settingsLoading } = useSupabaseMutation()
   

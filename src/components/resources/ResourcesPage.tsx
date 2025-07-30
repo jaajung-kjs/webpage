@@ -46,7 +46,7 @@ import {
   Edit,
   Trash2
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { 
   useContentList, 
@@ -83,7 +83,7 @@ const categoryColors = {
 }
 
 export default function ResourcesPage() {
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   

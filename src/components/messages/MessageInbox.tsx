@@ -8,7 +8,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeMessageInbox } from '@/hooks/useRealtime'
 import { MessageNotifications } from '@/lib/api/messages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -30,7 +30,7 @@ interface MessageInboxProps {
 }
 
 export function MessageInbox({ onConversationSelect, className }: MessageInboxProps) {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useOptimizedAuth()
   const { messages, loading, error, refetch } = useRealtimeMessageInbox(user?.id || '')
   const [refreshing, setRefreshing] = useState(false)
 

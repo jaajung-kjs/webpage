@@ -27,7 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { ArrowLeft, Save, Eye, Loader2 } from 'lucide-react'
@@ -55,8 +55,7 @@ const categoryLabels = {
 export default function NewCasePage() {
   const [loading, setLoading] = useState(false)
   const [preview, setPreview] = useState(false)
-  const { user } = useAuth()
-  const profile = useProfile()
+  const { user, profile } = useOptimizedAuth()
   const router = useRouter()
 
   const form = useForm<z.infer<typeof formSchema>>({

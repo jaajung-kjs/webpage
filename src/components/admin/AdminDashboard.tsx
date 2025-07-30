@@ -10,11 +10,11 @@ import {
 import MembershipApplicationManager from './MembershipApplicationManager'
 import MemberManagement from './MemberManagement'
 import ReportManagement from './ReportManagement'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import PermissionGate from '@/components/shared/PermissionGate'
 
 export default function AdminDashboard() {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [activeTab, setActiveTab] = useState('applications')
   
   return (

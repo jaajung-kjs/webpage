@@ -32,7 +32,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, User } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
@@ -70,7 +70,7 @@ const roleColors = {
 }
 
 export default function MemberManagement() {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [members, setMembers] = useState<MemberData[]>([])
   const [filteredMembers, setFilteredMembers] = useState<MemberData[]>([])
   const [searchTerm, setSearchTerm] = useState('')

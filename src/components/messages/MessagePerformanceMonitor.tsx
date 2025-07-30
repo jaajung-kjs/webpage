@@ -8,8 +8,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/hooks/useAuth'
-import { MessageCache } from '@/lib/utils/cache'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { CacheManager } from '@/lib/utils/cache-manager'
 import { MessageNotifications } from '@/lib/api/messages'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -29,7 +29,7 @@ import {
 import { motion } from 'framer-motion'
 
 export function MessagePerformanceMonitor() {
-  const { user, isAdmin } = useAuth()
+  const { user, isAdmin } = useOptimizedAuth()
   const [metrics, setMetrics] = useState<any>(null)
   const [refreshing, setRefreshing] = useState(false)
   
@@ -47,11 +47,20 @@ export function MessagePerformanceMonitor() {
   }, [shouldShow])
   
   const loadMetrics = () => {
-    const cacheReport = MessageCache.generateCacheReport()
     const notificationStatus = MessageNotifications.getNotificationStatus()
     
+    // CacheManager는 리포트 기능이 없으므로 기본 메트릭만 표시
+    const defaultMetrics = {
+      hitRate: 0,
+      totalRequests: 0,
+      cacheHits: 0,
+      cacheMisses: 0,
+      averageResponseTime: 0,
+      efficiency: 'N/A'
+    }
+    
     setMetrics({
-      cache: cacheReport,
+      cache: defaultMetrics,
       notifications: notificationStatus,
       timestamp: new Date().toLocaleTimeString()
     })

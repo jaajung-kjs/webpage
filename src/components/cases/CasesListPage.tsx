@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Search, Plus, ThumbsUp, MessageCircle, Eye, MoreVertical, Edit, Trash2 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
 import {
   DropdownMenu,
@@ -44,7 +44,7 @@ const categoryColors = {
 export default function CasesListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const router = useRouter()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   

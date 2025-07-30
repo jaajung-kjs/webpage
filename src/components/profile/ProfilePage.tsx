@@ -34,7 +34,7 @@ import {
   TrendingUp,
   Star
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
@@ -120,7 +120,7 @@ const getActivityTitle = (activityType: string, targetType?: string) => {
 }
 
 export default function ProfilePage() {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [userData, setUserData] = useState<UserData | null>(null)
   const [editData, setEditData] = useState<UserData | null>(null)
   const [loading, setLoading] = useState(true)

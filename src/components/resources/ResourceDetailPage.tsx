@@ -46,7 +46,7 @@ import {
   useDeleteContent
 } from '@/hooks/useSupabase'
 import { Views } from '@/lib/supabase/client'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 
 interface ResourceDetailPageProps {
@@ -88,8 +88,7 @@ const typeIcons = {
 }
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
-  const { user, isMember } = useAuth()
-  const profile = useProfile()
+  const { user, profile, isMember } = useOptimizedAuth()
   const router = useRouter()
   
   // Use Supabase hooks

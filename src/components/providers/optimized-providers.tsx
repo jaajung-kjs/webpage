@@ -1,7 +1,6 @@
 'use client'
 
 import { ReactNode } from 'react'
-import { AuthProvider } from '@/contexts/AuthContext'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { PerformanceProvider } from './performance-provider'
 import { Toaster } from '@/components/ui/sonner'
@@ -14,10 +13,8 @@ export function OptimizedProviders({ children }: OptimizedProvidersProps) {
   return (
     <ErrorBoundary>
       <PerformanceProvider>
-        <AuthProvider>
-          {children}
-          <Toaster />
-        </AuthProvider>
+        {children}
+        <Toaster />
       </PerformanceProvider>
     </ErrorBoundary>
   )

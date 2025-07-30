@@ -35,7 +35,7 @@ import {
   MessageSquare,
   ExternalLink
 } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -68,7 +68,7 @@ const targetTypeLabels = {
 }
 
 export default function ReportManagement() {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [reports, setReports] = useState<Report[]>([])
   const [filteredReports, setFilteredReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(true)

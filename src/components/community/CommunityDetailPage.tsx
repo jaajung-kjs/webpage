@@ -39,7 +39,7 @@ import {
   useDeleteContent
 } from '@/hooks/useSupabase'
 import { Views } from '@/lib/supabase/client'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
@@ -76,8 +76,7 @@ const categoryIcons = {
 }
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
-  const { user, isMember } = useAuth()
-  const profile = useProfile()
+  const { user, profile, isMember } = useOptimizedAuth()
   const router = useRouter()
   
   // Use Supabase hooks

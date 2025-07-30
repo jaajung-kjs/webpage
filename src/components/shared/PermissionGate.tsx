@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Shield, Users, Lock } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 
 interface PermissionGateProps {
   children: React.ReactNode
@@ -25,7 +25,7 @@ export default function PermissionGate({
   fallbackUrl = '/',
   showMessage = true
 }: PermissionGateProps) {
-  const { user, profile, loading } = useAuth()
+  const { user, profile, loading } = useOptimizedAuth()
   const router = useRouter()
   
   // Check permissions

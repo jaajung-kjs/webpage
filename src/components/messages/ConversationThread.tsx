@@ -8,7 +8,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeConversation } from '@/hooks/useRealtime'
 import { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -42,7 +42,7 @@ export function ConversationThread({
   onBack,
   className
 }: ConversationThreadProps) {
-  const { user, profile } = useAuth()
+  const { user, profile } = useOptimizedAuth()
   const { messages, loading, error } = useRealtimeConversation(conversationId)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -343,7 +343,7 @@ function MessageBubble({ message, isOwn, showAvatar, showTime }: MessageBubblePr
                     <CheckCheck className="h-4 w-4 text-blue-500" />
                   </motion.div>
                 ) : (
-                  <Check className="h-4 w-4 text-muted-foreground" title="안읽음" />
+                  <Check className="h-4 w-4 text-muted-foreground" />
                 )}
               </motion.div>
             )}

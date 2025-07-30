@@ -8,7 +8,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { MessageInbox } from './MessageInbox'
 import { ConversationThread } from './ConversationThread'
 import { NewMessageDialog } from './NewMessageDialog'
@@ -42,7 +42,7 @@ export function MessageModal({
   initialRecipientId,
   initialRecipientName
 }: MessageModalProps) {
-  const { isMember } = useAuth()
+  const { isMember } = useOptimizedAuth()
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (initialConversationId && initialRecipientId && initialRecipientName) {
       return {

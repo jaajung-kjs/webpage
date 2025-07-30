@@ -8,7 +8,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase } from '@/lib/supabase/client'
 import { MessagesAPI } from '@/lib/api/messages'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -50,7 +50,7 @@ export function NewMessageDialog({
   onOpenChange,
   onConversationStart
 }: NewMessageDialogProps) {
-  const { user } = useAuth()
+  const { user } = useOptimizedAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [members, setMembers] = useState<Member[]>([])
   const [filteredMembers, setFilteredMembers] = useState<Member[]>([])

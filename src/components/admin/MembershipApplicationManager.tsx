@@ -43,7 +43,7 @@ import {
   Check,
   X
 } from 'lucide-react'
-import { useAuth, useProfile } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { 
   useMembershipApplications, 
   useUpdateMembershipApplication, 
@@ -84,8 +84,7 @@ const experienceLevels: Record<string, string> = {
 }
 
 export default function MembershipApplicationManager() {
-  const { user } = useAuth()
-  const profile = useProfile()
+  const { user, profile } = useOptimizedAuth()
   
   // Use Supabase hooks for data fetching
   const { data: applications = [], loading, refetch } = useMembershipApplications()

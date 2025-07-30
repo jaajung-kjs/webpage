@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Mail, ArrowLeft, RefreshCw, CheckCircle } from 'lucide-react'
-import { useAuthLegacy } from '@/contexts/AuthContext'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 
 export default function VerifyEmailPage() {
   const router = useRouter()
-  const { user, loading, signOut, resendEmailConfirmation } = useAuthLegacy()
+  const { user, loading, signOut, resendEmailConfirmation } = useOptimizedAuth()
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [resendError, setResendError] = useState('')

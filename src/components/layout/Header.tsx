@@ -8,7 +8,8 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Menu, User, LogOut, Settings, Shield, Zap, MessageCircle } from 'lucide-react'
-import { useAuth } from '@/hooks/useAuth'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { sessionManager } from '@/lib/utils/session-manager'
 import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
 import LoginDialog from '@/components/auth/LoginDialog'
 
@@ -25,9 +26,14 @@ const navigation = [
 export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
-  const { user, profile, signOut, loading, isMember } = useAuth()
+  const { user, profile, loading, isMember } = useOptimizedAuth()
   const { openModal, modalProps } = useMessageModal()
   const router = useRouter()
+  
+  const handleSignOut = async () => {
+    await sessionManager.signOut()
+    router.push('/')
+  }
   
   // Listen for login dialog open events
   useEffect(() => {
@@ -147,12 +153,7 @@ export default function Header() {
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuItem
-                    onClick={async () => {
-                      const result = await signOut()
-                      if (result?.error) {
-                        console.error('Logout failed:', result.error)
-                      }
-                    }}
+                    onClick={handleSignOut}
                     className="text-red-600 focus:text-red-600 cursor-pointer"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
@@ -216,11 +217,16 @@ export default function Header() {
 }
 
 function MobileNav() {
-  const { user, profile, signOut, isMember } = useAuth()
+  const { user, profile, isMember } = useOptimizedAuth()
   const { openModal } = useMessageModal()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const router = useRouter()
+  
+  const handleSignOut = async () => {
+    await sessionManager.signOut()
+    router.push('/')
+  }
 
   return (
     <div className="my-4 h-[calc(100vh-8rem)] pb-10 px-6">
@@ -287,12 +293,7 @@ function MobileNav() {
             <Button 
               variant="outline" 
               size="sm" 
-              onClick={async () => {
-                const result = await signOut()
-                if (result?.error) {
-                  console.error('Logout failed:', result.error)
-                }
-              }}
+              onClick={handleSignOut}
               className="text-red-600"
             >
               로그아웃
