@@ -23,6 +23,9 @@ export interface MessageWithSender extends Message {
     name: string
     avatar_url: string | null
   }
+  // 로컬 상태 관리용 (DB에는 저장되지 않음)
+  status?: 'sending' | 'sent' | 'failed'
+  serverMessageId?: string // 실제 서버에서 받은 ID (임시 ID와 구분)
 }
 
 export interface ConversationWithLastMessage extends Conversation {
@@ -187,7 +190,7 @@ export class MessagesAPI {
         }
       }
 
-      // DB에 실제 메시지 전송
+      // DB에 실제 메시지 전송 (이제 완전한 메시지 객체 반환)
       const { data, error } = await supabase.rpc('send_message', {
         p_sender_id: senderId,
         p_recipient_id: recipientId,
@@ -202,35 +205,40 @@ export class MessagesAPI {
         throw error
       }
 
-      // 성공 시 메시지 ID 반환됨
-      const messageId = data as string
+      // 성공 시 완전한 메시지 객체가 반환됨
+      const messageData = data as any
+      const actualMessage: MessageWithSender = {
+        id: messageData.id,
+        conversation_id: messageData.conversation_id,
+        sender_id: messageData.sender_id,
+        recipient_id: messageData.recipient_id,
+        content: messageData.content,
+        is_read: messageData.is_read,
+        read_at: messageData.read_at,
+        created_at: messageData.created_at,
+        updated_at: messageData.updated_at,
+        sender: messageData.sender
+      }
       
-      // 관련 캐시 무효화
-      CacheManager.invalidate(createCacheKey('message', 'inbox', recipientId))
+      // 선택적 캐시 무효화 (꼭 필요한 것만)
       CacheManager.invalidate(createCacheKey('message', 'unread', recipientId))
-      CacheManager.invalidate(createCacheKey('message', 'user-conversations', senderId))
-      CacheManager.invalidate(createCacheKey('message', 'user-conversations', recipientId))
       
+      // 대화방 캐시는 낙관적 업데이트로 이미 처리했으므로 실제 데이터로 교체
       if (conversationId) {
-        CacheManager.invalidate(createCacheKey('message', 'conversation', conversationId))
-        CacheManager.invalidate(createCacheKey('message', 'meta', conversationId))
+        const cacheKey = createCacheKey('message', 'conversation', conversationId)
+        const cached = await CacheManager.get<MessageWithSender[]>(cacheKey, async () => [])
+        if (cached) {
+          // 임시 메시지를 실제 메시지로 교체
+          const updatedMessages = cached.map(msg => 
+            msg.id === optimisticMessage.id ? actualMessage : msg
+          )
+          CacheManager.set(cacheKey, updatedMessages)
+        }
       }
       
       stopMeasure()
       
-      // 실제 메시지 객체를 다시 조회해서 반환
-      const { data: actualMessage } = await supabase
-        .from('messages')
-        .select(`
-          *,
-          sender:users!messages_sender_id_fkey (
-            id, name, avatar_url
-          )
-        `)
-        .eq('id', messageId)
-        .single()
-      
-      return { success: true, data: actualMessage || optimisticMessage }
+      return { success: true, data: actualMessage }
     } catch (error) {
       console.error('Error sending message:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()

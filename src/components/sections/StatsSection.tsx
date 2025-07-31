@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { supabase } from '@/lib/supabase/client'
 
 interface Stats {
   membersCount: number
@@ -57,8 +58,6 @@ export default function StatsSection() {
   const fetchFreshStats = async (isBackgroundUpdate: boolean) => {
     try {
       // Direct DB query for real statistics
-      const { supabase } = await import('@/lib/supabase/client')
-      
       const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
         supabase.from('users').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
         supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),

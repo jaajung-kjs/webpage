@@ -97,7 +97,7 @@ export function useSupabaseQuery<T>(
     fetchData()
     
     // Subscribe to realtime changes if applicable
-    if (table === 'content' || table === 'comments' || table === 'users') {
+    if (table === 'content' || table === 'comments' || table === 'users' || table === 'user_message_stats') {
       const subscription = supabase
         .channel(`${table}_changes`)
         .on('postgres_changes', 

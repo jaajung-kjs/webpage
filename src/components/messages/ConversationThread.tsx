@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeConversation } from '@/hooks/useRealtime'
 import { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
@@ -17,13 +17,19 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ArrowLeft, Send, User, Loader2, Check, CheckCheck } from 'lucide-react'
+import { ArrowLeft, Send, User, Loader2, Check, CheckCheck, AlertCircle, MoreVertical, RotateCw, Trash2, Clock } from 'lucide-react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { MessageWithSender } from '@/lib/api/messages'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 interface ConversationThreadProps {
   conversationId: string
@@ -43,16 +49,42 @@ export function ConversationThread({
   className
 }: ConversationThreadProps) {
   const { user, profile } = useOptimizedAuth()
-  const { messages, loading, error } = useRealtimeConversation(conversationId)
+  const { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus } = useRealtimeConversation(conversationId, user?.id)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
+  const [optimisticId, setOptimisticId] = useState<string | null>(null)
+  const [recentMessageIds, setRecentMessageIds] = useState<Set<string>>(new Set())
+  const [failedMessages, setFailedMessages] = useState<Map<string, string>>(new Map()) // 실패한 메시지 내용 저장
   const scrollAreaRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const previousMessageCountRef = useRef(0)
 
-  // 자동 스크롤
+  // 자동 스크롤 (디바운스 적용)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
+    // 메시지가 추가되었을 때만 스크롤 (초기 로드 또는 새 메시지)
+    if (messages.length > previousMessageCountRef.current) {
+      // 이전 타이머 취소
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+      
+      // 디바운스로 스크롤 지연
+      scrollTimeoutRef.current = setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ 
+          behavior: messages.length > 20 ? 'auto' : 'smooth' // 많은 메시지일 때는 즉시 스크롤
+        })
+      }, 100)
+    }
+    
+    previousMessageCountRef.current = messages.length
+    
+    return () => {
+      if (scrollTimeoutRef.current) {
+        clearTimeout(scrollTimeoutRef.current)
+      }
+    }
+  }, [messages.length])
 
   // 대화방 진입 시 메시지 읽음 처리 (중복 방지)
   useEffect(() => {
@@ -69,6 +101,63 @@ export function ConversationThread({
     }
   }, [user, conversationId, messages.length])
 
+  // 메시지 재전송
+  const handleRetryMessage = async (messageId: string) => {
+    const messageContent = failedMessages.get(messageId)
+    if (!messageContent || !user) return
+
+    // 실패한 메시지를 다시 sending 상태로 변경
+    updateMessageStatus(messageId, {
+      status: 'sending'
+    })
+
+    try {
+      const result = await MessagesAPI.sendMessage(
+        user.id,
+        recipientId,
+        messageContent,
+        conversationId
+      )
+
+      if (!result.success) {
+        throw new Error(result.error)
+      }
+
+      // 성공 시 상태만 업데이트
+      if (result.data) {
+        updateMessageStatus(messageId, {
+          status: 'sent',
+          serverMessageId: result.data.id,
+          is_read: result.data.is_read,
+          read_at: result.data.read_at
+        })
+        // 실패 목록에서 제거
+        setFailedMessages(prev => {
+          const next = new Map(prev)
+          next.delete(messageId)
+          return next
+        })
+      }
+    } catch (error) {
+      // 재전송도 실패 - 상태만 변경
+      updateMessageStatus(messageId, {
+        status: 'failed'
+      })
+      toast.error('재전송에 실패했습니다.')
+    }
+  }
+
+  // 메시지 삭제
+  const handleDeleteMessage = (messageId: string) => {
+    replaceOptimisticMessage(messageId, null)
+    setFailedMessages(prev => {
+      const next = new Map(prev)
+      next.delete(messageId)
+      return next
+    })
+    toast.success('메시지가 삭제되었습니다.')
+  }
+
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault()
     
@@ -83,6 +172,40 @@ export function ConversationThread({
     const messageContent = newMessage.trim()
     setNewMessage('')
     setSending(true)
+
+    // 낙관적 메시지 생성
+    const tempId = `temp-${Date.now()}`
+    const optimisticMessage: MessageWithSender = {
+      id: tempId,
+      sender_id: user.id,
+      recipient_id: recipientId,
+      content: messageContent,
+      is_read: false,
+      read_at: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      conversation_id: conversationId,
+      sender: {
+        id: user.id,
+        name: profile?.name || user.email || 'You',
+        avatar_url: profile?.avatar_url || null
+      },
+      status: 'sending' // 전송 중 상태로 시작
+    }
+
+    // UI에 즉시 추가
+    setOptimisticId(tempId)
+    addOptimisticMessage(optimisticMessage)
+    
+    // 최근 메시지로 표시 (애니메이션을 위해)
+    setRecentMessageIds(prev => new Set([...prev, tempId]))
+    setTimeout(() => {
+      setRecentMessageIds(prev => {
+        const next = new Set(prev)
+        next.delete(tempId)
+        return next
+      })
+    }, 300) // 애니메이션 시간과 동일하게
 
     console.log('🚀 Sending message:', messageContent)
 
@@ -100,12 +223,26 @@ export function ConversationThread({
 
       console.log('✅ Message sent successfully:', result.data)
       
-      // 알림은 실시간 구독에서 처리됨 (받는 사람에게만)
+      // 상태만 업데이트 (재렌더링 최소화)
+      if (result.data) {
+        updateMessageStatus(tempId, {
+          status: 'sent',
+          serverMessageId: result.data.id,
+          is_read: result.data.is_read,
+          read_at: result.data.read_at
+        })
+      }
+      setOptimisticId(null)
       
     } catch (error) {
       console.error('❌ Failed to send message:', error)
-      setNewMessage(messageContent) // 실패 시 메시지 복원
-      toast.error('메시지 전송에 실패했습니다.')
+      // 실패 시 상태만 변경
+      updateMessageStatus(tempId, {
+        status: 'failed'
+      })
+      // 실패한 메시지 내용 저장
+      setFailedMessages(prev => new Map(prev).set(tempId, messageContent))
+      toast.error('메시지 전송에 실패했습니다. 재전송하거나 삭제할 수 있습니다.')
     } finally {
       setSending(false)
     }
@@ -178,18 +315,23 @@ export function ConversationThread({
                     return timeDiff >= 60000 // 1분(60초) 이상 차이
                   })()
                   
+                  // 새로 추가된 메시지만 애니메이션
+                  const isRecent = recentMessageIds.has(message.id)
+                  
                   return (
                     <motion.div
                       key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
+                      initial={isRecent ? { opacity: 0, y: 10 } : false}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: index * 0.02 }}
+                      transition={isRecent ? { duration: 0.3, ease: "easeOut" } : undefined}
                     >
                       <MessageBubble
                         message={message}
                         isOwn={isOwn}
                         showAvatar={showAvatar}
                         showTime={showTime}
+                        onRetry={() => handleRetryMessage(message.id)}
+                        onDelete={() => handleDeleteMessage(message.id)}
                       />
                     </motion.div>
                   )
@@ -250,20 +392,11 @@ interface MessageBubbleProps {
   isOwn: boolean
   showAvatar: boolean
   showTime: boolean
+  onRetry?: () => void
+  onDelete?: () => void
 }
 
-function MessageBubble({ message, isOwn, showAvatar, showTime }: MessageBubbleProps) {
-  // 디버깅: 읽음 상태 확인
-  if (isOwn && showTime) {
-    console.log('📖 Message read status:', {
-      messageId: message.id,
-      content: message.content.substring(0, 20),
-      isRead: message.is_read,
-      readAt: message.read_at,
-      showTime
-    })
-  }
-
+const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, showTime, onRetry, onDelete }: MessageBubbleProps) {
   return (
     <div className={cn(
       "flex items-end gap-2",
@@ -331,34 +464,79 @@ function MessageBubble({ message, isOwn, showAvatar, showTime }: MessageBubblePr
               })()}
             </span>
             
-            {/* 읽음 상태 (내가 보낸 메시지만) */}
+            {/* 상태 아이콘 (내가 보낸 메시지만) */}
             {isOwn && (
-              <motion.div 
-                className="flex items-center ml-1"
-                initial={{ scale: 0.8, opacity: 0.5 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ duration: 0.2 }}
-              >
-                {message.is_read ? (
+              <div className="flex items-center gap-1 ml-1">
+                {/* 전송 상태에 따른 아이콘 */}
+                {message.status === 'sending' ? (
                   <motion.div
-                    initial={{ scale: 0.8 }}
-                    animate={{ scale: 1 }}
-                    transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
-                    title="읽음"
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
                   >
-                    <CheckCheck className="h-4 w-4 text-blue-500" />
+                    <Clock className="h-4 w-4 text-muted-foreground" />
                   </motion.div>
+                ) : message.status === 'failed' ? (
+                  <div className="flex items-center gap-1">
+                    <AlertCircle className="h-4 w-4 text-destructive" />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                          <MoreVertical className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={onRetry}>
+                          <RotateCw className="h-4 w-4 mr-2" />
+                          재전송
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={onDelete} className="text-destructive">
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          삭제
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 ) : (
-                  <Check className="h-4 w-4 text-muted-foreground" />
+                  <motion.div 
+                    className="flex items-center"
+                    initial={{ scale: 0.8, opacity: 0.5 }}
+                    animate={{ scale: 1, opacity: 1 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {message.is_read ? (
+                      <motion.div
+                        initial={{ scale: 0.8 }}
+                        animate={{ scale: 1 }}
+                        transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
+                        title="읽음"
+                      >
+                        <CheckCheck className="h-4 w-4 text-blue-500" />
+                      </motion.div>
+                    ) : (
+                      <Check className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </motion.div>
                 )}
-              </motion.div>
+              </div>
             )}
           </div>
         )}
       </div>
     </div>
   )
-}
+}, (prevProps, nextProps) => {
+  // 메시지 내용이나 읽음 상태, 전송 상태가 변경될 때만 리렌더링
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.is_read === nextProps.message.is_read &&
+    prevProps.message.status === nextProps.message.status &&
+    prevProps.isOwn === nextProps.isOwn &&
+    prevProps.showAvatar === nextProps.showAvatar &&
+    prevProps.showTime === nextProps.showTime &&
+    prevProps.onRetry === nextProps.onRetry &&
+    prevProps.onDelete === nextProps.onDelete
+  )
+})
 
 /**
  * Empty conversation placeholder

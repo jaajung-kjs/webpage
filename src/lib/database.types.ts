@@ -1523,7 +1523,7 @@ export type Database = {
       }
       send_message: {
         Args: { p_sender_id: string; p_recipient_id: string; p_message: string }
-        Returns: string
+        Returns: Json
       }
       update_activity_score: {
         Args: { user_id: string }

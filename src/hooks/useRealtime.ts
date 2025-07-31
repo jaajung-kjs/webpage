@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { REALTIME_LISTEN_TYPES, REALTIME_POSTGRES_CHANGES_LISTEN_EVENT, REALTIME_PRESENCE_LISTEN_EVENTS } from '@supabase/supabase-js'
 import type { RealtimeChannel, RealtimePostgresChangesPayload, RealtimePostgresChangesFilter } from '@supabase/supabase-js'
@@ -445,20 +445,45 @@ export function useRealtimeMessageInbox(userId: string) {
 }
 
 // Hook for real-time conversation messages
-export function useRealtimeConversation(conversationId: string) {
+export function useRealtimeConversation(conversationId: string, currentUserId?: string | null) {
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const channelRef = useRef<RealtimeChannel | null>(null)
-
-  // Get current user ID
+  const messagesRef = useRef<any[]>([])
+  
+  // Keep messagesRef in sync with messages state
   useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUserId(user?.id || null)
-    }
-    getCurrentUser()
+    messagesRef.current = messages
+  }, [messages])
+
+  // 낙관적 메시지 추가 함수
+  const addOptimisticMessage = useCallback((message: any) => {
+    setMessages(prev => [...prev, message])
+  }, [])
+
+  // 낙관적 메시지 교체 함수
+  const replaceOptimisticMessage = useCallback((tempId: string, actualMessage: any | null) => {
+    setMessages(prev => {
+      if (actualMessage) {
+        // 실제 메시지로 교체
+        return prev.map(msg => msg.id === tempId ? actualMessage : msg)
+      } else {
+        // 실패 시 제거
+        return prev.filter(msg => msg.id !== tempId)
+      }
+    })
+  }, [])
+
+  // 메시지 상태만 업데이트하는 함수 (재렌더링 최소화)
+  const updateMessageStatus = useCallback((messageId: string, updates: Partial<any>) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        // 객체 참조를 유지하면서 필요한 필드만 업데이트
+        return { ...msg, ...updates }
+      }
+      return msg
+    }))
   }, [])
 
   // Fetch initial conversation messages
@@ -510,39 +535,51 @@ export function useRealtimeConversation(conversationId: string) {
         async (payload: PostgresChangePayload<any>) => {
           console.log('📨 New message received:', payload.new)
           if (payload.new) {
-            // Fetch the complete message with sender info
-            const { data: newMessage } = await supabase
-              .from('messages')
-              .select(`
-                *,
-                sender:users!messages_sender_id_fkey (
-                  id, name, avatar_url
-                )
-              `)
-              .eq('id', payload.new.id)
-              .single()
+            // 이미 로컬에 있는 메시지인지 확인 (serverMessageId로 체크)
+            const existingMessage = messagesRef.current.find(msg => 
+              msg.serverMessageId === payload.new.id || 
+              (msg.id.startsWith('temp-') && 
+               msg.content === payload.new.content &&
+               msg.sender_id === payload.new.sender_id)
+            )
 
-            console.log('📨 Complete message fetched:', newMessage)
-            if (newMessage) {
+            if (existingMessage) {
+              // 이미 로컬에 있는 메시지는 무시
+              console.log('📨 Ignoring duplicate message (already in local state)')
+              return
+            }
+
+            // 다른 사람이 보낸 메시지만 추가 (자신의 메시지는 낙관적 업데이트로 이미 처리)
+            if (payload.new.sender_id !== currentUserId) {
+              // sender 정보가 payload에 없으면 조회
+              let messageWithSender = payload.new
+              
+              if (!payload.new.sender) {
+                const { data: senderData } = await supabase
+                  .from('users')
+                  .select('id, name, avatar_url')
+                  .eq('id', payload.new.sender_id)
+                  .single()
+                
+                if (senderData) {
+                  messageWithSender = { ...payload.new, sender: senderData }
+                }
+              }
+
               setMessages(prev => {
-                console.log('📨 Current messages count:', prev.length)
-                console.log('📨 Adding message to conversation:', newMessage.id)
-                const updated = [...prev, newMessage]
-                console.log('📨 Updated messages count:', updated.length)
-                return updated
+                console.log('📨 Adding new message from other user')
+                return [...prev, messageWithSender]
               })
               
-              // 받는 사람에게만 알림 표시
-              if (currentUserId && newMessage.sender_id !== currentUserId) {
+              // 알림 표시
+              if (currentUserId && messageWithSender.sender) {
                 console.log('📨 Showing notification to recipient')
                 import('@/lib/api/messages').then(({ MessageNotifications }) => {
                   MessageNotifications.showNewMessageNotification(
-                    newMessage.sender.name || '익명',
-                    newMessage.content
+                    messageWithSender.sender.name || '익명',
+                    messageWithSender.content
                   )
                 })
-              } else {
-                console.log('📨 Not showing notification - sender is current user')
               }
             }
           }
@@ -561,14 +598,21 @@ export function useRealtimeConversation(conversationId: string) {
           if (payload.new) {
             setMessages(prev => {
               const updated = prev.map(msg => {
-                if (msg.id === payload.new.id) {
+                // 임시 ID를 가진 메시지도 serverMessageId로 매칭
+                if (msg.id === payload.new.id || msg.serverMessageId === payload.new.id) {
                   console.log('📨 Updating message read status:', {
                     messageId: msg.id,
+                    serverMessageId: msg.serverMessageId,
                     oldReadStatus: msg.is_read,
                     newReadStatus: payload.new.is_read,
                     readAt: payload.new.read_at
                   })
-                  return { ...msg, ...payload.new }
+                  // 읽음 상태와 시간만 업데이트
+                  return { 
+                    ...msg, 
+                    is_read: payload.new.is_read,
+                    read_at: payload.new.read_at
+                  }
                 }
                 return msg
               })
@@ -589,7 +633,7 @@ export function useRealtimeConversation(conversationId: string) {
     }
   }, [conversationId, currentUserId])
 
-  return { messages, loading, error }
+  return { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus }
 }
 
 // Hook for real-time unread message count

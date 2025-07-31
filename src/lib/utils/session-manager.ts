@@ -196,6 +196,7 @@ export class SessionManager {
     this.listeners.forEach(listener => listener(this.state))
   }
   
+  
   /**
    * 정리
    */
@@ -209,6 +210,7 @@ export class SessionManager {
       this.profileSubscription.unsubscribe()
       this.profileSubscription = null
     }
+    
     
     // 로그아웃 시 모든 캐시 완전 정리
     CacheManager.invalidate()
