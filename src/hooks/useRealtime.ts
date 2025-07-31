@@ -445,7 +445,7 @@ export function useRealtimeMessageInbox(userId: string) {
 }
 
 // Hook for real-time conversation messages
-export function useRealtimeConversation(conversationId: string, currentUserId?: string | null, isConversationOpen: boolean = false) {
+export function useRealtimeConversation(conversationId: string, currentUserId?: string | null) {
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -621,7 +621,7 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
         supabase.removeChannel(channelRef.current)
       }
     }
-  }, [conversationId, currentUserId, isConversationOpen])
+  }, [conversationId, currentUserId])
 
   return { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus }
 }
