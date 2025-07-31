@@ -3,6 +3,7 @@ import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { PerformanceProvider } from "@/components/providers/performance-provider";
+import { GlobalMessageNotifications } from "@/components/providers/GlobalMessageNotifications";
 
 const notoSansKR = Noto_Sans_KR({
   variable: "--font-noto-sans-kr",
@@ -51,6 +52,7 @@ export default function RootLayout({
       >
         <ErrorBoundary>
           <PerformanceProvider>
+            <GlobalMessageNotifications />
             <div className="relative flex min-h-screen flex-col">
               {children}
             </div>

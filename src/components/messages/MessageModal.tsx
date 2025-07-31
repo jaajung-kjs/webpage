@@ -172,6 +172,7 @@ export function MessageModal({
                     recipientAvatar={viewState.recipientAvatar}
                     onBack={handleBackToInbox}
                     className="border-0 shadow-none h-[500px]"
+                    isOpen={open}
                   />
                 </motion.div>
               )}

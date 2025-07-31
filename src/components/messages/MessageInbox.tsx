@@ -192,7 +192,7 @@ function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
           "text-sm text-muted-foreground truncate",
           isUnread && "text-foreground font-medium"
         )}>
-          {message.last_message_content}
+          {message.last_message}
         </p>
       </div>
     </motion.div>

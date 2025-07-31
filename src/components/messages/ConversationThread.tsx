@@ -38,6 +38,7 @@ interface ConversationThreadProps {
   recipientAvatar?: string | null
   onBack?: () => void
   className?: string
+  isOpen?: boolean
 }
 
 export function ConversationThread({
@@ -46,10 +47,11 @@ export function ConversationThread({
   recipientName,
   recipientAvatar,
   onBack,
-  className
+  className,
+  isOpen = true
 }: ConversationThreadProps) {
   const { user, profile } = useOptimizedAuth()
-  const { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus } = useRealtimeConversation(conversationId, user?.id)
+  const { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus } = useRealtimeConversation(conversationId, user?.id, isOpen)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [optimisticId, setOptimisticId] = useState<string | null>(null)

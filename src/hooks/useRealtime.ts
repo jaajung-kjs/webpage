@@ -445,7 +445,7 @@ export function useRealtimeMessageInbox(userId: string) {
 }
 
 // Hook for real-time conversation messages
-export function useRealtimeConversation(conversationId: string, currentUserId?: string | null) {
+export function useRealtimeConversation(conversationId: string, currentUserId?: string | null, isConversationOpen: boolean = false) {
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -549,38 +549,28 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
               return
             }
 
+            // 메시지 추가 및 알림 처리
+            let messageWithSender = payload.new
+            
+            // sender 정보가 payload에 없으면 조회
+            if (!payload.new.sender) {
+              const { data: senderData } = await supabase
+                .from('users')
+                .select('id, name, avatar_url')
+                .eq('id', payload.new.sender_id)
+                .single()
+              
+              if (senderData) {
+                messageWithSender = { ...payload.new, sender: senderData }
+              }
+            }
+
             // 다른 사람이 보낸 메시지만 추가 (자신의 메시지는 낙관적 업데이트로 이미 처리)
             if (payload.new.sender_id !== currentUserId) {
-              // sender 정보가 payload에 없으면 조회
-              let messageWithSender = payload.new
-              
-              if (!payload.new.sender) {
-                const { data: senderData } = await supabase
-                  .from('users')
-                  .select('id, name, avatar_url')
-                  .eq('id', payload.new.sender_id)
-                  .single()
-                
-                if (senderData) {
-                  messageWithSender = { ...payload.new, sender: senderData }
-                }
-              }
-
               setMessages(prev => {
                 console.log('📨 Adding new message from other user')
                 return [...prev, messageWithSender]
               })
-              
-              // 알림 표시
-              if (currentUserId && messageWithSender.sender) {
-                console.log('📨 Showing notification to recipient')
-                import('@/lib/api/messages').then(({ MessageNotifications }) => {
-                  MessageNotifications.showNewMessageNotification(
-                    messageWithSender.sender.name || '익명',
-                    messageWithSender.content
-                  )
-                })
-              }
             }
           }
         }
@@ -631,7 +621,7 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
         supabase.removeChannel(channelRef.current)
       }
     }
-  }, [conversationId, currentUserId])
+  }, [conversationId, currentUserId, isConversationOpen])
 
   return { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus }
 }

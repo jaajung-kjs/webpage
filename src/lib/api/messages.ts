@@ -42,7 +42,7 @@ export interface InboxMessage {
   other_user_id: string
   other_user_name: string
   other_user_avatar: string
-  last_message_content: string
+  last_message: string
   last_message_time: string
   unread_count: number
   is_sender: boolean
@@ -80,7 +80,7 @@ export class MessagesAPI {
             other_user_id: item.other_user_id,
             other_user_name: item.other_user_name,
             other_user_avatar: item.other_user_avatar,
-            last_message_content: item.last_message, // DB returns 'last_message'
+            last_message: item.last_message,
             last_message_time: item.last_message_time,
             unread_count: item.unread_count,
             is_sender: item.is_last_message_read !== undefined ? !item.is_last_message_read : false // Determine based on read status
