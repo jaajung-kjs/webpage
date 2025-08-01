@@ -11,6 +11,7 @@ import { Session, User } from '@supabase/supabase-js'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { CacheManager, getCacheKey } from './cache-manager'
 import { AuthMonitorLite } from './auth-monitor.lite'
+import { realtimeManager } from '@/lib/realtime/RealtimeManager'
 
 type UserProfile = Tables<'users'>
 
@@ -31,7 +32,7 @@ export class SessionManager {
   }
   private listeners = new Set<(state: SessionState) => void>()
   private refreshTimer: NodeJS.Timeout | null = null
-  private profileSubscription: any = null
+  private profileUnsubscribe: (() => void) | null = null
   
   // 싱글톤 인스턴스
   static getInstance(): SessionManager {
@@ -120,7 +121,7 @@ export class SessionManager {
       this.updateState({ profile })
       
       // 프로필 실시간 구독 (중복 방지)
-      if (!this.profileSubscription) {
+      if (!this.profileUnsubscribe) {
         this.subscribeToProfile(userId)
       }
     } catch (error) {
@@ -133,24 +134,23 @@ export class SessionManager {
    */
   private subscribeToProfile(userId: string) {
     // 기존 구독 정리
-    if (this.profileSubscription) {
-      this.profileSubscription.unsubscribe()
+    if (this.profileUnsubscribe) {
+      this.profileUnsubscribe()
+      this.profileUnsubscribe = null
     }
     
-    this.profileSubscription = supabase
-      .channel(`session_profile_${userId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'users',
-        filter: `id=eq.${userId}`
-      }, async () => {
+    this.profileUnsubscribe = realtimeManager.subscribe({
+      name: `session_profile_${userId}`,
+      table: 'users',
+      filter: `id=eq.${userId}`,
+      event: '*',
+      callback: async () => {
         // 프로필 변경 시 캐시 무효화 및 재로드
         const cacheKey = getCacheKey('auth', 'profile', userId)
         CacheManager.invalidate(cacheKey)
         await this.loadProfile(userId, true)
-      })
-      .subscribe()
+      }
+    })
   }
   
   /**
@@ -206,9 +206,9 @@ export class SessionManager {
       this.refreshTimer = null
     }
     
-    if (this.profileSubscription) {
-      this.profileSubscription.unsubscribe()
-      this.profileSubscription = null
+    if (this.profileUnsubscribe) {
+      this.profileUnsubscribe()
+      this.profileUnsubscribe = null
     }
     
     

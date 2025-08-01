@@ -92,29 +92,10 @@ export function useSupabaseQuery<T>(
     }
   }, [table, cacheKey, cacheOptions.enabled, cacheOptions.ttl, ...deps])
 
-  // Invalidate cache when component unmounts
+  // Fetch data when component mounts
   useEffect(() => {
     fetchData()
-    
-    // Subscribe to realtime changes if applicable
-    if (table === 'content' || table === 'comments' || table === 'users' || table === 'user_message_stats') {
-      const subscription = supabase
-        .channel(`${table}_changes`)
-        .on('postgres_changes', 
-          { event: '*', schema: 'public', table: table as string },
-          () => {
-            // Invalidate cache and refetch
-            HybridCache.invalidate(cacheKey)
-            fetchData()
-          }
-        )
-        .subscribe()
-      
-      return () => {
-        subscription.unsubscribe()
-      }
-    }
-  }, [fetchData, table, cacheKey])
+  }, [fetchData])
 
   const refetch = useCallback(async () => {
     // Invalidate cache before refetching

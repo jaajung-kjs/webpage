@@ -11,7 +11,6 @@ import { useState, useRef, useEffect, memo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeConversation } from '@/hooks/useRealtime'
 import { MessagesAPI } from '@/lib/api/messages'
-import { setActiveConversation } from '@/hooks/useGlobalMessageNotifications'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,6 +30,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+
+// 개발 환경 체크
+const isDev = process.env.NODE_ENV === 'development'
+const log = isDev ? console.log : () => {}
+const logError = console.error // 에러는 항상 출력
 
 interface ConversationThreadProps {
   conversationId: string
@@ -61,16 +65,6 @@ export function ConversationThread({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousMessageCountRef = useRef(0)
 
-  // 대화창 열림 상태 관리
-  useEffect(() => {
-    console.log('💬 ConversationThread mounted, setting active conversation:', conversationId)
-    setActiveConversation(conversationId)
-    
-    return () => {
-      console.log('💬 ConversationThread unmounted, clearing active conversation')
-      setActiveConversation(null)
-    }
-  }, [conversationId])
 
   // 자동 스크롤 (디바운스 적용)
   useEffect(() => {
@@ -107,7 +101,7 @@ export function ConversationThread({
       )
       
       if (hasUnreadMessages) {
-        console.log('📖 Marking messages as read for conversation:', conversationId)
+        log('📖 Marking messages as read for conversation:', conversationId)
         MessagesAPI.markMessagesAsRead(user.id, conversationId)
       }
     }
@@ -219,7 +213,7 @@ export function ConversationThread({
       })
     }, 300) // 애니메이션 시간과 동일하게
 
-    console.log('🚀 Sending message:', messageContent)
+    log('🚀 Sending message:', messageContent)
 
     try {
       const result = await MessagesAPI.sendMessage(
@@ -233,7 +227,7 @@ export function ConversationThread({
         throw new Error(result.error)
       }
 
-      console.log('✅ Message sent successfully:', result.data)
+      log('✅ Message sent successfully:', result.data)
       
       // 상태만 업데이트 (재렌더링 최소화)
       if (result.data) {
@@ -247,7 +241,7 @@ export function ConversationThread({
       setOptimisticId(null)
       
     } catch (error) {
-      console.error('❌ Failed to send message:', error)
+      logError('❌ Failed to send message:', error)
       // 실패 시 상태만 변경
       updateMessageStatus(tempId, {
         status: 'failed'

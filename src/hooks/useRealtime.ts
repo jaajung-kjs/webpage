@@ -9,19 +9,24 @@
 
 import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase/client'
-import { REALTIME_LISTEN_TYPES, REALTIME_POSTGRES_CHANGES_LISTEN_EVENT } from '@supabase/supabase-js'
-import type { RealtimeChannel, RealtimePostgresChangesPayload, RealtimePostgresChangesFilter } from '@supabase/supabase-js'
+import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { realtimeManager } from '@/lib/realtime/RealtimeManager'
+import { toast } from 'sonner'
+
+// 개발 환경 체크
+const isDev = process.env.NODE_ENV === 'development'
+const log = isDev ? console.log : () => {}
+const logError = console.error // 에러는 항상 출력
 
 // Types
 type PostgresChangePayload<T extends { [key: string]: any }> = RealtimePostgresChangesPayload<T>
 
-// Hook for real-time messages inbox
+// Hook for real-time messages inbox using RealtimeManager
 export function useRealtimeMessageInbox(userId: string) {
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const unsubscribeRef = useRef<(() => void) | null>(null)
   const fetchedRef = useRef(false)
 
   // Fetch initial inbox
@@ -37,8 +42,13 @@ export function useRealtimeMessageInbox(userId: string) {
         
         setMessages(data || [])
         fetchedRef.current = true
+        
+        // 초기 데이터 로드 후 구독 활성화를 위해 짧은 지연 추가
+        setTimeout(() => {
+          log('📬 Initial inbox data loaded, ensuring subscription activation')
+        }, 100)
       } catch (err) {
-        console.error('Error fetching inbox:', err)
+        logError('Error fetching inbox:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch inbox')
       } finally {
         setLoading(false)
@@ -48,58 +58,37 @@ export function useRealtimeMessageInbox(userId: string) {
     fetchInbox()
   }, [userId])
 
-  // Subscribe to real-time changes
+  // Subscribe to real-time changes using RealtimeManager
   useEffect(() => {
     if (!userId) return
 
-    // Subscribe to new messages where user is recipient
-    channelRef.current = supabase
-      .channel(`inbox:${userId}`)
-      .on(
-        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES as `${REALTIME_LISTEN_TYPES.POSTGRES_CHANGES}`,
-        {
-          event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.INSERT,
-          schema: 'public',
-          table: 'messages',
-          filter: `recipient_id=eq.${userId}`
-        } as RealtimePostgresChangesFilter<`${REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.INSERT}`>,
-        async () => {
-          // Refetch inbox to get updated data with sender info
-          try {
-            const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
+    log('📬 Setting up inbox subscription for user:', userId)
+    
+    // Subscribe to message changes where user is recipient
+    unsubscribeRef.current = realtimeManager.subscribe({
+      name: `inbox-messages-${userId}`,
+      table: 'messages',
+      filter: `recipient_id=eq.${userId}`,
+      event: '*', // Listen to both INSERT and UPDATE
+      callback: async (payload: PostgresChangePayload<any>) => {
+        log('📬 Inbox update:', payload.eventType)
+        
+        // Refetch inbox to get updated data with sender info
+        try {
+          const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
 
-            if (error) throw error
-            setMessages(data || [])
-          } catch (err) {
-            console.error('Error refetching inbox:', err)
-          }
+          if (error) throw error
+          setMessages(data || [])
+        } catch (err) {
+          logError('Error refetching inbox:', err)
         }
-      )
-      .on(
-        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES as `${REALTIME_LISTEN_TYPES.POSTGRES_CHANGES}`,
-        {
-          event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.UPDATE,
-          schema: 'public',
-          table: 'messages',
-          filter: `recipient_id=eq.${userId}`
-        } as RealtimePostgresChangesFilter<`${REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.UPDATE}`>,
-        async () => {
-          // Refetch inbox for read status updates
-          try {
-            const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
-
-            if (error) throw error
-            setMessages(data || [])
-          } catch (err) {
-            console.error('Error refetching inbox:', err)
-          }
-        }
-      )
-      .subscribe()
+      }
+    })
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
       }
     }
   }, [userId])
@@ -112,7 +101,8 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
   const [messages, setMessages] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const unsubscribeInsertRef = useRef<(() => void) | null>(null)
+  const unsubscribeUpdateRef = useRef<(() => void) | null>(null)
   const messagesRef = useRef<any[]>([])
   
   // Keep messagesRef in sync with messages state
@@ -170,7 +160,7 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
         if (error) throw error
         setMessages(data || [])
       } catch (err) {
-        console.error('Error fetching conversation:', err)
+        logError('Error fetching conversation:', err)
         setError(err instanceof Error ? err.message : 'Failed to fetch conversation')
       } finally {
         setLoading(false)
@@ -180,108 +170,106 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
     fetchMessages()
   }, [conversationId])
 
-  // Subscribe to new messages in conversation
+  // Subscribe to new messages in conversation using RealtimeManager
   useEffect(() => {
     if (!conversationId) return
 
-    console.log('📨 Setting up realtime subscription for conversation:', conversationId)
-    channelRef.current = supabase
-      .channel(`conversation:${conversationId}`)
-      .on(
-        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES as `${REALTIME_LISTEN_TYPES.POSTGRES_CHANGES}`,
-        {
-          event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.INSERT,
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`
-        } as RealtimePostgresChangesFilter<`${REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.INSERT}`>,
-        async (payload: PostgresChangePayload<any>) => {
-          console.log('📨 New message received:', payload.new)
-          if (payload.new) {
-            // 이미 로컬에 있는 메시지인지 확인 (serverMessageId로 체크)
-            const existingMessage = messagesRef.current.find(msg => 
-              msg.serverMessageId === payload.new.id || 
-              (msg.id.startsWith('temp-') && 
-               msg.content === payload.new.content &&
-               msg.sender_id === payload.new.sender_id)
-            )
+    log('📨 Setting up realtime subscription for conversation:', conversationId)
+    
+    // Subscribe to INSERT events
+    unsubscribeInsertRef.current = realtimeManager.subscribe({
+      name: `conversation-insert-${conversationId}`,
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`,
+      event: 'INSERT',
+      callback: async (payload: PostgresChangePayload<any>) => {
+        log('📨 New message received:', payload.new)
+        if (payload.new) {
+          // 이미 로컬에 있는 메시지인지 확인 (serverMessageId로 체크)
+          const existingMessage = messagesRef.current.find(msg => 
+            msg.serverMessageId === payload.new.id || 
+            (msg.id.startsWith('temp-') && 
+             msg.content === payload.new.content &&
+             msg.sender_id === payload.new.sender_id)
+          )
 
-            if (existingMessage) {
-              // 이미 로컬에 있는 메시지는 무시
-              console.log('📨 Ignoring duplicate message (already in local state)')
-              return
-            }
+          if (existingMessage) {
+            // 이미 로컬에 있는 메시지는 무시
+            log('📨 Ignoring duplicate message (already in local state)')
+            return
+          }
 
-            // 메시지 추가 및 알림 처리
-            let messageWithSender = payload.new
+          // 메시지 추가 및 알림 처리
+          let messageWithSender = payload.new
+          
+          // sender 정보가 payload에 없으면 조회
+          if (!payload.new.sender) {
+            const { data: senderData } = await supabase
+              .from('users')
+              .select('id, name, avatar_url')
+              .eq('id', payload.new.sender_id)
+              .single()
             
-            // sender 정보가 payload에 없으면 조회
-            if (!payload.new.sender) {
-              const { data: senderData } = await supabase
-                .from('users')
-                .select('id, name, avatar_url')
-                .eq('id', payload.new.sender_id)
-                .single()
-              
-              if (senderData) {
-                messageWithSender = { ...payload.new, sender: senderData }
-              }
-            }
-
-            // 다른 사람이 보낸 메시지만 추가 (자신의 메시지는 낙관적 업데이트로 이미 처리)
-            if (payload.new.sender_id !== currentUserId) {
-              setMessages(prev => {
-                console.log('📨 Adding new message from other user')
-                return [...prev, messageWithSender]
-              })
+            if (senderData) {
+              messageWithSender = { ...payload.new, sender: senderData }
             }
           }
-        }
-      )
-      .on(
-        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES as `${REALTIME_LISTEN_TYPES.POSTGRES_CHANGES}`,
-        {
-          event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.UPDATE,
-          schema: 'public',
-          table: 'messages',
-          filter: `conversation_id=eq.${conversationId}`
-        } as RealtimePostgresChangesFilter<`${REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.UPDATE}`>,
-        (payload: PostgresChangePayload<any>) => {
-          console.log('📨 Message updated:', payload.new)
-          if (payload.new) {
+
+          // 다른 사람이 보낸 메시지만 추가 (자신의 메시지는 낙관적 업데이트로 이미 처리)
+          if (payload.new.sender_id !== currentUserId) {
             setMessages(prev => {
-              const updated = prev.map(msg => {
-                // 임시 ID를 가진 메시지도 serverMessageId로 매칭
-                if (msg.id === payload.new.id || msg.serverMessageId === payload.new.id) {
-                  console.log('📨 Updating message read status:', {
-                    messageId: msg.id,
-                    serverMessageId: msg.serverMessageId,
-                    oldReadStatus: msg.is_read,
-                    newReadStatus: payload.new.is_read,
-                    readAt: payload.new.read_at
-                  })
-                  // 읽음 상태와 시간만 업데이트
-                  return { 
-                    ...msg, 
-                    is_read: payload.new.is_read,
-                    read_at: payload.new.read_at
-                  }
-                }
-                return msg
-              })
-              return updated
+              log('📨 Adding new message from other user')
+              return [...prev, messageWithSender]
             })
           }
         }
-      )
-      .subscribe((status) => {
-        console.log('📨 Subscription status:', status)
-      })
+      }
+    })
+    
+    // Subscribe to UPDATE events
+    unsubscribeUpdateRef.current = realtimeManager.subscribe({
+      name: `conversation-update-${conversationId}`,
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`,
+      event: 'UPDATE',
+      callback: (payload: PostgresChangePayload<any>) => {
+        log('📨 Message updated:', payload.new)
+        if (payload.new) {
+          setMessages(prev => {
+            const updated = prev.map(msg => {
+              // 임시 ID를 가진 메시지도 serverMessageId로 매칭
+              if (msg.id === payload.new.id || msg.serverMessageId === payload.new.id) {
+                log('📨 Updating message read status:', {
+                  messageId: msg.id,
+                  serverMessageId: msg.serverMessageId,
+                  oldReadStatus: msg.is_read,
+                  newReadStatus: payload.new.is_read,
+                  readAt: payload.new.read_at
+                })
+                // 읽음 상태와 시간만 업데이트
+                return { 
+                  ...msg, 
+                  is_read: payload.new.is_read,
+                  read_at: payload.new.read_at
+                }
+              }
+              return msg
+            })
+            return updated
+          })
+        }
+      }
+    })
 
     return () => {
-      console.log('📨 Cleaning up subscription for conversation:', conversationId)
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+      log('📨 Cleaning up subscription for conversation:', conversationId)
+      if (unsubscribeInsertRef.current) {
+        unsubscribeInsertRef.current()
+        unsubscribeInsertRef.current = null
+      }
+      if (unsubscribeUpdateRef.current) {
+        unsubscribeUpdateRef.current()
+        unsubscribeUpdateRef.current = null
       }
     }
   }, [conversationId, currentUserId])
@@ -294,6 +282,8 @@ export function useRealtimeUnreadCount(userId: string) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+  const previousCountRef = useRef(0)
+  const isInitialLoadRef = useRef(true)
 
   // Fetch initial unread count
   useEffect(() => {
@@ -317,12 +307,18 @@ export function useRealtimeUnreadCount(userId: string) {
           }
         } else {
           setUnreadCount(data.unread_count)
+          previousCountRef.current = data.unread_count // 초기값 설정
         }
       } catch (err) {
-        console.error('Error fetching unread count:', err)
+        logError('Error fetching unread count:', err)
         setUnreadCount(0)
+        previousCountRef.current = 0
       } finally {
         setLoading(false)
+        // 초기 로드가 완료되면 이후 모든 변경사항에 대해 toast 표시
+        setTimeout(() => {
+          isInitialLoadRef.current = false
+        }, 1000) // 1초 후 초기 로드 상태 해제
       }
     }
 
@@ -333,18 +329,58 @@ export function useRealtimeUnreadCount(userId: string) {
   useEffect(() => {
     if (!userId) return
 
-    console.log('📊 Setting up unread count subscription for user:', userId)
+    log('📊 Setting up unread count subscription for user:', userId)
     
     unsubscribeRef.current = realtimeManager.subscribe({
       name: `user-stats-${userId}`,
       table: 'user_message_stats',
       filter: `user_id=eq.${userId}`,
       event: '*',
-      callback: (payload: PostgresChangePayload<any>) => {
-        console.log('📊 Unread count update:', payload)
+      callback: async (payload: PostgresChangePayload<any>) => {
+        log('📊 Unread count update:', payload)
         if (payload.new && 'unread_count' in payload.new) {
-          setUnreadCount(payload.new.unread_count)
+          const newCount = payload.new.unread_count
+          const prevCount = previousCountRef.current
+          
+          // unread count가 증가했을 때만 toast 표시
+          if (newCount > prevCount && !isInitialLoadRef.current) { // 초기 로드 시에는 toast 표시 안 함
+            log('🎉 New message received! Count increased from', prevCount, 'to', newCount)
+            
+            // 메시지 정보 가져오기 (가능한 경우)
+            try {
+              const { data: latestMessage } = await supabase
+                .from('messages')
+                .select(`
+                  content,
+                  sender:users!messages_sender_id_fkey(name)
+                `)
+                .eq('recipient_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single()
+                
+              if (latestMessage && latestMessage.sender) {
+                toast.success(
+                  `${latestMessage.sender.name}님의 새 메시지: ${
+                    latestMessage.content.length > 50 
+                      ? latestMessage.content.substring(0, 50) + '...' 
+                      : latestMessage.content
+                  }`,
+                  { duration: 4000 }
+                )
+              } else {
+                toast.success('새 메시지가 도착했습니다!', { duration: 4000 })
+              }
+            } catch (error) {
+              logError('Failed to fetch message details:', error)
+              toast.success('새 메시지가 도착했습니다!', { duration: 4000 })
+            }
+          }
+          
+          previousCountRef.current = newCount
+          setUnreadCount(newCount)
         } else if (payload.eventType === 'DELETE') {
+          previousCountRef.current = 0
           setUnreadCount(0)
         }
       }

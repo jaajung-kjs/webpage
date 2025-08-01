@@ -7,6 +7,7 @@
 
 import { HybridCache, createCacheKey } from './cache'
 import { supabase } from '@/lib/supabase/client'
+import { realtimeManager } from '@/lib/realtime/RealtimeManager'
 
 // 캐시 구성 타입
 export interface CacheConfig {
@@ -124,7 +125,7 @@ export class CacheManager {
       Array.from(this.activeSubscriptions.keys()).forEach(key => {
         if (key.includes(pattern)) {
           const subscription = this.activeSubscriptions.get(key)
-          if (subscription) {
+          if (subscription && subscription.unsubscribe) {
             subscription.unsubscribe()
             this.activeSubscriptions.delete(key)
           }
@@ -134,7 +135,11 @@ export class CacheManager {
       HybridCache.invalidate()
       
       // 모든 실시간 구독 정리
-      this.activeSubscriptions.forEach(subscription => subscription.unsubscribe())
+      this.activeSubscriptions.forEach(subscription => {
+        if (subscription && subscription.unsubscribe) {
+          subscription.unsubscribe()
+        }
+      })
       this.activeSubscriptions.clear()
     }
     
@@ -211,77 +216,69 @@ export class CacheManager {
    * 콘텐츠 실시간 구독
    */
   private static subscribeToContent(key: string, type: string): void {
-    const subscription = supabase
-      .channel(`cache_${key}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'content'
-      }, () => {
+    const unsubscribe = realtimeManager.subscribe({
+      name: `cache_${key}`,
+      table: 'content',
+      event: '*',
+      callback: () => {
         // 캐시 무효화
         this.invalidate(key)
-      })
-      .subscribe()
+      }
+    })
     
-    this.activeSubscriptions.set(key, subscription)
+    this.activeSubscriptions.set(key, { unsubscribe })
   }
   
   /**
    * 메시지 실시간 구독
    */
   private static subscribeToMessages(key: string, type: string): void {
-    const subscription = supabase
-      .channel(`cache_${key}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'messages'
-      }, () => {
+    const unsubscribe = realtimeManager.subscribe({
+      name: `cache_${key}`,
+      table: 'messages',
+      event: '*',
+      callback: () => {
         // 메시지 관련 캐시 무효화
         this.invalidate('message:')
-      })
-      .subscribe()
+      }
+    })
     
-    this.activeSubscriptions.set(key, subscription)
+    this.activeSubscriptions.set(key, { unsubscribe })
   }
   
   /**
    * 댓글 실시간 구독
    */
   private static subscribeToComments(key: string, type: string): void {
-    const subscription = supabase
-      .channel(`cache_${key}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'comments'
-      }, () => {
+    const unsubscribe = realtimeManager.subscribe({
+      name: `cache_${key}`,
+      table: 'comments',
+      event: '*',
+      callback: () => {
         // 댓글 캐시 무효화
         this.invalidate(key)
-      })
-      .subscribe()
+      }
+    })
     
-    this.activeSubscriptions.set(key, subscription)
+    this.activeSubscriptions.set(key, { unsubscribe })
   }
   
   /**
    * 프로필 실시간 구독
    */
   private static subscribeToProfile(key: string, type: string): void {
-    const subscription = supabase
-      .channel(`cache_${key}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'users'
-      }, () => {
+    const unsubscribe = realtimeManager.subscribe({
+      name: `cache_${key}`,
+      table: 'users',
+      event: '*',
+      callback: () => {
         // 사용자 관련 캐시 무효화
         this.invalidate('user:')
         this.invalidate('auth:')
-      })
-      .subscribe()
+      }
+    })
     
-    this.activeSubscriptions.set(key, subscription)
+    this.activeSubscriptions.set(key, { unsubscribe })
   }
   
   /**

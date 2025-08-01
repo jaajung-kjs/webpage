@@ -9,7 +9,11 @@ import { supabase, handleSupabaseError, Tables, TablesInsert } from '@/lib/supab
 import { createCacheKey } from '@/lib/utils/cache'
 import { CacheManager } from '@/lib/utils/cache-manager'
 import { measurePerformance } from '@/lib/utils/performance-monitor'
-import { toast } from 'sonner'
+
+// 개발 환경 체크
+const isDev = process.env.NODE_ENV === 'development'
+const log = isDev ? console.log : () => {}
+const logError = console.error // 에러는 항상 출력
 
 // Types from database
 type Message = Tables<'messages'>
@@ -96,7 +100,7 @@ export class MessagesAPI {
       stopMeasure()
       return { success: true, data: inbox }
     } catch (error) {
-      console.error('Error fetching inbox:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error fetching inbox:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -142,7 +146,7 @@ export class MessagesAPI {
       stopMeasure()
       return { success: true, data: messages }
     } catch (error) {
-      console.error('Error fetching conversation:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error fetching conversation:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -240,11 +244,10 @@ export class MessagesAPI {
       
       return { success: true, data: actualMessage }
     } catch (error) {
-      console.error('Error sending message:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error sending message:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       
       const errorMessage = handleSupabaseError(error)
-      toast.error(errorMessage)
       
       return { 
         success: false, 
@@ -280,7 +283,7 @@ export class MessagesAPI {
       stopMeasure()
       return { success: true }
     } catch (error) {
-      console.error('Error marking messages as read:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error marking messages as read:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -328,7 +331,7 @@ export class MessagesAPI {
       stopMeasure()
       return { success: true, data: count }
     } catch (error) {
-      console.error('Error fetching unread count:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error fetching unread count:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -392,7 +395,7 @@ export class MessagesAPI {
       stopMeasure()
       return { success: true, data: cachedConversationId }
     } catch (error) {
-      console.error('Error finding/creating conversation:', error instanceof Error ? error.message : JSON.stringify(error))
+      logError('Error finding/creating conversation:', error instanceof Error ? error.message : JSON.stringify(error))
       stopMeasure()
       return { 
         success: false, 
@@ -422,23 +425,6 @@ export class MessagesAPI {
  * 메시지 알림 관리
  */
 export class MessageNotifications {
-  private static notificationQueue: Array<{
-    senderName: string
-    messageContent: string
-    timestamp: number
-    onClick?: () => void
-  }> = []
-  
-  private static isProcessingQueue = false
-  private static lastNotificationTime = 0
-  private static readonly NOTIFICATION_THROTTLE = 2000 // 2초
-  
-  private static isNotificationPermissionGranted(): boolean {
-    return typeof window !== 'undefined' && 
-           'Notification' in window && 
-           Notification.permission === 'granted'
-  }
-
   /**
    * 알림 권한 요청
    */
@@ -460,136 +446,51 @@ export class MessageNotifications {
   }
 
   /**
-   * 새 메시지 알림 표시 (스로틀링 적용)
+   * 브라우저 알림 표시 (선택적)
+   * React 컴포넌트에서 toast와 함께 사용할 수 있음
    */
-  static showNewMessageNotification(
-    senderName: string, 
-    messageContent: string,
-    onClick?: () => void
+  static showBrowserNotification(
+    title: string,
+    body: string,
+    options?: {
+      icon?: string
+      badge?: string
+      tag?: string
+      onClick?: () => void
+    }
   ): void {
-    const now = Date.now()
-    
-    // 알림을 큐에 추가
-    this.notificationQueue.push({
-      senderName,
-      messageContent,
-      timestamp: now,
-      onClick
-    })
-    
-    // 스로틀링 적용
-    if (now - this.lastNotificationTime < this.NOTIFICATION_THROTTLE) {
-      if (!this.isProcessingQueue) {
-        this.isProcessingQueue = true
-        setTimeout(() => {
-          this.processNotificationQueue()
-        }, this.NOTIFICATION_THROTTLE)
-      }
+    if (typeof window === 'undefined' || !('Notification' in window)) {
       return
     }
-    
-    this.processNotificationQueue()
-  }
-  
-  /**
-   * 알림 큐 처리
-   */
-  private static processNotificationQueue(): void {
-    if (this.notificationQueue.length === 0) {
-      this.isProcessingQueue = false
+
+    if (Notification.permission !== 'granted') {
       return
     }
-    
-    const now = Date.now()
-    this.lastNotificationTime = now
-    
-    // 가장 최근 알림만 처리 (같은 발신자의 경우 통합)
-    const groupedNotifications = this.groupNotificationsBySender()
-    
-    for (const [senderName, notifications] of Object.entries(groupedNotifications)) {
-      this.showActualNotification(senderName, notifications)
-    }
-    
-    // 큐 비우기
-    this.notificationQueue = []
-    this.isProcessingQueue = false
-  }
-  
-  /**
-   * 발신자별로 알림 그룹화
-   */
-  private static groupNotificationsBySender(): Record<string, typeof this.notificationQueue> {
-    const grouped: Record<string, typeof this.notificationQueue> = {}
-    
-    this.notificationQueue.forEach(notification => {
-      if (!grouped[notification.senderName]) {
-        grouped[notification.senderName] = []
-      }
-      grouped[notification.senderName].push(notification)
+
+    const notification = new Notification(title, {
+      body,
+      icon: options?.icon || '/favicon.ico',
+      badge: options?.badge || '/favicon.ico',
+      tag: options?.tag,
+      requireInteraction: false,
+      silent: false
     })
-    
-    return grouped
-  }
-  
-  /**
-   * 실제 알림 표시
-   */
-  private static showActualNotification(
-    senderName: string,
-    notifications: typeof this.notificationQueue
-  ): void {
-    const count = notifications.length
-    const latestNotification = notifications[notifications.length - 1]
-    
-    let title: string
-    let body: string
-    
-    if (count === 1) {
-      title = `${senderName}님의 새 메시지`
-      body = latestNotification.messageContent.length > 50 
-        ? latestNotification.messageContent.substring(0, 50) + '...' 
-        : latestNotification.messageContent
-    } else {
-      title = `${senderName}님의 새 메시지 ${count}개`
-      body = '새로운 메시지가 도착했습니다.'
-    }
-    
-    // 브라우저 알림
-    if (this.isNotificationPermissionGranted()) {
-      const notification = new Notification(title, {
-        body,
-        icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        tag: `message-${senderName}`,
-        requireInteraction: false,
-        silent: false
-      })
 
-      if (latestNotification.onClick) {
-        notification.onclick = () => {
-          latestNotification.onClick?.()
-          notification.close()
-        }
+    if (options?.onClick) {
+      notification.onclick = () => {
+        options.onClick?.()
+        notification.close()
       }
-
-      // 5초 후 자동 닫기
-      setTimeout(() => {
-        try {
-          notification.close()
-        } catch (e) {
-          // 이미 닫힌 알림인 경우 무시
-        }
-      }, 5000)
     }
 
-    // Toast 알림
-    toast.success(`${title}: ${body}`, {
-      duration: 3000,
-      action: latestNotification.onClick ? {
-        label: '확인',
-        onClick: latestNotification.onClick
-      } : undefined
-    })
+    // 5초 후 자동 닫기
+    setTimeout(() => {
+      try {
+        notification.close()
+      } catch (e) {
+        // 이미 닫힌 알림인 경우 무시
+      }
+    }, 5000)
   }
   
   /**

@@ -10,6 +10,12 @@
 import { supabase } from '@/lib/supabase/client'
 import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 
+// 개발 환경 체크
+const isDev = process.env.NODE_ENV === 'development'
+const log = isDev ? console.log : () => {}
+const logError = console.error // 에러는 항상 출력
+const logWarn = isDev ? console.warn : () => {} // 경고는 개발 환경에서만
+
 interface ChannelConfig {
   name: string
   table?: string
@@ -18,32 +24,67 @@ interface ChannelConfig {
   callback: (payload: any) => void
 }
 
+// 연결 상태 타입
+export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error'
+
 interface RealtimeState {
   isConnected: boolean
+  connectionState: ConnectionState
   connectionStartTime: number | null
-  lastHeartbeat: number | null
   activeChannels: Map<string, RealtimeChannel>
+  connectionAttempts: number
 }
 
 export class RealtimeManager {
   private static instance: RealtimeManager
   private state: RealtimeState = {
     isConnected: false,
+    connectionState: 'disconnected',
     connectionStartTime: null,
-    lastHeartbeat: null,
-    activeChannels: new Map()
+    activeChannels: new Map(),
+    connectionAttempts: 0
   }
   private heartbeatTimer: NodeJS.Timeout | null = null
   private reconnectTimer: NodeJS.Timeout | null = null
   private mainChannel: RealtimeChannel | null = null
   
+  // 추가: 구독 대기열 및 초기화 상태
+  private pendingSubscriptions: Map<string, ChannelConfig> = new Map()
+  private activeSubscriptions: Map<string, ChannelConfig> = new Map() // 재연결 시 복구용
+  private isInitializing = false
+  private initializationPromise: Promise<void> | null = null
+  
   // Heartbeat 설정
-  private readonly HEARTBEAT_INTERVAL = 30000 // 30초
+  private readonly HEARTBEAT_INTERVAL = 10000 // 10초로 단축
   private readonly RECONNECT_DELAY = 5000 // 5초
+  private readonly MAX_RECONNECT_ATTEMPTS = 5 // 최대 재연결 시도
+  private readonly RECONNECT_BACKOFF_MULTIPLIER = 1.5 // 지수 백오프
   
   private constructor() {
-    console.log('🔌 RealtimeManager: Initializing')
-    this.initialize()
+    log('🔌 RealtimeManager: Constructor called')
+    
+    // Auth 상태 변경 감지를 constructor에서 설정 (항상 동작하도록)
+    supabase.auth.onAuthStateChange((event, session) => {
+      log('🔌 RealtimeManager: Auth state changed:', event)
+      
+      if (event === 'SIGNED_OUT') {
+        this.cleanup()
+      } else if (event === 'SIGNED_IN' && session) {
+        // 로그인 시 초기화
+        this.initialize()
+      } else if (event === 'TOKEN_REFRESHED' && session) {
+        // 토큰 갱신 시 연결 상태 확인
+        if (!this.state.isConnected) {
+          this.initialize()
+        }
+      } else if (event === 'INITIAL_SESSION' && session) {
+        // 페이지 로드 시 세션이 있으면 초기화
+        this.initialize()
+      }
+    })
+    
+    // 초기 세션 체크 및 초기화
+    this.checkSessionAndInitialize()
   }
   
   static getInstance(): RealtimeManager {
@@ -54,15 +95,73 @@ export class RealtimeManager {
   }
   
   /**
+   * 초기 세션 체크 및 초기화
+   */
+  private async checkSessionAndInitialize() {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session) {
+        log('🔌 RealtimeManager: Initial session found, initializing')
+        await this.initialize()
+      } else {
+        log('🔌 RealtimeManager: No initial session, waiting for login')
+      }
+    } catch (error) {
+      logError('🔌 RealtimeManager: Error checking initial session:', error)
+    }
+  }
+  
+  
+  /**
    * 초기화 및 메인 채널 설정
    */
-  private async initialize() {
+  private async initialize(): Promise<void> {
+    // 이미 연결되어 있으면 스킵
+    if (this.state.isConnected) {
+      log('🔌 RealtimeManager: Already connected, skipping initialization')
+      return
+    }
+    
+    // 이미 초기화 중이면 기존 Promise 반환
+    if (this.isInitializing && this.initializationPromise) {
+      log('🔌 RealtimeManager: Already initializing, waiting...')
+      return this.initializationPromise
+    }
+    
+    // 초기화 시작
+    this.isInitializing = true
+    this.initializationPromise = this._doInitialize()
+    
     try {
+      await this.initializationPromise
+    } finally {
+      this.isInitializing = false
+      this.initializationPromise = null
+    }
+  }
+  
+  /**
+   * 실제 초기화 로직
+   */
+  private async _doInitialize(): Promise<void> {
+    try {
+      // 연결 시작 알림
+      this.state.connectionState = 'connecting'
+      
       // 세션 확인
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
-        console.log('🔌 RealtimeManager: No session, skipping initialization')
+        log('🔌 RealtimeManager: No session during initialization')
+        this.state.connectionState = 'disconnected'
         return
+      }
+      
+      log('🔌 RealtimeManager: Initializing with session:', session.user.id)
+      
+      // 기존 채널 정리
+      if (this.mainChannel) {
+        supabase.removeChannel(this.mainChannel)
+        this.mainChannel = null
       }
       
       // 메인 채널 생성 (heartbeat용)
@@ -75,31 +174,34 @@ export class RealtimeManager {
       })
       
       // 연결 상태 모니터링
-      this.mainChannel
-        .on('system', { event: '*' }, (payload) => {
-          console.log('🔌 RealtimeManager: System event', payload)
-        })
-        .subscribe((status) => {
-          console.log('🔌 RealtimeManager: Main channel status', status)
-          
-          if (status === 'SUBSCRIBED') {
-            this.onConnected()
-          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            this.onDisconnected()
-          }
-        })
-      
-      // Auth 상태 변경 감지
-      supabase.auth.onAuthStateChange((event, session) => {
-        if (event === 'SIGNED_OUT') {
-          this.cleanup()
-        } else if (event === 'SIGNED_IN' && session) {
-          this.initialize()
-        }
+      const subscribePromise = new Promise<void>((resolve) => {
+        this.mainChannel!
+          .on('system', { event: '*' }, (payload) => {
+            log('🔌 RealtimeManager: System event', payload)
+          })
+          .subscribe(async (status) => {
+            log('🔌 RealtimeManager: Main channel status:', status)
+            
+            if (status === 'SUBSCRIBED') {
+              await this.onConnected()
+              resolve()
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              this.state.connectionState = 'error'
+              this.onDisconnected()
+              resolve()
+            } else if (status === 'CLOSED') {
+              log('🔌 RealtimeManager: Channel closed')
+              this.onDisconnected()
+              resolve()
+            }
+          })
       })
       
+      // 구독 완료 대기
+      await subscribePromise
+      
     } catch (error) {
-      console.error('🔌 RealtimeManager: Initialization error', error)
+      logError('🔌 RealtimeManager: Initialization error:', error)
       this.scheduleReconnect()
     }
   }
@@ -107,10 +209,12 @@ export class RealtimeManager {
   /**
    * 연결 성공 시
    */
-  private onConnected() {
-    console.log('✅ RealtimeManager: Connected')
+  private async onConnected() {
+    log('✅ RealtimeManager: Connected')
     this.state.isConnected = true
     this.state.connectionStartTime = Date.now()
+    this.state.connectionAttempts = 0 // 성공 시 재연결 시도 횟수 초기화
+    this.state.connectionState = 'connected'
     
     // Heartbeat 시작
     this.startHeartbeat()
@@ -120,21 +224,136 @@ export class RealtimeManager {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+    
+    // 채널 활성화를 위한 초기 쿼리 실행
+    await this.activateChannels()
+    
+    // 대기 중인 구독 처리
+    this.processPendingSubscriptions()
+  }
+  
+  /**
+   * 채널 활성화를 위한 초기 쿼리 실행
+   */
+  private async activateChannels() {
+    try {
+      log('🚀 RealtimeManager: Activating channels with initial queries')
+      
+      // 현재 사용자 ID 가져오기
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user?.id) return
+      
+      // 채널 활성화를 위한 더미 쿼리들
+      const activationQueries = [
+        // 메시지 관련 쿼리
+        supabase
+          .from('messages')
+          .select('id')
+          .eq('recipient_id', session.user.id)
+          .limit(1),
+        
+        // 사용자 통계 쿼리
+        supabase
+          .from('user_message_stats')
+          .select('unread_count')
+          .eq('user_id', session.user.id)
+          .single()
+      ]
+      
+      // 병렬로 실행
+      await Promise.allSettled(activationQueries)
+      
+      log('✅ RealtimeManager: Channels activated with initial queries')
+    } catch (error) {
+      logError('⚠️ RealtimeManager: Error activating channels:', error)
+      // 에러가 나도 계속 진행
+    }
+  }
+  
+  /**
+   * 특정 테이블 채널 활성화
+   */
+  private async activateTableChannel(table: string, filter?: string) {
+    try {
+      log(`🔄 RealtimeManager: Activating table channel for ${table}`)
+      
+      // 테이블별 활성화 쿼리 - 타입 안전성을 위해 테이블별로 분기
+      switch (table) {
+        case 'messages':
+          let messagesQuery = supabase.from('messages').select('id').limit(1)
+          if (filter) {
+            const [column, , value] = filter.split(/[=.]/)
+            if (column === 'recipient_id' && value) {
+              messagesQuery = messagesQuery.eq('recipient_id', value)
+            } else if (column === 'conversation_id' && value) {
+              messagesQuery = messagesQuery.eq('conversation_id', value)
+            }
+          }
+          await messagesQuery
+          break
+          
+        case 'user_message_stats':
+          let statsQuery = supabase.from('user_message_stats').select('unread_count').limit(1)
+          if (filter) {
+            const [column, , value] = filter.split(/[=.]/)
+            if (column === 'user_id' && value) {
+              statsQuery = statsQuery.eq('user_id', value)
+            }
+          }
+          await statsQuery
+          break
+          
+        default:
+          logWarn(`⚠️ RealtimeManager: Unknown table ${table}, skipping activation`)
+          return
+      }
+      
+      log(`✅ RealtimeManager: Table channel ${table} activated`)
+    } catch (error) {
+      logError(`⚠️ RealtimeManager: Error activating table channel ${table}:`, error)
+      // 에러가 나도 계속 진행
+    }
+  }
+  
+  /**
+   * 대기 중인 구독 처리
+   */
+  private processPendingSubscriptions() {
+    if (this.pendingSubscriptions.size === 0) return
+    
+    log(`📡 RealtimeManager: Processing ${this.pendingSubscriptions.size} pending subscriptions`)
+    
+    // 대기 중인 구독을 복사하고 클리어
+    const pending = new Map(this.pendingSubscriptions)
+    this.pendingSubscriptions.clear()
+    
+    // 각 구독 처리
+    pending.forEach((config, channelKey) => {
+      log(`📡 RealtimeManager: Processing pending subscription: ${channelKey}`)
+      // subscribe를 다시 호출하지만, 이번엔 연결된 상태이므로 즉시 처리됨
+      this.subscribe(config)
+    })
   }
   
   /**
    * 연결 끊김 시
    */
   private onDisconnected() {
-    console.log('❌ RealtimeManager: Disconnected')
+    log('❌ RealtimeManager: Disconnected')
     this.state.isConnected = false
     this.state.connectionStartTime = null
+    this.state.connectionState = 'disconnected'
     
     // Heartbeat 중지
     this.stopHeartbeat()
     
-    // 재연결 예약
-    this.scheduleReconnect()
+    // 재연결 예약 (최대 시도 횟수 확인)
+    if (this.state.connectionAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+      this.scheduleReconnect()
+    } else {
+      logError('🚀 RealtimeManager: Max reconnection attempts reached')
+      this.state.connectionState = 'error'
+    }
   }
   
   /**
@@ -165,10 +384,9 @@ export class RealtimeManager {
         heartbeat_at: Date.now()
       })
       
-      this.state.lastHeartbeat = Date.now()
-      console.log('💓 RealtimeManager: Heartbeat sent')
+      log('💓 RealtimeManager: Heartbeat sent')
     } catch (error) {
-      console.error('💔 RealtimeManager: Heartbeat failed', error)
+      logError('💔 RealtimeManager: Heartbeat failed', error)
       this.onDisconnected()
     }
   }
@@ -184,27 +402,48 @@ export class RealtimeManager {
   }
   
   /**
-   * 재연결 예약
+   * 재연결 예약 (지수 백오프 적용)
    */
   private scheduleReconnect() {
     if (this.reconnectTimer) return
     
-    console.log(`🔄 RealtimeManager: Scheduling reconnect in ${this.RECONNECT_DELAY}ms`)
+    this.state.connectionAttempts++
+    const delay = Math.min(
+      this.RECONNECT_DELAY * Math.pow(this.RECONNECT_BACKOFF_MULTIPLIER, this.state.connectionAttempts - 1),
+      30000 // 최대 30초
+    )
+    
+    log(`🔄 RealtimeManager: Scheduling reconnect attempt ${this.state.connectionAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delay}ms`)
     
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       this.reconnect()
-    }, this.RECONNECT_DELAY)
+    }, delay)
   }
   
   /**
    * 재연결 시도
    */
   private async reconnect() {
-    console.log('🔄 RealtimeManager: Attempting reconnect')
+    log('🔄 RealtimeManager: Attempting reconnect')
+    
+    // 세션 체크
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      log('🔄 RealtimeManager: No session for reconnect, waiting for auth')
+      return
+    }
+    
+    // 기존 구독 정보 백업 (activeSubscriptions에서 가져오기)
+    const subscriptionsBackup = new Map(this.activeSubscriptions)
     
     // 모든 채널 정리
     this.cleanup()
+    
+    // 백업된 구독을 대기열에 추가
+    subscriptionsBackup.forEach((config, key) => {
+      this.pendingSubscriptions.set(key, config)
+    })
     
     // 다시 초기화
     await this.initialize()
@@ -216,38 +455,87 @@ export class RealtimeManager {
   subscribe(config: ChannelConfig): () => void {
     const channelKey = `${config.name}-${config.table || 'custom'}`
     
+    // 연결 상태 확인
+    if (!this.state.isConnected) {
+      logWarn(`⚠️ RealtimeManager: Not connected, queueing subscription for ${channelKey}`)
+      
+      // 대기열에 추가
+      this.pendingSubscriptions.set(channelKey, config)
+      
+      // 초기화 시도
+      this.initialize().catch(error => {
+        logError('🔌 RealtimeManager: Failed to initialize during subscribe:', error)
+      })
+      
+      // 구독 해제 함수 반환 (대기열에서 제거)
+      return () => {
+        this.pendingSubscriptions.delete(channelKey)
+        this.unsubscribe(channelKey)
+      }
+    }
+    
     // 이미 구독 중인 경우
     if (this.state.activeChannels.has(channelKey)) {
-      console.log(`📡 RealtimeManager: Already subscribed to ${channelKey}`)
+      log(`📡 RealtimeManager: Already subscribed to ${channelKey}`)
       return () => this.unsubscribe(channelKey)
     }
     
-    console.log(`📡 RealtimeManager: Subscribing to ${channelKey}`)
+    log(`📡 RealtimeManager: Subscribing to ${channelKey}`, {
+      table: config.table,
+      event: config.event,
+      filter: config.filter
+    })
     
     const channel = supabase.channel(channelKey)
     
     if (config.table) {
       // 테이블 변경 구독
+      const postgresConfig = {
+        event: config.event || '*',
+        schema: 'public',
+        table: config.table,
+        ...(config.filter && { filter: config.filter })
+      }
+      
+      log(`📡 RealtimeManager: Postgres changes config:`, postgresConfig)
+      
       channel.on(
         'postgres_changes' as any,
-        {
-          event: config.event || '*',
-          schema: 'public',
-          table: config.table,
-          ...(config.filter && { filter: config.filter })
-        },
-        config.callback
+        postgresConfig,
+        (payload) => {
+          log(`📡 RealtimeManager: Event received on ${channelKey}:`, payload)
+          // 직접 콜백 호출
+          try {
+            config.callback(payload)
+          } catch (error) {
+            logError(`📡 RealtimeManager: Error in callback for ${channelKey}:`, error)
+          }
+        }
       )
     } else {
       // 커스텀 이벤트 구독
       channel.on('broadcast' as any, { event: config.name }, config.callback)
     }
     
-    channel.subscribe((status) => {
-      console.log(`📡 RealtimeManager: Channel ${channelKey} status:`, status)
+    channel.subscribe(async (status) => {
+      log(`📡 RealtimeManager: Channel ${channelKey} subscription status:`, status)
+      
+      if (status === 'SUBSCRIBED') {
+        log(`✅ RealtimeManager: Successfully subscribed to ${channelKey}`)
+        
+        // 채널 활성화를 위한 초기 쿼리 실행
+        if (config.table) {
+          await this.activateTableChannel(config.table, config.filter)
+        }
+      } else if (status === 'CHANNEL_ERROR') {
+        logError(`❌ RealtimeManager: Error subscribing to ${channelKey}`)
+      }
     })
     
     this.state.activeChannels.set(channelKey, channel)
+    
+    // 구독 정보 저장 (재연결 시 복구용)
+    this.activeSubscriptions.set(channelKey, config)
     
     // 구독 해제 함수 반환
     return () => this.unsubscribe(channelKey)
@@ -259,9 +547,10 @@ export class RealtimeManager {
   private unsubscribe(channelKey: string) {
     const channel = this.state.activeChannels.get(channelKey)
     if (channel) {
-      console.log(`📡 RealtimeManager: Unsubscribing from ${channelKey}`)
+      log(`📡 RealtimeManager: Unsubscribing from ${channelKey}`)
       supabase.removeChannel(channel)
       this.state.activeChannels.delete(channelKey)
+      this.activeSubscriptions.delete(channelKey)
     }
   }
   
@@ -269,7 +558,7 @@ export class RealtimeManager {
    * 모든 정리
    */
   private cleanup() {
-    console.log('🧹 RealtimeManager: Cleaning up')
+    log('🧹 RealtimeManager: Cleaning up')
     
     // Heartbeat 중지
     this.stopHeartbeat()
@@ -282,7 +571,7 @@ export class RealtimeManager {
     
     // 모든 채널 정리
     this.state.activeChannels.forEach((channel, key) => {
-      console.log(`🧹 RealtimeManager: Removing channel ${key}`)
+      log(`🧹 RealtimeManager: Removing channel ${key}`)
       supabase.removeChannel(channel)
     })
     this.state.activeChannels.clear()
@@ -296,7 +585,8 @@ export class RealtimeManager {
     // 상태 초기화
     this.state.isConnected = false
     this.state.connectionStartTime = null
-    this.state.lastHeartbeat = null
+    this.state.connectionAttempts = 0
+    this.state.connectionState = 'disconnected'
   }
   
   /**
@@ -315,20 +605,20 @@ export class RealtimeManager {
   }
   
   /**
-   * 마지막 heartbeat 이후 시간 (ms)
-   */
-  getTimeSinceLastHeartbeat(): number {
-    if (!this.state.lastHeartbeat) return Infinity
-    return Date.now() - this.state.lastHeartbeat
-  }
-  
-  /**
    * 수동 재연결
    */
   forceReconnect() {
-    console.log('🔄 RealtimeManager: Force reconnect requested')
+    log('🔄 RealtimeManager: Force reconnect requested')
+    this.state.connectionAttempts = 0 // 수동 재연결 시 시도 횟수 초기화
     this.cleanup()
     this.initialize()
+  }
+  
+  /**
+   * 현재 연결 상태 반환
+   */
+  getConnectionState(): ConnectionState {
+    return this.state.connectionState
   }
 }
 

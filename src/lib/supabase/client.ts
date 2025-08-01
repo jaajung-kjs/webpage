@@ -38,8 +38,11 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
   realtime: {
     params: {
-      eventsPerSecond: 10
-    }
+      eventsPerSecond: 10,
+      heartbeat_interval: 10 // 30초에서 10초로 단축하여 연결 끊김을 빠르게 감지
+    },
+    timeout: 20000, // 20초 타임아웃
+    transport: typeof window !== 'undefined' ? window.WebSocket : undefined
   }
 })
 
