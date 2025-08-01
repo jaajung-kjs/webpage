@@ -11,6 +11,7 @@ import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeConversation } from '@/hooks/useRealtime'
 import { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
+import { setActiveConversation } from '@/hooks/useGlobalMessageNotifications'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -60,6 +61,17 @@ export function ConversationThread({
   const scrollTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const previousMessageCountRef = useRef(0)
 
+  // 대화창 열림 상태 관리
+  useEffect(() => {
+    console.log('💬 ConversationThread mounted, setting active conversation:', conversationId)
+    setActiveConversation(conversationId)
+    
+    return () => {
+      console.log('💬 ConversationThread unmounted, clearing active conversation')
+      setActiveConversation(null)
+    }
+  }, [conversationId])
+
   // 자동 스크롤 (디바운스 적용)
   useEffect(() => {
     // 메시지가 추가되었을 때만 스크롤 (초기 로드 또는 새 메시지)
@@ -90,7 +102,7 @@ export function ConversationThread({
   useEffect(() => {
     if (user && conversationId && messages.length > 0) {
       // 읽지 않은 메시지가 있는지 확인 후 읽음 처리
-      const hasUnreadMessages = messages.some(msg => 
+      const hasUnreadMessages = messages.some((msg: MessageWithSender) => 
         msg.recipient_id === user.id && !msg.is_read
       )
       
@@ -295,7 +307,7 @@ export function ConversationThread({
           ) : (
             <div className="space-y-4">
               <AnimatePresence initial={false}>
-                {messages.map((message, index) => {
+                {messages.map((message: MessageWithSender, index: number) => {
                   const isOwn = message.sender_id === user?.id
                   const showAvatar = index === 0 || messages[index - 1]?.sender_id !== message.sender_id
                   

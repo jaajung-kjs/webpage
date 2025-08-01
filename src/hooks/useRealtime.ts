@@ -11,6 +11,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { REALTIME_LISTEN_TYPES, REALTIME_POSTGRES_CHANGES_LISTEN_EVENT, REALTIME_PRESENCE_LISTEN_EVENTS } from '@supabase/supabase-js'
 import type { RealtimeChannel, RealtimePostgresChangesPayload, RealtimePostgresChangesFilter } from '@supabase/supabase-js'
+import { realtimeManager } from '@/lib/realtime/RealtimeManager'
 
 // Types
 type PostgresChangePayload<T extends { [key: string]: any }> = RealtimePostgresChangesPayload<T>
@@ -626,11 +627,11 @@ export function useRealtimeConversation(conversationId: string, currentUserId?: 
   return { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus }
 }
 
-// Hook for real-time unread message count
+// Hook for real-time unread message count using RealtimeManager
 export function useRealtimeUnreadCount(userId: string) {
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const channelRef = useRef<RealtimeChannel | null>(null)
+  const unsubscribeRef = useRef<(() => void) | null>(null)
 
   // Fetch initial unread count
   useEffect(() => {
@@ -666,33 +667,31 @@ export function useRealtimeUnreadCount(userId: string) {
     fetchUnreadCount()
   }, [userId])
 
-  // Subscribe to unread count changes
+  // Subscribe to unread count changes using RealtimeManager
   useEffect(() => {
     if (!userId) return
 
-    channelRef.current = supabase
-      .channel(`unread-count:${userId}`)
-      .on(
-        REALTIME_LISTEN_TYPES.POSTGRES_CHANGES as `${REALTIME_LISTEN_TYPES.POSTGRES_CHANGES}`,
-        {
-          event: REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.ALL,
-          schema: 'public',
-          table: 'user_message_stats',
-          filter: `user_id=eq.${userId}`
-        } as RealtimePostgresChangesFilter<`${REALTIME_POSTGRES_CHANGES_LISTEN_EVENT.ALL}`>,
-        (payload: PostgresChangePayload<any>) => {
-          if (payload.new && 'unread_count' in payload.new) {
-            setUnreadCount(payload.new.unread_count)
-          } else if (payload.eventType === 'DELETE') {
-            setUnreadCount(0)
-          }
+    console.log('📊 Setting up unread count subscription for user:', userId)
+    
+    unsubscribeRef.current = realtimeManager.subscribe({
+      name: `user-stats-${userId}`,
+      table: 'user_message_stats',
+      filter: `user_id=eq.${userId}`,
+      event: '*',
+      callback: (payload: PostgresChangePayload<any>) => {
+        console.log('📊 Unread count update:', payload)
+        if (payload.new && 'unread_count' in payload.new) {
+          setUnreadCount(payload.new.unread_count)
+        } else if (payload.eventType === 'DELETE') {
+          setUnreadCount(0)
         }
-      )
-      .subscribe()
+      }
+    })
 
     return () => {
-      if (channelRef.current) {
-        supabase.removeChannel(channelRef.current)
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current()
+        unsubscribeRef.current = null
       }
     }
   }, [userId])
