@@ -7,10 +7,10 @@
 
 'use client'
 
-import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react'
+import { useState, useRef, useEffect, memo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useRealtimeConversation } from '@/hooks/useRealtime'
-import { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
+import { MessagesAPI } from '@/lib/api/messages'
 import { setActiveConversation } from '@/hooks/useGlobalMessageNotifications'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'

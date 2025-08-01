@@ -23,7 +23,6 @@ export {
   MessageButtonWithModal 
 } from './MessageButton'
 
-export { MessagePerformanceMonitor } from './MessagePerformanceMonitor'
 
 // API and utilities
 export { MessagesAPI, MessageNotifications } from '@/lib/api/messages'

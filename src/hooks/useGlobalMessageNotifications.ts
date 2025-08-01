@@ -8,7 +8,7 @@
 
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase } from '@/lib/supabase/client'
 import { MessageNotifications } from '@/lib/api/messages'
