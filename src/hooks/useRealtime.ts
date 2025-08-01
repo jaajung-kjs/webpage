@@ -396,3 +396,218 @@ export function useRealtimeUnreadCount(userId: string) {
 
   return { unreadCount, loading }
 }
+
+// Hook for real-time conversation messages with pagination
+export function useRealtimeConversationPaginated(conversationId: string, currentUserId?: string | null) {
+  const [messages, setMessages] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [hasMore, setHasMore] = useState(true)
+  const unsubscribeInsertRef = useRef<(() => void) | null>(null)
+  const unsubscribeUpdateRef = useRef<(() => void) | null>(null)
+  const messagesRef = useRef<any[]>([])
+  
+  // Keep messagesRef in sync with messages state
+  useEffect(() => {
+    messagesRef.current = messages
+  }, [messages])
+
+  // 낙관적 메시지 추가 함수
+  const addOptimisticMessage = useCallback((message: any) => {
+    setMessages(prev => [...prev, message])
+  }, [])
+
+  // 낙관적 메시지 교체 함수
+  const replaceOptimisticMessage = useCallback((tempId: string, actualMessage: any | null) => {
+    setMessages(prev => {
+      if (actualMessage) {
+        // 실제 메시지로 교체
+        return prev.map(msg => msg.id === tempId ? actualMessage : msg)
+      } else {
+        // 실패 시 제거
+        return prev.filter(msg => msg.id !== tempId)
+      }
+    })
+  }, [])
+
+  // 메시지 상태만 업데이트하는 함수 (재렌더링 최소화)
+  const updateMessageStatus = useCallback((messageId: string, updates: Partial<any>) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId) {
+        // 객체 참조를 유지하면서 필요한 필드만 업데이트
+        return { ...msg, ...updates }
+      }
+      return msg
+    }))
+  }, [])
+
+  // Fetch initial conversation messages
+  useEffect(() => {
+    if (!conversationId) return
+
+    const fetchMessages = async () => {
+      try {
+        setLoading(true)
+        const MessagesAPI = (await import('@/lib/api/messages')).MessagesAPI
+        const result = await MessagesAPI.getConversationWithPagination(conversationId, {
+          limit: 50
+        })
+
+        if (result.success && result.data) {
+          setMessages(result.data.messages)
+          setHasMore(result.data.hasMore)
+        } else if (result.error) {
+          throw new Error(result.error)
+        }
+      } catch (err) {
+        logError('Error fetching conversation:', err)
+        setError(err instanceof Error ? err.message : 'Failed to fetch conversation')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchMessages()
+  }, [conversationId])
+
+  // Load more messages
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMore || messages.length === 0) return
+
+    try {
+      setLoadingMore(true)
+      const MessagesAPI = (await import('@/lib/api/messages')).MessagesAPI
+      const result = await MessagesAPI.getConversationWithPagination(conversationId, {
+        limit: 50,
+        before: messages[0].id // 첫 번째 메시지 이전 메시지 로드
+      })
+
+      if (result.success && result.data) {
+        setMessages(prev => [...result.data!.messages, ...prev])
+        setHasMore(result.data.hasMore)
+      }
+    } catch (err) {
+      logError('Error loading more messages:', err)
+      toast.error('이전 메시지를 불러오는데 실패했습니다.')
+    } finally {
+      setLoadingMore(false)
+    }
+  }, [conversationId, messages, loadingMore, hasMore])
+
+  // Subscribe to new messages in conversation using RealtimeManager
+  useEffect(() => {
+    if (!conversationId) return
+
+    log('📨 Setting up realtime subscription for conversation:', conversationId)
+    
+    // Subscribe to INSERT events
+    unsubscribeInsertRef.current = realtimeManager.subscribe({
+      name: `conversation-insert-${conversationId}`,
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`,
+      event: 'INSERT',
+      callback: async (payload: PostgresChangePayload<any>) => {
+        log('📨 New message received:', payload.new)
+        if (payload.new) {
+          // 이미 로컬에 있는 메시지인지 확인 (serverMessageId로 체크)
+          const existingMessage = messagesRef.current.find(msg => 
+            msg.serverMessageId === payload.new.id || 
+            (msg.id.startsWith('temp-') && 
+             msg.content === payload.new.content &&
+             msg.sender_id === payload.new.sender_id)
+          )
+
+          if (existingMessage) {
+            // 이미 로컬에 있는 메시지는 무시
+            log('📨 Ignoring duplicate message (already in local state)')
+            return
+          }
+
+          // 메시지 추가 및 알림 처리
+          let messageWithSender = payload.new
+          
+          // sender 정보가 payload에 없으면 조회
+          if (!payload.new.sender) {
+            const { data: senderData } = await supabase
+              .from('users')
+              .select('id, name, avatar_url')
+              .eq('id', payload.new.sender_id)
+              .single()
+            
+            if (senderData) {
+              messageWithSender = { ...payload.new, sender: senderData }
+            }
+          }
+
+          // 다른 사람이 보낸 메시지만 추가 (자신의 메시지는 낙관적 업데이트로 이미 처리)
+          if (payload.new.sender_id !== currentUserId) {
+            setMessages(prev => {
+              log('📨 Adding new message from other user')
+              return [...prev, messageWithSender]
+            })
+          }
+        }
+      }
+    })
+    
+    // Subscribe to UPDATE events
+    unsubscribeUpdateRef.current = realtimeManager.subscribe({
+      name: `conversation-update-${conversationId}`,
+      table: 'messages',
+      filter: `conversation_id=eq.${conversationId}`,
+      event: 'UPDATE',
+      callback: (payload: PostgresChangePayload<any>) => {
+        log('📨 Message updated:', payload.new)
+        if (payload.new) {
+          setMessages(prev => {
+            const updated = prev.map(msg => {
+              // 임시 ID를 가진 메시지도 serverMessageId로 매칭
+              if (msg.id === payload.new.id || msg.serverMessageId === payload.new.id) {
+                log('📨 Updating message read status:', {
+                  messageId: msg.id,
+                  serverMessageId: msg.serverMessageId,
+                  oldReadStatus: msg.is_read,
+                  newReadStatus: payload.new.is_read,
+                  readAt: payload.new.read_at
+                })
+                // 읽음 상태와 시간만 업데이트
+                return { 
+                  ...msg, 
+                  is_read: payload.new.is_read,
+                  read_at: payload.new.read_at
+                }
+              }
+              return msg
+            })
+            return updated
+          })
+        }
+      }
+    })
+
+    return () => {
+      log('📨 Cleaning up subscription for conversation:', conversationId)
+      if (unsubscribeInsertRef.current) {
+        unsubscribeInsertRef.current()
+        unsubscribeInsertRef.current = null
+      }
+      if (unsubscribeUpdateRef.current) {
+        unsubscribeUpdateRef.current()
+        unsubscribeUpdateRef.current = null
+      }
+    }
+  }, [conversationId, currentUserId])
+
+  return { 
+    messages, 
+    loading, 
+    loadingMore,
+    error, 
+    hasMore,
+    loadMoreMessages,
+    addOptimisticMessage, 
+    replaceOptimisticMessage, 
+    updateMessageStatus 
+  }
+}

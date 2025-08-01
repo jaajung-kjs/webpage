@@ -156,6 +156,68 @@ export class MessagesAPI {
   }
 
   /**
+   * 대화방 메시지 페이지네이션 조회
+   */
+  static async getConversationWithPagination(
+    conversationId: string,
+    options?: {
+      limit?: number
+      before?: string // 특정 메시지 ID 이전 메시지 조회
+    }
+  ): Promise<ApiResult<{ messages: MessageWithSender[], hasMore: boolean }>> {
+    const stopMeasure = measurePerformance('messages.getConversationPaginated')
+    
+    try {
+      const limit = options?.limit || 50
+      
+      let query = supabase
+        .from('messages')
+        .select(`
+          *,
+          sender:users!messages_sender_id_fkey (
+            id, name, avatar_url
+          )
+        `)
+        .eq('conversation_id', conversationId)
+        .order('created_at', { ascending: false })
+        .limit(limit + 1) // hasMore 확인을 위해 +1
+      
+      // 특정 메시지 이전 메시지만 조회
+      if (options?.before) {
+        const { data: beforeMessage } = await supabase
+          .from('messages')
+          .select('created_at')
+          .eq('id', options.before)
+          .single()
+        
+        if (beforeMessage) {
+          query = query.lt('created_at', beforeMessage.created_at)
+        }
+      }
+      
+      const { data, error } = await query
+      
+      if (error) throw error
+      
+      const messages = (data || []).slice(0, limit).reverse() // 시간순 정렬
+      const hasMore = (data || []).length > limit
+      
+      stopMeasure()
+      return { 
+        success: true, 
+        data: { messages, hasMore }
+      }
+    } catch (error) {
+      logError('Error fetching paginated conversation:', error instanceof Error ? error.message : JSON.stringify(error))
+      stopMeasure()
+      return { 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Failed to fetch conversation' 
+      }
+    }
+  }
+
+  /**
    * 메시지 전송 (낙관적 업데이트 적용)
    */
   static async sendMessage(

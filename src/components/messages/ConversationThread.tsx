@@ -9,7 +9,7 @@
 
 import { useState, useRef, useEffect, memo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useRealtimeConversation } from '@/hooks/useRealtime'
+import { useRealtimeConversationPaginated } from '@/hooks/useRealtime'
 import { MessagesAPI } from '@/lib/api/messages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -54,7 +54,17 @@ export function ConversationThread({
   className
 }: ConversationThreadProps) {
   const { user, profile } = useOptimizedAuth()
-  const { messages, loading, error, addOptimisticMessage, replaceOptimisticMessage, updateMessageStatus } = useRealtimeConversation(conversationId, user?.id)
+  const { 
+    messages, 
+    loading, 
+    loadingMore,
+    error, 
+    hasMore,
+    loadMoreMessages,
+    addOptimisticMessage, 
+    replaceOptimisticMessage, 
+    updateMessageStatus 
+  } = useRealtimeConversationPaginated(conversationId, user?.id)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [optimisticId, setOptimisticId] = useState<string | null>(null)
@@ -300,6 +310,31 @@ export function ConversationThread({
             <EmptyConversation recipientName={recipientName} />
           ) : (
             <div className="space-y-4">
+              {/* 이전 대화 보기 버튼 */}
+              {hasMore && (
+                <div className="flex justify-center pb-4">
+                  <Button
+                    onClick={loadMoreMessages}
+                    disabled={loadingMore}
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                  >
+                    {loadingMore ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        이전 대화 불러오는 중...
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="h-3 w-3" />
+                        이전 대화 보기
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+              
               <AnimatePresence initial={false}>
                 {messages.map((message: MessageWithSender, index: number) => {
                   const isOwn = message.sender_id === user?.id

@@ -169,7 +169,7 @@ export default function ProfilePage() {
         const [profileResult, statsResult, activityResult] = await Promise.allSettled([
           supabase.from('users').select('*').eq('id', user.id).single(),
           supabase.from('user_stats').select('*').eq('user_id', user.id).single(),
-          supabase.from('user_activity_logs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(10)
+          supabase.from('user_activity_logs').select('*').eq('user_id', user.id).order('created_at', { ascending: false }).limit(8)
         ])
         
         // Process profile data
@@ -716,7 +716,7 @@ export default function ProfilePage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
-                      {userData.recentActivity.map((activity, index) => (
+                      {userData.recentActivity.slice(0, 8).map((activity, index) => (
                         <div key={index} className="flex items-start space-x-3 border-b pb-4 last:border-b-0">
                           <div className="flex-shrink-0">
                             {activity.type === 'post' && (
