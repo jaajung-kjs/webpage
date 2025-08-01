@@ -742,7 +742,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 <CardContent>
                   {recentActivities.length > 0 ? (
                     <div className="space-y-4">
-                      {recentActivities.map((activity, index) => {
+                      {recentActivities.slice(0, 8).map((activity, index) => {
                         const config = getActivityConfig(activity.activity_type, activity.target_type)
                         const ActivityIcon = config.icon
                         const isReply = activity.metadata?.is_reply === true
