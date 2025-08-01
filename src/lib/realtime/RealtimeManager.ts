@@ -57,8 +57,10 @@ export class RealtimeManager {
   // Heartbeat 설정
   private readonly HEARTBEAT_INTERVAL = 10000 // 10초로 단축
   private readonly RECONNECT_DELAY = 5000 // 5초
-  private readonly MAX_RECONNECT_ATTEMPTS = 5 // 최대 재연결 시도
+  private readonly MAX_RECONNECT_ATTEMPTS = 10 // 최대 재연결 시도 증가
   private readonly RECONNECT_BACKOFF_MULTIPLIER = 1.5 // 지수 백오프
+  private readonly SESSION_TIMEOUT_CHECK_INTERVAL = 60000 // 1분마다 세션 체크
+  private sessionTimeoutTimer: NodeJS.Timeout | null = null
   
   private constructor() {
     log('🔌 RealtimeManager: Constructor called')
@@ -80,6 +82,10 @@ export class RealtimeManager {
       } else if (event === 'INITIAL_SESSION' && session) {
         // 페이지 로드 시 세션이 있으면 초기화
         this.initialize()
+      } else if (event === 'USER_UPDATED' && session) {
+        // 사용자 정보 업데이트 시 재연결
+        log('🔌 RealtimeManager: User updated, reconnecting')
+        this.forceReconnect()
       }
     })
     
@@ -147,12 +153,14 @@ export class RealtimeManager {
     try {
       // 연결 시작 알림
       this.state.connectionState = 'connecting'
+      this.notifyStateChange()
       
       // 세션 확인
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
         log('🔌 RealtimeManager: No session during initialization')
         this.state.connectionState = 'disconnected'
+        this.notifyStateChange()
         return
       }
       
@@ -187,6 +195,7 @@ export class RealtimeManager {
               resolve()
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
               this.state.connectionState = 'error'
+              this.notifyStateChange()
               this.onDisconnected()
               resolve()
             } else if (status === 'CLOSED') {
@@ -215,9 +224,13 @@ export class RealtimeManager {
     this.state.connectionStartTime = Date.now()
     this.state.connectionAttempts = 0 // 성공 시 재연결 시도 횟수 초기화
     this.state.connectionState = 'connected'
+    this.notifyStateChange()
     
     // Heartbeat 시작
     this.startHeartbeat()
+    
+    // 세션 타임아웃 체크 시작
+    this.startSessionTimeoutCheck()
     
     // 재연결 타이머 정리
     if (this.reconnectTimer) {
@@ -343,6 +356,7 @@ export class RealtimeManager {
     this.state.isConnected = false
     this.state.connectionStartTime = null
     this.state.connectionState = 'disconnected'
+    this.notifyStateChange()
     
     // Heartbeat 중지
     this.stopHeartbeat()
@@ -353,6 +367,7 @@ export class RealtimeManager {
     } else {
       logError('🚀 RealtimeManager: Max reconnection attempts reached')
       this.state.connectionState = 'error'
+      this.notifyStateChange()
     }
   }
   
@@ -398,6 +413,61 @@ export class RealtimeManager {
     if (this.heartbeatTimer) {
       clearInterval(this.heartbeatTimer)
       this.heartbeatTimer = null
+    }
+  }
+  
+  /**
+   * 세션 타임아웃 체크 시작
+   */
+  private startSessionTimeoutCheck() {
+    this.stopSessionTimeoutCheck()
+    
+    // 주기적으로 세션 상태 확인
+    this.sessionTimeoutTimer = setInterval(async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        
+        if (error || !session) {
+          logError('🔌 RealtimeManager: Session check failed:', error)
+          this.onDisconnected()
+          return
+        }
+        
+        // 토큰 만료 시간 체크 (만료 5분 전에 갱신)
+        const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null
+        if (expiresAt) {
+          const now = new Date()
+          const timeUntilExpiry = expiresAt.getTime() - now.getTime()
+          
+          if (timeUntilExpiry < 5 * 60 * 1000) { // 5분 미만 남음
+            log('🔌 RealtimeManager: Token expiring soon, refreshing...')
+            const { error: refreshError } = await supabase.auth.refreshSession()
+            if (refreshError) {
+              logError('🔌 RealtimeManager: Failed to refresh token:', refreshError)
+              this.onDisconnected()
+            }
+          }
+        }
+        
+        // 연결 상태가 끊어졌지만 세션은 유효한 경우 재연결 시도
+        if (!this.state.isConnected && session) {
+          log('🔌 RealtimeManager: Session valid but disconnected, attempting reconnect')
+          this.state.connectionAttempts = 0 // 재연결 시도 횟수 초기화
+          await this.initialize()
+        }
+      } catch (error) {
+        logError('🔌 RealtimeManager: Session timeout check error:', error)
+      }
+    }, this.SESSION_TIMEOUT_CHECK_INTERVAL)
+  }
+  
+  /**
+   * 세션 타임아웃 체크 중지
+   */
+  private stopSessionTimeoutCheck() {
+    if (this.sessionTimeoutTimer) {
+      clearInterval(this.sessionTimeoutTimer)
+      this.sessionTimeoutTimer = null
     }
   }
   
@@ -529,6 +599,15 @@ export class RealtimeManager {
         }
       } else if (status === 'CHANNEL_ERROR') {
         logError(`❌ RealtimeManager: Error subscribing to ${channelKey}`)
+        // 채널 에러 시 재연결 시도
+        if (this.state.connectionAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+          log(`🔄 RealtimeManager: Channel error, scheduling reconnect for ${channelKey}`)
+          setTimeout(() => {
+            if (!this.state.isConnected) {
+              this.scheduleReconnect()
+            }
+          }, 1000)
+        }
       }
     })
     
@@ -563,6 +642,9 @@ export class RealtimeManager {
     // Heartbeat 중지
     this.stopHeartbeat()
     
+    // 세션 타임아웃 체크 중지
+    this.stopSessionTimeoutCheck()
+    
     // 재연결 타이머 정리
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
@@ -587,6 +669,7 @@ export class RealtimeManager {
     this.state.connectionStartTime = null
     this.state.connectionAttempts = 0
     this.state.connectionState = 'disconnected'
+    this.notifyStateChange()
   }
   
   /**
@@ -619,6 +702,39 @@ export class RealtimeManager {
    */
   getConnectionState(): ConnectionState {
     return this.state.connectionState
+  }
+  
+  /**
+   * 연결 상태 구독 (외부에서 상태 변화 감지용)
+   */
+  onConnectionStateChange(callback: (state: ConnectionState) => void): () => void {
+    // 간단한 이벤트 리스너 패턴
+    const listeners = (this as any)._stateListeners || ((this as any)._stateListeners = new Set())
+    listeners.add(callback)
+    
+    // 즉시 현재 상태 전달
+    callback(this.state.connectionState)
+    
+    // 구독 해제 함수 반환
+    return () => {
+      listeners.delete(callback)
+    }
+  }
+  
+  /**
+   * 연결 상태 변경 시 리스너들에게 알림
+   */
+  private notifyStateChange() {
+    const listeners = (this as any)._stateListeners
+    if (listeners) {
+      listeners.forEach((callback: (state: ConnectionState) => void) => {
+        try {
+          callback(this.state.connectionState)
+        } catch (error) {
+          logError('Error in connection state listener:', error)
+        }
+      })
+    }
   }
 }
 

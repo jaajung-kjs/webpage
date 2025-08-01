@@ -28,6 +28,8 @@ export function useRealtimeMessageInbox(userId: string) {
   const [error, setError] = useState<string | null>(null)
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const fetchedRef = useRef(false)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const unsubscribeStateRef = useRef<(() => void) | null>(null)
 
   // Fetch initial inbox
   useEffect(() => {
@@ -85,10 +87,55 @@ export function useRealtimeMessageInbox(userId: string) {
       }
     })
 
+    // 연결 상태 모니터링 및 폴링 설정
+    unsubscribeStateRef.current = realtimeManager.onConnectionStateChange((state) => {
+      log('📬 Inbox connection state changed:', state)
+      
+      if (state === 'disconnected' || state === 'error') {
+        // 연결 끊김 시 폴링 시작 (30초 간격)
+        if (!pollingIntervalRef.current) {
+          log('📬 Starting polling for inbox due to disconnection')
+          
+          const pollInbox = async () => {
+            try {
+              const { data, error } = await supabase.rpc('get_message_inbox', { p_user_id: userId })
+              if (!error && data) {
+                setMessages(data)
+              }
+            } catch (err) {
+              logError('Error polling inbox:', err)
+            }
+          }
+          
+          // 즉시 한 번 실행 후 30초마다 반복
+          pollInbox()
+          pollingIntervalRef.current = setInterval(pollInbox, 30000)
+        }
+      } else if (state === 'connected') {
+        // 연결 복구 시 폴링 중지
+        if (pollingIntervalRef.current) {
+          log('📬 Stopping polling for inbox - connection restored')
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+          
+          // 연결 복구 시 최신 데이터 한 번 가져오기
+          fetchedRef.current = false
+        }
+      }
+    })
+
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
         unsubscribeRef.current = null
+      }
+      if (unsubscribeStateRef.current) {
+        unsubscribeStateRef.current()
+        unsubscribeStateRef.current = null
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
       }
     }
   }, [userId])
@@ -284,6 +331,8 @@ export function useRealtimeUnreadCount(userId: string) {
   const unsubscribeRef = useRef<(() => void) | null>(null)
   const previousCountRef = useRef(0)
   const isInitialLoadRef = useRef(true)
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const unsubscribeStateRef = useRef<(() => void) | null>(null)
 
   // Fetch initial unread count
   useEffect(() => {
@@ -385,11 +434,63 @@ export function useRealtimeUnreadCount(userId: string) {
         }
       }
     })
+    
+    // 연결 상태 모니터링 및 폴링 설정
+    unsubscribeStateRef.current = realtimeManager.onConnectionStateChange((state) => {
+      log('📊 Unread count connection state changed:', state)
+      
+      if (state === 'disconnected' || state === 'error') {
+        // 연결 끊김 시 폴링 시작 (30초 간격)
+        if (!pollingIntervalRef.current) {
+          log('📊 Starting polling for unread count due to disconnection')
+          
+          const pollUnreadCount = async () => {
+            try {
+              const { data, error } = await supabase
+                .from('user_message_stats')
+                .select('unread_count')
+                .eq('user_id', userId)
+                .single()
+              
+              if (!error && data) {
+                const newCount = data.unread_count
+                if (newCount !== previousCountRef.current) {
+                  previousCountRef.current = newCount
+                  setUnreadCount(newCount)
+                  log('📊 Polling updated unread count:', newCount)
+                }
+              }
+            } catch (err) {
+              logError('Error polling unread count:', err)
+            }
+          }
+          
+          // 즉시 한 번 실행 후 30초마다 반복
+          pollUnreadCount()
+          pollingIntervalRef.current = setInterval(pollUnreadCount, 30000)
+        }
+      } else if (state === 'connected') {
+        // 연결 복구 시 폴링 중지
+        if (pollingIntervalRef.current) {
+          log('📊 Stopping polling for unread count - connection restored')
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    })
 
     return () => {
       if (unsubscribeRef.current) {
         unsubscribeRef.current()
         unsubscribeRef.current = null
+      }
+      if (unsubscribeStateRef.current) {
+        unsubscribeStateRef.current()
+        unsubscribeStateRef.current = null
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
       }
     }
   }, [userId])
@@ -407,6 +508,8 @@ export function useRealtimeConversationPaginated(conversationId: string, current
   const unsubscribeInsertRef = useRef<(() => void) | null>(null)
   const unsubscribeUpdateRef = useRef<(() => void) | null>(null)
   const messagesRef = useRef<any[]>([])
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const unsubscribeStateRef = useRef<(() => void) | null>(null)
   
   // Keep messagesRef in sync with messages state
   useEffect(() => {
@@ -585,6 +688,51 @@ export function useRealtimeConversationPaginated(conversationId: string, current
         }
       }
     })
+    
+    // 연결 상태 모니터링 및 폴링 설정
+    unsubscribeStateRef.current = realtimeManager.onConnectionStateChange((state) => {
+      log('📨 Conversation connection state changed:', state)
+      
+      if (state === 'disconnected' || state === 'error') {
+        // 연결 끊김 시 폴링 시작 (30초 간격)
+        if (!pollingIntervalRef.current && conversationId) {
+          log('📨 Starting polling for conversation due to disconnection')
+          
+          const pollConversation = async () => {
+            try {
+              const MessagesAPI = (await import('@/lib/api/messages')).MessagesAPI
+              const result = await MessagesAPI.getConversationWithPagination(conversationId, {
+                limit: 50
+              })
+              
+              if (result.success && result.data) {
+                // 새 메시지만 추가 (중복 방지)
+                const currentIds = new Set(messagesRef.current.map(m => m.id))
+                const newMessages = result.data.messages.filter(m => !currentIds.has(m.id))
+                
+                if (newMessages.length > 0) {
+                  setMessages(prev => [...prev, ...newMessages])
+                  log(`📨 Polling found ${newMessages.length} new messages`)
+                }
+              }
+            } catch (err) {
+              logError('Error polling conversation:', err)
+            }
+          }
+          
+          // 즉시 한 번 실행 후 30초마다 반복
+          pollConversation()
+          pollingIntervalRef.current = setInterval(pollConversation, 30000)
+        }
+      } else if (state === 'connected') {
+        // 연결 복구 시 폴링 중지
+        if (pollingIntervalRef.current) {
+          log('📨 Stopping polling for conversation - connection restored')
+          clearInterval(pollingIntervalRef.current)
+          pollingIntervalRef.current = null
+        }
+      }
+    })
 
     return () => {
       log('📨 Cleaning up subscription for conversation:', conversationId)
@@ -595,6 +743,14 @@ export function useRealtimeConversationPaginated(conversationId: string, current
       if (unsubscribeUpdateRef.current) {
         unsubscribeUpdateRef.current()
         unsubscribeUpdateRef.current = null
+      }
+      if (unsubscribeStateRef.current) {
+        unsubscribeStateRef.current()
+        unsubscribeStateRef.current = null
+      }
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current)
+        pollingIntervalRef.current = null
       }
     }
   }, [conversationId, currentUserId])
