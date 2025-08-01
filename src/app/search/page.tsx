@@ -1,12 +1,15 @@
 'use client'
 
 import { Suspense } from 'react'
+import MainLayout from '@/components/layout/MainLayout'
 import SearchPage from '@/components/search/SearchPage'
 
 export default function Page() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <SearchPage />
-    </Suspense>
+    <MainLayout>
+      <Suspense fallback={<div>Loading...</div>}>
+        <SearchPage />
+      </Suspense>
+    </MainLayout>
   )
 }

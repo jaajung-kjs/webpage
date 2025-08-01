@@ -218,6 +218,10 @@ export default function SearchPage() {
   }, [activeTab, searchQuery, performSearch])
 
   const handleSearch = (query: string) => {
+    if (!query.trim()) {
+      toast.error('검색어를 입력해주세요')
+      return
+    }
     setSearchQuery(query)
     setShowSuggestions(false)
     updateURL(query)
@@ -417,8 +421,16 @@ export default function SearchPage() {
               onClick={() => handleSearch(searchQuery)}
               className="absolute right-2 top-1/2 -translate-y-1/2"
               size="sm"
+              disabled={loading}
             >
-              검색
+              {loading ? (
+                <>
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  검색 중...
+                </>
+              ) : (
+                '검색'
+              )}
             </Button>
           </div>
 

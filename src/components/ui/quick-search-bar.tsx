@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Search, TrendingUp } from 'lucide-react'
+import { Search, TrendingUp, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 
 export default function QuickSearchBar() {
   const router = useRouter()
@@ -14,6 +15,7 @@ export default function QuickSearchBar() {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [popularSearches, setPopularSearches] = useState<string[]>([])
+  const [isSearching, setIsSearching] = useState(false)
 
   // 인기 검색어 가져오기
   useEffect(() => {
@@ -51,9 +53,17 @@ export default function QuickSearchBar() {
     return () => clearTimeout(debounceTimer)
   }, [searchQuery])
 
-  const handleSearch = (query: string = searchQuery) => {
-    if (query.trim()) {
-      router.push(`/search?q=${encodeURIComponent(query.trim())}`)
+  const handleSearch = async (query: string = searchQuery) => {
+    if (!query.trim()) {
+      toast.error('검색어를 입력해주세요')
+      return
+    }
+    
+    setIsSearching(true)
+    try {
+      await router.push(`/search?q=${encodeURIComponent(query.trim())}`)
+    } finally {
+      setIsSearching(false)
     }
   }
 
@@ -91,10 +101,19 @@ export default function QuickSearchBar() {
         />
         <Button 
           onClick={() => handleSearch()}
-          className="absolute right-2 top-1/2 -translate-y-1/2 kepco-gradient"
+          className="absolute right-2 top-1/2 -translate-y-1/2 kepco-gradient z-10"
           size="sm"
+          type="button"
+          disabled={isSearching}
         >
-          검색
+          {isSearching ? (
+            <>
+              <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+              검색 중...
+            </>
+          ) : (
+            '검색'
+          )}
         </Button>
       </div>
 
