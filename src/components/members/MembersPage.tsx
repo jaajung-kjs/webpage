@@ -53,7 +53,6 @@ import { MessageButton } from '@/components/messages'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
-import ContentFilters from '@/components/shared/ContentFilters'
 import StatsCard from '@/components/shared/StatsCard'
 
 interface MemberWithStats {
@@ -442,26 +441,27 @@ function MembersPage() {
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const advancedFilters = (
-    <ContentFilters
-      filterGroups={[
-        {
-          id: 'skill',
-          label: '스킬 레벨',
-          type: 'radio',
-          options: Object.entries(skillLevels).map(([value, label]) => ({
-            value,
-            label,
-            count: value === 'all' 
-              ? members.length
-              : members.filter(m => m.skill_level === value).length
-          })),
-          value: activeSkill,
-          onChange: handleSkillChange
-        }
-      ]}
-      onReset={() => setActiveSkill('all')}
-      activeFiltersCount={activeSkill !== 'all' ? 1 : 0}
-    />
+    <div className="p-4 border rounded-lg">
+      <h3 className="font-semibold mb-2">스킬 레벨</h3>
+      <div className="space-y-2">
+        {Object.entries(skillLevels).map(([value, label]) => (
+          <Button
+            key={value}
+            variant={activeSkill === value ? "default" : "ghost"}
+            size="sm"
+            onClick={() => handleSkillChange(value)}
+            className="w-full justify-start"
+          >
+            <span>{label}</span>
+            <span className="ml-auto text-xs text-muted-foreground">
+              {value === 'all' 
+                ? members.length
+                : members.filter(m => m.skill_level === value).length}
+            </span>
+          </Button>
+        ))}
+      </div>
+    </div>
   )
 
   return (

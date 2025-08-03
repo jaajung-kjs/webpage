@@ -265,14 +265,14 @@ export default function ContentListLayout({
 
         {/* Categories Tabs */}
         {categories && activeCategory && onCategoryChange && (
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
+          <div className="-mx-4 px-4 sm:mx-0 sm:px-0">
             <Tabs value={activeCategory} onValueChange={onCategoryChange}>
-              <TabsList className="inline-flex h-auto items-center justify-start rounded-md bg-muted p-1 text-muted-foreground w-max">
+              <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
                 {categories.map((category) => (
                   <TabsTrigger
                     key={category.value}
                     value={category.value}
-                    className="whitespace-nowrap px-3 py-1.5 text-sm font-medium touch-manipulation min-h-[32px] flex items-center"
+                    className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
                   >
                     {category.label}
                   </TabsTrigger>
