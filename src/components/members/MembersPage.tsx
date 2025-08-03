@@ -4,9 +4,7 @@ import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -26,7 +24,6 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { 
-  Search, 
   Mail, 
   Phone, 
   MapPin,
@@ -44,7 +41,8 @@ import {
   Crown,
   Shield,
   UserCheck,
-  User
+  User,
+  Activity
 } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
@@ -52,6 +50,11 @@ import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 import { MessageButton } from '@/components/messages'
+
+// Shared components
+import ContentListLayout from '@/components/shared/ContentListLayout'
+import ContentFilters from '@/components/shared/ContentFilters'
+import StatsCard from '@/components/shared/StatsCard'
 
 interface MemberWithStats {
   id: string
@@ -388,125 +391,102 @@ function MembersPage() {
     }
   }
 
+  // Categories for tabs
+  const categories = Object.entries(roleLabels).map(([value, label]) => ({ value, label }))
+
+  // Calculate new members this month
+  const newMembersThisMonth = members.filter(m => {
+    const joinDate = new Date(m.join_date)
+    const now = new Date()
+    return joinDate.getMonth() === now.getMonth() && joinDate.getFullYear() === now.getFullYear()
+  }).length
+
+  // Calculate active members percentage
+  const activeMembers = members.filter(m => (m.activity_score || 0) > 200).length
+  const activePercentage = members.length > 0 ? Math.round((activeMembers / members.length) * 100) : 0
+
+  // Stats Section
+  const statsSection = (
+    <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <StatsCard
+        title="총 회원"
+        value={members.length}
+        icon={Users}
+        subtitle={`이번 달 +${newMembersThisMonth}`}
+        loading={loading}
+      />
+      <StatsCard
+        title="활동 회원"
+        value={activeMembers}
+        icon={Activity}
+        subtitle={`전체의 ${activePercentage}%`}
+        loading={loading}
+      />
+      <StatsCard
+        title="신규 회원"
+        value={members.filter(m => new Date(m.join_date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000).length}
+        icon={UserPlus}
+        subtitle="최근 7일"
+        loading={loading}
+      />
+      <StatsCard
+        title="운영진"
+        value={members.filter(m => ['leader', 'vice-leader', 'admin'].includes(m.role)).length}
+        icon={Shield}
+        subtitle="리더 및 관리자"
+        loading={loading}
+      />
+    </div>
+  )
+
+  // Advanced filters
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const advancedFilters = (
+    <ContentFilters
+      filterGroups={[
+        {
+          id: 'skill',
+          label: '스킬 레벨',
+          type: 'radio',
+          options: Object.entries(skillLevels).map(([value, label]) => ({
+            value,
+            label,
+            count: value === 'all' 
+              ? members.length
+              : members.filter(m => m.skill_level === value).length
+          })),
+          value: activeSkill,
+          onChange: handleSkillChange
+        }
+      ]}
+      onReset={() => setActiveSkill('all')}
+      activeFiltersCount={activeSkill !== 'all' ? 1 : 0}
+    />
+  )
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="text-center"
-        >
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
-            회원목록
-          </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            AI 학습동아리 회원들을 만나보세요
-          </p>
-        </motion.div>
-      </div>
-
-      {/* Quick Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="mb-8"
+    <>
+      <ContentListLayout
+        title="회원목록"
+        description="AI 학습동아리 회원들을 만나보세요"
+        searchPlaceholder="이름, 부서, 직급, AI 도구로 검색..."
+        searchValue={searchTerm}
+        onSearchChange={handleSearch}
+        showCreateButton={false}
+        categories={categories}
+        activeCategory={activeRole}
+        onCategoryChange={handleRoleChange}
+        showViewToggle={false}
+        showAdvancedFilters={showAdvancedFilters}
+        onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
+        advancedFilters={advancedFilters}
+        advancedFiltersCount={activeSkill !== 'all' ? 1 : 0}
+        statsSection={statsSection}
+        loading={loading}
+        resultCount={filteredMembers.length}
+        emptyMessage="조건에 맞는 회원이 없습니다."
       >
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <Card className="text-center">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-primary">{loading ? '-' : members.length}</div>
-                <div className="text-sm text-muted-foreground">총 회원</div>
-              </CardContent>
-            </Card>
-            <Card className="text-center">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-green-600">{loading ? '-' : members.filter(m => (m.activity_score || 0) > 200).length}</div>
-                <div className="text-sm text-muted-foreground">활동 회원</div>
-              </CardContent>
-            </Card>
-            <Card className="text-center">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-blue-600">{loading ? '-' : members.filter(m => new Date(m.join_date).getTime() > Date.now() - 30 * 24 * 60 * 60 * 1000).length}</div>
-                <div className="text-sm text-muted-foreground">신규 회원</div>
-              </CardContent>
-            </Card>
-            <Card className="text-center">
-              <CardContent className="p-4">
-                <div className="text-2xl font-bold text-purple-600">{loading ? '-' : members.filter(m => ['leader', 'vice-leader', 'admin'].includes(m.role)).length}</div>
-                <div className="text-sm text-muted-foreground">운영진</div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Search and Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-8 space-y-4"
-      >
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="이름, 부서, 직급, AI 도구로 검색..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div className="overflow-x-auto">
-            <Tabs value={activeRole} onValueChange={handleRoleChange}>
-              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
-                {Object.entries(roleLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <Tabs value={activeSkill} onValueChange={handleSkillChange}>
-              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
-                {Object.entries(skillLevels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Results count */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="mb-6"
-      >
-        <p className="text-sm text-muted-foreground">
-          {loading ? '로딩 중...' : `총 ${filteredMembers.length}명의 회원이 있습니다`}
-        </p>
-      </motion.div>
-
-      {/* Members Grid */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-      >
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           // Loading skeleton
           Array.from({ length: 6 }).map((_, index) => (
@@ -704,34 +684,8 @@ function MembersPage() {
             </motion.div>
           )
         })}
-      </motion.div>
-
-      {/* Empty state */}
-      {!loading && filteredMembers.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex flex-col items-center justify-center py-12"
-        >
-          <div className="mb-4 text-6xl">👥</div>
-          <h3 className="mb-2 text-xl font-semibold">검색 결과가 없습니다</h3>
-          <p className="mb-4 text-muted-foreground">
-            다른 검색어나 필터를 시도해보세요
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearchTerm('')
-              setActiveRole('all')
-              setActiveSkill('all')
-              filterMembers('', 'all', 'all')
-            }}
-          >
-            전체 보기
-          </Button>
-        </motion.div>
-      )}
+        </div>
+      </ContentListLayout>
 
       {/* Remove Member Dialog */}
       <AlertDialog open={removeDialogOpen} onOpenChange={setRemoveDialogOpen}>
@@ -759,7 +713,7 @@ function MembersPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </>
   )
 }
 

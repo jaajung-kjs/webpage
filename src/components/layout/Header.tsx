@@ -14,7 +14,6 @@ import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/compo
 import LoginDialog from '@/components/auth/LoginDialog'
 
 const navigation = [
-  { name: '홈', href: '/' },
   { name: 'AI 활용사례', href: '/cases' },
   { name: '학습자료', href: '/resources' },
   { name: '자유게시판', href: '/community' },

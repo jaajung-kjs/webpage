@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -32,7 +31,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { 
-  Search, 
   Clock, 
   MapPin, 
   Users, 
@@ -43,12 +41,20 @@ import {
   Edit,
   Trash2,
   UserPlus,
-  UserMinus
+  UserMinus,
+  Info,
+  Activity,
+  CheckCircle
 } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { useActivities, useSupabaseMutation } from '@/hooks/useSupabase'
 import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
+
+// Shared components
+import ContentListLayout from '@/components/shared/ContentListLayout'
+import ContentFilters from '@/components/shared/ContentFilters'
+import StatsCard from '@/components/shared/StatsCard'
 
 const categoryLabels = {
   all: '전체',
@@ -451,145 +457,130 @@ function ActivitiesPage() {
     }
   }
 
+  // Categories for tabs
+  const categories = Object.entries(categoryLabels).map(([value, label]) => ({ value, label }))
+
+  // Calculate today's activities
+  const todayActivities = activities?.filter(a => {
+    if (!a.scheduled_at) return false
+    const activityDate = new Date(a.scheduled_at)
+    const today = new Date()
+    return activityDate.toDateString() === today.toDateString()
+  }).length || 0
+
+  // Calculate this week's activities
+  const thisWeekActivities = activities?.filter(a => {
+    if (!a.scheduled_at) return false
+    const activityDate = new Date(a.scheduled_at)
+    const now = new Date()
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - now.getDay())
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+    return activityDate >= weekStart && activityDate <= weekEnd
+  }).length || 0
+
+  // Stats Section
+  const statsSection = (
+    <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+      <StatsCard
+        title="예정된 활동"
+        value={activities?.filter(a => a.status === 'upcoming').length || 0}
+        icon={Calendar}
+        subtitle={`오늘 ${todayActivities}개`}
+        loading={loading}
+      />
+      <StatsCard
+        title="진행 중"
+        value={activities?.filter(a => a.status === 'ongoing').length || 0}
+        icon={Activity}
+        subtitle="현재 진행 중"
+        loading={loading}
+      />
+      <StatsCard
+        title="총 참여자"
+        value={activities?.reduce((total, a) => total + (a.current_participants || 0), 0) || 0}
+        icon={Users}
+        subtitle={`이번 주 ${thisWeekActivities}개 활동`}
+        loading={loading}
+      />
+      <StatsCard
+        title="완료된 활동"
+        value={activities?.filter(a => a.status === 'completed').length || 0}
+        icon={CheckCircle}
+        subtitle="누적 완료"
+        loading={loading}
+      />
+    </div>
+  )
+
+  // Advanced filters
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const advancedFilters = (
+    <ContentFilters
+      filterGroups={[
+        {
+          id: 'status',
+          label: '상태',
+          type: 'radio',
+          options: Object.entries(statusLabels).map(([value, label]) => ({
+            value,
+            label,
+            count: value === 'all' 
+              ? activities?.length || 0
+              : activities?.filter(a => a.status === value).length || 0
+          })),
+          value: activeStatus,
+          onChange: handleStatusChange
+        }
+      ]}
+      onReset={() => setActiveStatus('all')}
+      activeFiltersCount={activeStatus !== 'all' ? 1 : 0}
+    />
+  )
+
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
-              학습 활동
-            </h1>
-            <p className="mt-2 text-lg text-muted-foreground">
-              AI 학습동아리의 다양한 활동과 세미나에 참여해보세요
-            </p>
-          </div>
-          {user && profile?.role && ['admin', 'leader', 'vice-leader'].includes(profile.role) && (
+    <>
+      <ContentListLayout
+        title="학습 활동"
+        description="AI 학습동아리의 다양한 활동과 세미나에 참여해보세요"
+        searchPlaceholder="활동명, 설명, 장소, 태그로 검색..."
+        searchValue={searchTerm}
+        onSearchChange={handleSearch}
+        showCreateButton={!!(user && profile?.role && ['admin', 'leader', 'vice-leader'].includes(profile.role))}
+        createButtonText="활동 등록하기"
+        onCreateClick={() => {
+          resetForm()
+          setCreateDialogOpen(true)
+        }}
+        categories={categories}
+        activeCategory={activeCategory}
+        onCategoryChange={handleCategoryChange}
+        showViewToggle={false}
+        showAdvancedFilters={showAdvancedFilters}
+        onAdvancedFiltersToggle={() => setShowAdvancedFilters(!showAdvancedFilters)}
+        advancedFilters={advancedFilters}
+        advancedFiltersCount={activeStatus !== 'all' ? 1 : 0}
+        statsSection={statsSection}
+        loading={loading}
+        resultCount={filteredActivities.length}
+        emptyMessage="활동이 없습니다."
+        emptyAction={
+          user && profile?.role && ['admin', 'leader', 'vice-leader'].includes(profile.role) && (
             <Button 
-              className="kepco-gradient"
+              className="kepco-gradient" 
               onClick={() => {
                 resetForm()
                 setCreateDialogOpen(true)
               }}
             >
               <Plus className="mr-2 h-4 w-4" />
-              활동 등록하기
+              첫 번째 활동을 등록해보세요!
             </Button>
-          )}
-        </motion.div>
-      </div>
-
-      {/* Quick Stats */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.1 }}
-        className="mb-8"
+          )
+        }
       >
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Card className="text-center">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-primary">
-                {loading ? '-' : activities?.filter(a => a.status === 'upcoming').length || 0}
-              </div>
-              <div className="text-sm text-muted-foreground">예정된 활동</div>
-            </CardContent>
-          </Card>
-          <Card className="text-center">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-green-600">
-                {loading ? '-' : activities?.filter(a => a.status === 'ongoing').length || 0}
-              </div>
-              <div className="text-sm text-muted-foreground">진행 중</div>
-            </CardContent>
-          </Card>
-          <Card className="text-center">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-blue-600">
-                {loading ? '-' : activities?.reduce((total, a) => total + (a.current_participants || 0), 0) || 0}
-              </div>
-              <div className="text-sm text-muted-foreground">총 참여자</div>
-            </CardContent>
-          </Card>
-          <Card className="text-center">
-            <CardContent className="p-4">
-              <div className="text-2xl font-bold text-purple-600">
-                {loading ? '-' : activities?.filter(a => a.status === 'completed').length || 0}
-              </div>
-              <div className="text-sm text-muted-foreground">완료된 활동</div>
-            </CardContent>
-          </Card>
-        </div>
-      </motion.div>
-
-      {/* Search and Filters */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-8 space-y-4"
-      >
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            placeholder="활동명, 설명, 장소, 태그로 검색..."
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        <div className="flex flex-col gap-4">
-          <div className="overflow-x-auto">
-            <Tabs value={activeCategory} onValueChange={handleCategoryChange}>
-              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
-                {Object.entries(categoryLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <Tabs value={activeStatus} onValueChange={handleStatusChange}>
-              <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
-                {Object.entries(statusLabels).map(([key, label]) => (
-                  <TabsTrigger key={key} value={key} className="whitespace-nowrap px-3 py-1.5 text-xs font-medium">
-                    {label}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-            </Tabs>
-          </div>
-        </div>
-      </motion.div>
-
-      {/* Results count */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.3 }}
-        className="mb-6"
-      >
-        <p className="text-sm text-muted-foreground">
-          {loading ? '로딩 중...' : `총 ${filteredActivities.length}개의 활동이 있습니다`}
-        </p>
-      </motion.div>
-
-      {/* Activities Grid */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5, delay: 0.4 }}
-        className="grid gap-6 md:grid-cols-2 lg:grid-cols-3"
-      >
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
         {loading ? (
           // Loading skeleton
           Array.from({ length: 6 }).map((_, index) => (
@@ -773,35 +764,8 @@ function ActivitiesPage() {
             </Card>
           </motion.div>
         ))}
-      </motion.div>
-
-      {/* Empty state */}
-      {!loading && filteredActivities.length === 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.4 }}
-          className="flex flex-col items-center justify-center py-12"
-        >
-          <div className="mb-4 text-6xl">📅</div>
-          <h3 className="mb-2 text-xl font-semibold">
-            {!activities || activities.length === 0 ? '아직 등록된 활동이 없습니다' : '검색 결과가 없습니다'}
-          </h3>
-          <p className="mb-4 text-muted-foreground">
-            {!activities || activities.length === 0 ? '첫 번째 활동을 등록해보세요!' : '다른 검색어나 필터를 시도해보세요'}
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setSearchTerm('')
-              setActiveCategory('all')
-              setActiveStatus('all')
-            }}
-          >
-            {!activities || activities.length === 0 ? '새로고침' : '전체 보기'}
-          </Button>
-        </motion.div>
-      )}
+        </div>
+      </ContentListLayout>
 
       {/* Create Activity Dialog */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
@@ -1076,7 +1040,7 @@ function ActivitiesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </>
   )
 }
 
