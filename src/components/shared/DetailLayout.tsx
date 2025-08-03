@@ -138,9 +138,9 @@ export default function DetailLayout({
         </Link>
       </motion.div>
 
-      <div className="grid gap-8 lg:grid-cols-[1fr,300px]">
+      <div className="grid gap-8 lg:grid-cols-[1fr,300px] min-w-0">
         {/* Main content */}
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           {/* Header */}
           <motion.div
             {...fadeInUp}
@@ -247,7 +247,7 @@ export default function DetailLayout({
 
               <Separator />
 
-              <CardContent className="pt-6">
+              <CardContent className="pt-6 min-w-0 overflow-hidden">
                 {/* Content */}
                 <MarkdownRenderer content={content} />
 
@@ -274,7 +274,7 @@ export default function DetailLayout({
 
               {/* Action buttons */}
               <CardContent className="pt-6">
-                <div className="flex items-center gap-2 overflow-x-auto">
+                <div className="flex items-center gap-2 flex-wrap">
                   <Button
                     variant={isLiked ? "default" : "outline"}
                     size="sm"

@@ -205,4 +205,44 @@
       transform: translateX(100%);
     }
   }
+
+  /* Enhanced responsive styles for markdown content */
+  .prose * {
+    min-width: 0;
+    word-wrap: break-word;
+    overflow-wrap: anywhere;
+  }
+
+  .prose pre,
+  .prose code {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .prose table {
+    width: 100%;
+    table-layout: auto;
+  }
+
+  .prose th,
+  .prose td {
+    word-break: break-word;
+    hyphens: auto;
+  }
+
+  /* Prevent horizontal overflow in all containers */
+  .container,
+  .grid,
+  .flex {
+    min-width: 0;
+  }
+
+  /* Force text wrapping in long content */
+  .prose p,
+  .prose li,
+  .prose blockquote {
+    word-break: break-word;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+  }
 }

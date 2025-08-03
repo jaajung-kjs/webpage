@@ -57,7 +57,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
         <img
           src={src}
           alt={alt || ''}
-          className="max-w-full h-auto rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow"
+          className="max-w-full w-full h-auto rounded-lg shadow-md cursor-pointer hover:shadow-lg transition-shadow object-contain"
           onClick={() => window.open(src, '_blank')}
         />
       )
@@ -100,7 +100,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
           href={href} 
           target="_blank" 
           rel="noopener noreferrer"
-          className="text-blue-600 hover:text-blue-800 underline"
+          className="text-blue-600 hover:text-blue-800 underline break-all"
         >
           {children}
         </a>
@@ -114,8 +114,8 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       if (!inline && match) {
         return (
           <div className="relative">
-            <pre className="bg-muted p-4 rounded-lg overflow-x-auto">
-              <code className={className} {...props}>
+            <pre className="bg-muted p-4 rounded-lg overflow-x-auto max-w-full">
+              <code className={`${className} break-all`} {...props}>
                 {children}
               </code>
             </pre>
@@ -127,7 +127,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       }
       
       return (
-        <code className="bg-muted px-1 py-0.5 rounded text-sm" {...props}>
+        <code className="bg-muted px-1 py-0.5 rounded text-sm break-all overflow-wrap-anywhere" {...props}>
           {children}
         </code>
       )
@@ -135,7 +135,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
     
     // Tables with better styling
     table: ({ children }: { children?: React.ReactNode }) => (
-      <div className="overflow-x-auto my-4">
+      <div className="overflow-x-auto my-4 max-w-full">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           {children}
         </table>
@@ -153,21 +153,28 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
     ),
     
     td: ({ children }: { children?: React.ReactNode }) => (
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
+      <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100 break-words">
         {children}
       </td>
     ),
     
+    // Paragraphs with proper word wrapping
+    p: ({ children }: { children?: React.ReactNode }) => (
+      <p className="break-words overflow-wrap-anywhere hyphens-auto max-w-full">
+        {children}
+      </p>
+    ),
+    
     // Blockquotes
     blockquote: ({ children }: { children?: React.ReactNode }) => (
-      <blockquote className="border-l-4 border-primary pl-4 my-4 italic text-muted-foreground">
+      <blockquote className="border-l-4 border-primary pl-4 my-4 italic text-muted-foreground break-words overflow-wrap-anywhere hyphens-auto">
         {children}
       </blockquote>
     ),
   }
 
   return (
-    <div className={`prose prose-sm dark:prose-invert max-w-none ${className}`}>
+    <div className={`prose prose-sm dark:prose-invert w-full min-w-0 overflow-hidden break-words hyphens-auto ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         rehypePlugins={[rehypeRaw]}

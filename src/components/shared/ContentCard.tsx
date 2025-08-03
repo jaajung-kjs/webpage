@@ -28,7 +28,7 @@ import {
   Pin,
   PinOff,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, extractCleanPreview } from '@/lib/utils'
 import { Views } from '@/lib/supabase/client'
 
 interface ContentCardProps {
@@ -186,10 +186,10 @@ export default function ContentCard({
       <CardContent>
         {/* Description/Excerpt */}
         <CardDescription className={cn(
-          "mb-4",
+          "mb-4 break-words overflow-wrap-anywhere min-w-0",
           viewMode === 'grid' ? "line-clamp-2" : "line-clamp-3"
         )}>
-          {content.excerpt || (content.content ? content.content.substring(0, 150) + '...' : '')}
+          {extractCleanPreview(content.excerpt || content.content || '', 150)}
         </CardDescription>
 
         {/* Tags */}
@@ -259,7 +259,7 @@ export default function ContentCard({
       variants={cardHover}
     >
       <Card className={cn(
-        "h-full transition-all hover:shadow-lg hover:-translate-y-1 touch-manipulation",
+        "h-full transition-all hover:shadow-lg hover:-translate-y-1 touch-manipulation min-w-0 overflow-hidden",
         isPinned && "border-primary bg-primary/5"
       )}>
         <Link href={`${linkPrefix}/${content.id}`} className="block touch-manipulation">
