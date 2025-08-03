@@ -367,6 +367,57 @@ export type Database = {
           },
         ]
       }
+      content_attachments: {
+        Row: {
+          attachment_type: string
+          content_id: string
+          created_at: string
+          display_order: number
+          file_name: string
+          file_size: number
+          file_type: string
+          file_url: string
+          id: string
+        }
+        Insert: {
+          attachment_type?: string
+          content_id: string
+          created_at?: string
+          display_order?: number
+          file_name: string
+          file_size?: number
+          file_type?: string
+          file_url: string
+          id?: string
+        }
+        Update: {
+          attachment_type?: string
+          content_id?: string
+          created_at?: string
+          display_order?: number
+          file_name?: string
+          file_size?: number
+          file_type?: string
+          file_url?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_attachments_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_attachments_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_author"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversations: {
         Row: {
           created_at: string
@@ -1474,7 +1525,7 @@ export type Database = {
         Returns: undefined
       }
       increment_view_count: {
-        Args: { content_id: string; content_type: string }
+        Args: { content_id: string; content_type?: string }
         Returns: undefined
       }
       is_admin: {

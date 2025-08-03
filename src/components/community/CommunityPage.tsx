@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
 import { toast } from 'sonner'
-import { Views, TablesInsert } from '@/lib/supabase/client'
+import { Views, TablesInsert, supabase } from '@/lib/supabase/client'
 import * as z from 'zod'
 import { 
   Plus,
@@ -22,7 +22,7 @@ import {
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import ContentCard from '@/components/shared/ContentCard'
-import ContentCreateModal from '@/components/shared/ContentCreateModal'
+import ContentCreateModalEnhanced from '@/components/shared/ContentCreateModalEnhanced'
 import StatsCard from '@/components/shared/StatsCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -85,11 +85,10 @@ const createFields = [
   {
     name: 'content',
     label: '내용',
-    type: 'textarea' as const,
-    placeholder: '내용을 입력하세요',
-    rows: 10,
-    maxLength: 5000,
-    validation: z.string().min(1, '내용을 입력해주세요').max(5000, '내용은 5000자 이하여야 합니다')
+    type: 'markdown' as const,
+    placeholder: '내용을 입력하세요. 이미지는 복사-붙여넣기로 바로 삽입할 수 있습니다.',
+    maxLength: 10000,
+    validation: z.string().min(1, '내용을 입력해주세요').max(10000, '내용은 10000자 이하여야 합니다')
   },
   {
     name: 'tags',
@@ -193,7 +192,7 @@ export default function CommunityPage() {
   }
 
   // Handle create
-  const handleCreate = async (values: any) => {
+  const handleCreate = async (values: any, attachments: any[]) => {
     if (!user) {
       toast.error('로그인이 필요합니다.')
       return
@@ -215,6 +214,27 @@ export default function CommunityPage() {
       
       if (result.error) {
         throw new Error(result.error.message)
+      }
+
+      // Save attachments if any
+      if (result.data && attachments.length > 0) {
+        for (const attachment of attachments) {
+          const { error: attachmentError } = await supabase
+            .from('content_attachments')
+            .insert({
+              content_id: result.data.id,
+              file_url: attachment.file_url,
+              file_name: attachment.file_name,
+              file_size: attachment.file_size,
+              file_type: attachment.file_type,
+              attachment_type: attachment.attachment_type,
+              display_order: attachments.indexOf(attachment)
+            })
+          
+          if (attachmentError) {
+            console.error('Error saving attachment:', attachmentError)
+          }
+        }
       }
 
       toast.success('게시글이 작성되었습니다.')
@@ -335,7 +355,7 @@ export default function CommunityPage() {
       </ContentListLayout>
 
       {/* Create Modal */}
-      <ContentCreateModal
+      <ContentCreateModalEnhanced
         isOpen={createModalOpen}
         onOpenChange={setCreateModalOpen}
         title="새 게시글 작성"
