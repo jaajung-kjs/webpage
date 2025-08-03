@@ -34,6 +34,7 @@ import {
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
+import MarkdownRenderer from './MarkdownRenderer'
 
 interface DetailLayoutProps {
   // Content data
@@ -248,9 +249,7 @@ export default function DetailLayout({
 
               <CardContent className="pt-6">
                 {/* Content */}
-                <div className="prose prose-sm dark:prose-invert max-w-none">
-                  <div dangerouslySetInnerHTML={{ __html: content }} />
-                </div>
+                <MarkdownRenderer content={content} />
 
                 {/* Tags */}
                 {tags && tags.length > 0 && (

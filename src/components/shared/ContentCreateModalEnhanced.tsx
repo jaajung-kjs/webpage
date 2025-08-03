@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useCallback } from 'react'
+import React, { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -32,20 +32,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Loader2, X, Eye, Save, Upload, Image, FileText } from 'lucide-react'
-import { supabase } from '@/lib/supabase/client'
+import { Loader2, X, Eye, Save } from 'lucide-react'
 import { toast } from 'sonner'
-import '@uiw/react-md-editor/markdown-editor.css'
-import '@uiw/react-markdown-preview/markdown.css'
-
-// Dynamic import for markdown editor to avoid SSR issues
-const MDEditor = dynamic(
-  () => import('@uiw/react-md-editor').then((mod) => mod.default),
-  { 
-    ssr: false,
-    loading: () => <div className="animate-pulse h-64 bg-muted rounded-md" />
-  }
-)
+import MarkdownEditor from './MarkdownEditor'
+import MarkdownRenderer from './MarkdownRenderer'
 
 interface FieldConfig {
   name: string
@@ -94,8 +84,6 @@ export default function ContentCreateModalEnhanced({
   const [showPreview, setShowPreview] = useState(false)
   const [tagInput, setTagInput] = useState('')
   const [attachments, setAttachments] = useState<AttachmentInfo[]>([])
-  const [uploadingFiles, setUploadingFiles] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Build dynamic schema from fields
   const schemaObject: Record<string, z.ZodTypeAny> = {}
@@ -114,93 +102,14 @@ export default function ContentCreateModalEnhanced({
     }, {} as Record<string, any>),
   })
 
-  // Handle paste event for images
-  const handlePaste = useCallback(async (e: ClipboardEvent) => {
-    const items = e.clipboardData?.items
-    if (!items) return
-
-    for (const item of items) {
-      if (item.type.indexOf('image') !== -1) {
-        e.preventDefault()
-        const file = item.getAsFile()
-        if (file) {
-          await handleFileUpload([file])
-        }
-      }
-    }
-  }, [])
-
-  // Handle drag and drop
-  const handleDrop = useCallback(async (e: React.DragEvent) => {
-    e.preventDefault()
-    const files = Array.from(e.dataTransfer.files)
-    if (files.length > 0) {
-      await handleFileUpload(files)
-    }
-  }, [])
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault()
-  }
-
-  // Upload files to Supabase Storage
-  const handleFileUpload = async (files: File[]) => {
-    setUploadingFiles(true)
-    const newAttachments: AttachmentInfo[] = []
-
-    try {
-      for (const file of files) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-        const filePath = `content/${fileName}`
-
-        // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
-          .from('attachments')
-          .upload(filePath, file)
-
-        if (error) throw error
-
-        // Get public URL
-        const { data: { publicUrl } } = supabase.storage
-          .from('attachments')
-          .getPublicUrl(filePath)
-
-        const attachmentInfo: AttachmentInfo = {
-          id: Math.random().toString(36).substring(7),
-          file_name: file.name,
-          file_url: publicUrl,
-          file_type: file.type,
-          file_size: file.size,
-          attachment_type: file.type.startsWith('image/') ? 'image' : 'file'
-        }
-
-        newAttachments.push(attachmentInfo)
-
-        // If it's an image and we're in markdown content, insert it into the editor
-        if (attachmentInfo.attachment_type === 'image') {
-          const contentField = fields.find(f => f.type === 'markdown')
-          if (contentField) {
-            const currentContent = form.getValues(contentField.name) || ''
-            const imageMarkdown = `\n![${file.name}](${publicUrl})\n`
-            form.setValue(contentField.name, currentContent + imageMarkdown)
-          }
-        }
-      }
-
-      setAttachments([...attachments, ...newAttachments])
-      toast.success(`${newAttachments.length}개 파일이 업로드되었습니다.`)
-    } catch (error: any) {
-      console.error('Error uploading files:', error)
-      toast.error('파일 업로드에 실패했습니다.')
-    } finally {
-      setUploadingFiles(false)
-    }
-  }
+  // Note: File upload is now handled by MarkdownEditor component
+  // We only track attachments for the submission process here
 
   const handleSubmit = async (values: any) => {
     try {
-      await onSubmit(values, attachments)
+      // Note: attachments are now embedded in the markdown content
+      // We pass an empty array for backward compatibility
+      await onSubmit(values, [])
       form.reset()
       setAttachments([])
       onOpenChange(false)
@@ -227,9 +136,6 @@ export default function ContentCreateModalEnhanced({
     )
   }
 
-  const removeAttachment = (id: string) => {
-    setAttachments(attachments.filter(a => a.id !== id))
-  }
 
   const renderField = (field: FieldConfig) => {
     switch (field.type) {
@@ -274,20 +180,12 @@ export default function ContentCreateModalEnhanced({
               <FormItem>
                 <FormLabel>{field.label}</FormLabel>
                 <FormControl>
-                  <div 
-                    onDrop={handleDrop}
-                    onDragOver={handleDragOver}
-                    onPaste={handlePaste as any}
-                    className="border rounded-md"
-                  >
-                    <MDEditor
-                      value={(formField.value as string) || ''}
-                      onChange={(value) => formField.onChange(value || '')}
-                      preview="edit"
-                      height={400}
-                      data-color-mode="light"
-                    />
-                  </div>
+                  <MarkdownEditor
+                    value={(formField.value as string) || ''}
+                    onChange={(value) => formField.onChange(value || '')}
+                    placeholder={field.placeholder}
+                    height={400}
+                  />
                 </FormControl>
                 {field.description && (
                   <FormDescription>{field.description}</FormDescription>
@@ -421,7 +319,24 @@ export default function ContentCreateModalEnhanced({
                 </Button>
               </div>
               <div className="rounded-lg border p-4">
-                {previewRenderer(formValues, attachments)}
+                {/* Use MarkdownRenderer for preview if content has markdown field */}
+                {fields.some(f => f.type === 'markdown') ? (
+                  <div>
+                    {fields.map(field => {
+                      if (field.type === 'markdown') {
+                        return (
+                          <MarkdownRenderer
+                            key={field.name}
+                            content={(formValues[field.name] as string) || ''}
+                          />
+                        )
+                      }
+                      return null
+                    })}
+                  </div>
+                ) : (
+                  previewRenderer(formValues, attachments)
+                )}
               </div>
             </div>
           ) : (
@@ -431,73 +346,6 @@ export default function ContentCreateModalEnhanced({
                 className="space-y-6"
               >
                 {fields.map(renderField)}
-
-                {/* File Upload Section */}
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium">첨부파일</h4>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={uploadingFiles}
-                    >
-                      {uploadingFiles ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Upload className="mr-2 h-4 w-4" />
-                      )}
-                      파일 선택
-                    </Button>
-                  </div>
-                  
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      const files = Array.from(e.target.files || [])
-                      if (files.length > 0) {
-                        handleFileUpload(files)
-                      }
-                    }}
-                  />
-
-                  {attachments.length > 0 && (
-                    <div className="space-y-2">
-                      {attachments.map((attachment) => (
-                        <div
-                          key={attachment.id}
-                          className="flex items-center justify-between p-2 border rounded-md"
-                        >
-                          <div className="flex items-center space-x-2">
-                            {attachment.attachment_type === 'image' ? (
-                              <Image className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <FileText className="h-4 w-4 text-muted-foreground" />
-                            )}
-                            <span className="text-sm truncate max-w-xs">
-                              {attachment.file_name}
-                            </span>
-                            <span className="text-xs text-muted-foreground">
-                              ({(attachment.file_size / 1024).toFixed(1)} KB)
-                            </span>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeAttachment(attachment.id)}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
 
                 <DialogFooter className="flex gap-2">
                   <Button
@@ -520,7 +368,7 @@ export default function ContentCreateModalEnhanced({
                   <Button
                     type="submit"
                     className="kepco-gradient"
-                    disabled={loading || uploadingFiles}
+                    disabled={loading}
                   >
                     {loading && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
