@@ -25,6 +25,8 @@ import {
   Trash2,
   Tag,
   Paperclip,
+  Pin,
+  PinOff,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Views } from '@/lib/supabase/client'
@@ -37,8 +39,10 @@ interface ContentCardProps {
   categoryIcons?: Record<string, React.ElementType>
   onEdit?: (id: string) => void
   onDelete?: (id: string) => void
+  onPin?: (id: string, pinned: boolean) => void
   canEdit?: boolean
   canDelete?: boolean
+  canPin?: boolean
   linkPrefix: string // e.g., '/cases', '/community'
   index?: number
 }
@@ -51,8 +55,10 @@ export default function ContentCard({
   categoryIcons = {},
   onEdit,
   onDelete,
+  onPin,
   canEdit = false,
   canDelete = false,
+  canPin = false,
   linkPrefix,
   index = 0,
 }: ContentCardProps) {
@@ -113,17 +119,46 @@ export default function ContentCard({
           </div>
 
           {/* Actions Dropdown */}
-          {(canEdit || canDelete) && (
+          {(canEdit || canDelete || canPin) && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="h-8 w-8 p-0"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                {canPin && onPin && (
+                  <>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation()
+                      content.id && onPin(content.id, !isPinned)
+                    }}>
+                      {isPinned ? (
+                        <>
+                          <PinOff className="mr-2 h-4 w-4" />
+                          고정 해제
+                        </>
+                      ) : (
+                        <>
+                          <Pin className="mr-2 h-4 w-4" />
+                          고정
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {canEdit && onEdit && (
                   <>
-                    <DropdownMenuItem onClick={() => content.id && onEdit(content.id)}>
+                    <DropdownMenuItem onClick={(e) => {
+                      e.stopPropagation()
+                      content.id && onEdit(content.id)
+                    }}>
                       <Edit className="mr-2 h-4 w-4" />
                       수정
                     </DropdownMenuItem>
@@ -132,7 +167,10 @@ export default function ContentCard({
                 )}
                 {canDelete && onDelete && (
                   <DropdownMenuItem
-                    onClick={() => content.id && onDelete(content.id)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      content.id && onDelete(content.id)
+                    }}
                     className="text-red-600 focus:text-red-600"
                   >
                     <Trash2 className="mr-2 h-4 w-4" />

@@ -134,19 +134,26 @@
     line-height: 1.8;
   }
   
-  /* KEPCO brand gradients */
+  /* KEPCO brand gradients - Blue theme */
   .kepco-gradient {
-    background: linear-gradient(135deg, oklch(0.45 0.2 240) 0%, oklch(0.6 0.15 260) 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    transition: all 200ms ease-in-out;
+  }
+  
+  .kepco-gradient:hover {
+    background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
   }
   
   .kepco-gradient-animated {
-    background: linear-gradient(135deg, oklch(0.45 0.2 240) 0%, oklch(0.6 0.15 260) 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 50%, #3b82f6 100%);
     background-size: 200% 200%;
     animation: gradient-shift 3s ease infinite;
   }
   
   .kepco-text-gradient {
-    background: linear-gradient(135deg, oklch(0.45 0.2 240) 0%, oklch(0.6 0.15 260) 100%);
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;

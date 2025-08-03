@@ -529,7 +529,16 @@ export default function CommentSection({
                     onEditCancel={cancelEdit}
                     onEditSave={handleCommentEdit}
                     onDelete={handleCommentDelete}
-                    onReport={() => {}}
+                    onReport={(commentId: string) => {
+                    // Dispatch custom event to open report dialog
+                    window.dispatchEvent(new CustomEvent('openReportDialog', {
+                      detail: {
+                        targetType: 'comment',
+                        targetId: commentId,
+                        parentContentId: contentId
+                      }
+                    }))
+                  }}
                     isAuthor={comment.author_id === user?.id}
                     canModerate={false}
                     isReplying={comment.id ? (replyingToComments[comment.id] || false) : false}

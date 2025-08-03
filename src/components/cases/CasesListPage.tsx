@@ -92,7 +92,7 @@ export default function CasesListPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
   const [sortBy, setSortBy] = useState('latest')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
   const [createModalOpen, setCreateModalOpen] = useState(false)
   
   const { user, profile } = useOptimizedAuth()
@@ -228,8 +228,8 @@ export default function CasesListPage() {
         sortOptions={sortOptions}
         activeSortBy={sortBy}
         onSortChange={setSortBy}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        autoResponsiveViewMode={true}
+        showViewToggle={false}
         loading={loading}
         resultCount={filteredCases.length}
         emptyMessage="검색 결과가 없습니다."
@@ -245,27 +245,29 @@ export default function CasesListPage() {
           )
         }
       >
-        <div className={viewMode === 'grid' 
-          ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
-          : "space-y-4"
-        }>
-          {filteredCases.map((caseItem, index) => (
-            <ContentCard
-              key={caseItem.id}
-              content={caseItem}
-              viewMode={viewMode}
-              categoryLabels={categoryLabels}
-              categoryColors={categoryColors}
-              categoryIcons={categoryIcons}
-              onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
-              onDelete={handleDelete}
-              canEdit={canEdit(caseItem)}
-              canDelete={canDelete(caseItem)}
-              linkPrefix="/cases"
-              index={index}
-            />
-          ))}
-        </div>
+        {(currentViewMode) => (
+          <div className={currentViewMode === 'grid' 
+            ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
+            : "space-y-4"
+          }>
+            {filteredCases.map((caseItem, index) => (
+              <ContentCard
+                key={caseItem.id}
+                content={caseItem}
+                viewMode={currentViewMode}
+                categoryLabels={categoryLabels}
+                categoryColors={categoryColors}
+                categoryIcons={categoryIcons}
+                onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+                onDelete={handleDelete}
+                canEdit={canEdit(caseItem)}
+                canDelete={canDelete(caseItem)}
+                linkPrefix="/cases"
+                index={index}
+              />
+            ))}
+          </div>
+        )}
       </ContentListLayout>
 
       {/* Create Modal */}

@@ -3,11 +3,10 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { ArrowRight, ThumbsUp, MessageCircle, Eye } from 'lucide-react'
+import { ArrowRight, Lightbulb, Cpu, ChartBar, Zap, BookOpen } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { supabase, Views } from '@/lib/supabase/client'
+import ContentCard from '@/components/shared/ContentCard'
 
 interface PostWithAuthor {
   id: string
@@ -20,6 +19,10 @@ interface PostWithAuthor {
   created_at: string | null
   author_id: string
   author_name: string | null
+  author_avatar_url: string | null
+  author_department: string | null
+  tags: string[] | null
+  metadata: Record<string, any> | null
 }
 
 const categoryLabels = {
@@ -27,39 +30,23 @@ const categoryLabels = {
   creativity: '창의적 활용',
   development: '개발',
   analysis: '분석',
-  other: '기타',
-  automation: '업무자동화',
-  documentation: '문서작성',
-  coding: '코딩',
-  design: '디자인',
-  research: '연구',
-  communication: '커뮤니케이션',
-  tips: '팁 공유',
-  review: '리뷰',
-  help: '도움 요청',
-  discussion: '토론',
-  question: '질문',
-  chat: '잡담'
+  other: '기타'
 }
 
 const categoryColors = {
-  productivity: 'bg-blue-100 text-blue-800',
-  creativity: 'bg-purple-100 text-purple-800',
-  development: 'bg-green-100 text-green-800',
-  analysis: 'bg-orange-100 text-orange-800',
-  other: 'bg-gray-100 text-gray-800',
-  automation: 'bg-blue-100 text-blue-800',
-  documentation: 'bg-green-100 text-green-800',
-  coding: 'bg-indigo-100 text-indigo-800',
-  design: 'bg-pink-100 text-pink-800',
-  research: 'bg-yellow-100 text-yellow-800',
-  communication: 'bg-cyan-100 text-cyan-800',
-  tips: 'bg-emerald-100 text-emerald-800',
-  review: 'bg-violet-100 text-violet-800',
-  help: 'bg-red-100 text-red-800',
-  discussion: 'bg-amber-100 text-amber-800',
-  question: 'bg-sky-100 text-sky-800',
-  chat: 'bg-slate-100 text-slate-800'
+  productivity: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  creativity: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+  development: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  analysis: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+}
+
+const categoryIcons = {
+  productivity: Zap,
+  creativity: Lightbulb,
+  development: Cpu,
+  analysis: ChartBar,
+  other: BookOpen
 }
 
 export default function RecentPostsSection() {
@@ -72,10 +59,25 @@ export default function RecentPostsSection() {
 
   const fetchRecentPosts = async () => {
     try {
-      // Fetch recent cases from DB
+      // Fetch recent cases from DB with all necessary fields
       const { data, error } = await supabase
         .from('content_with_author')
-        .select('*')
+        .select(`
+          id,
+          title,
+          content,
+          category,
+          view_count,
+          like_count,
+          comment_count,
+          created_at,
+          author_id,
+          author_name,
+          author_avatar_url,
+          author_department,
+          tags,
+          metadata
+        `)
         .eq('type', 'case')
         .eq('status', 'published')
         .order('created_at', { ascending: false })
@@ -100,7 +102,11 @@ export default function RecentPostsSection() {
           comment_count: caseItem.comment_count || 0,
           created_at: caseItem.created_at,
           author_id: caseItem.author_id,
-          author_name: caseItem.author_name
+          author_name: caseItem.author_name,
+          author_avatar_url: caseItem.author_avatar_url,
+          author_department: caseItem.author_department,
+          tags: caseItem.tags || [],
+          metadata: caseItem.metadata || {}
         }))
       
       setRecentPosts(transformedData)
@@ -153,38 +159,62 @@ export default function RecentPostsSection() {
           </div>
 
           {loading ? (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
-                <Card key={i} className="h-full">
-                  <CardHeader>
-                    <div className="mb-2 flex items-center justify-between">
-                      <div className="h-6 w-20 bg-muted rounded animate-pulse" />
-                      <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                <div key={i} className="h-full bg-card rounded-lg border p-6 animate-pulse">
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-6 w-20 bg-muted rounded" />
                     </div>
-                    <div className="h-6 bg-muted rounded animate-pulse" />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-2 mb-4">
-                      <div className="h-4 bg-muted rounded animate-pulse" />
-                      <div className="h-4 bg-muted rounded animate-pulse" />
-                      <div className="h-4 w-3/4 bg-muted rounded animate-pulse" />
+                    <div className="h-6 bg-muted rounded" />
+                    <div className="space-y-2">
+                      <div className="h-4 bg-muted rounded" />
+                      <div className="h-4 bg-muted rounded" />
+                      <div className="h-4 w-3/4 bg-muted rounded" />
                     </div>
                     <div className="flex items-center justify-between">
-                      <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+                      <div className="flex items-center gap-2">
+                        <div className="h-6 w-6 bg-muted rounded-full" />
+                        <div className="h-4 w-16 bg-muted rounded" />
+                      </div>
                       <div className="flex space-x-3">
-                        <div className="h-4 w-8 bg-muted rounded animate-pulse" />
-                        <div className="h-4 w-8 bg-muted rounded animate-pulse" />
-                        <div className="h-4 w-8 bg-muted rounded animate-pulse" />
+                        <div className="h-4 w-8 bg-muted rounded" />
+                        <div className="h-4 w-8 bg-muted rounded" />
+                        <div className="h-4 w-8 bg-muted rounded" />
                       </div>
                     </div>
-                  </CardContent>
-                </Card>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {recentPosts.map((postItem, index) => {
-                const displayCategory = postItem.category
+                // Transform postItem to match Views<'content_with_author'> format
+                const transformedPost = {
+                  id: postItem.id,
+                  title: postItem.title,
+                  content: postItem.content,
+                  excerpt: getDescription(postItem.content),
+                  category: postItem.category,
+                  view_count: postItem.view_count,
+                  like_count: postItem.like_count,
+                  comment_count: postItem.comment_count,
+                  created_at: postItem.created_at,
+                  author_id: postItem.author_id,
+                  author_name: postItem.author_name,
+                  author_avatar_url: postItem.author_avatar_url,
+                  author_department: postItem.author_department,
+                  author_email: null,
+                  author_role: null,
+                  metadata: postItem.metadata,
+                  tags: postItem.tags,
+                  type: 'case',
+                  status: 'published',
+                  updated_at: null,
+                  is_pinned: false
+                } as Views<'content_with_author'>
+
                 return (
                   <motion.div
                     key={postItem.id}
@@ -193,49 +223,15 @@ export default function RecentPostsSection() {
                     transition={{ duration: 0.5, delay: index * 0.1 }}
                     viewport={{ once: true }}
                   >
-                    <Card className="h-full transition-all hover:shadow-lg hover:-translate-y-1">
-                      <CardHeader>
-                        <div className="mb-2 flex items-center justify-between">
-                          <Badge 
-                            variant="secondary" 
-                            className={categoryColors[displayCategory as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'}
-                          >
-                            {categoryLabels[displayCategory as keyof typeof categoryLabels] || displayCategory || '기타'}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {postItem.created_at ? new Date(postItem.created_at).toLocaleDateString('ko-KR') : '날짜 없음'}
-                          </span>
-                        </div>
-                        <CardTitle className="line-clamp-2 text-xl leading-tight">
-                          <Link href={`/cases/${postItem.id}`} className="hover:text-primary">
-                            {postItem.title}
-                          </Link>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                          {getDescription(postItem.content)}
-                        </CardDescription>
-                        
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span className="font-medium">{postItem.author_name || '익명'}</span>
-                          <div className="flex items-center space-x-3">
-                            <div className="flex items-center space-x-1">
-                              <Eye className="h-4 w-4" />
-                              <span>{postItem.view_count}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <ThumbsUp className="h-4 w-4" />
-                              <span>{postItem.like_count}</span>
-                            </div>
-                            <div className="flex items-center space-x-1">
-                              <MessageCircle className="h-4 w-4" />
-                              <span>{postItem.comment_count}</span>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <ContentCard
+                      content={transformedPost}
+                      viewMode="grid"
+                      categoryLabels={categoryLabels}
+                      categoryColors={categoryColors}
+                      categoryIcons={categoryIcons}
+                      linkPrefix="/cases"
+                      index={index}
+                    />
                   </motion.div>
                 )
               })}

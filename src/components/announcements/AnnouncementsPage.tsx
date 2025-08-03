@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
 import { toast } from 'sonner'
-import { Views, TablesInsert } from '@/lib/supabase/client'
+import { Views, TablesInsert, supabase } from '@/lib/supabase/client'
 import * as z from 'zod'
 import { 
   Plus,
@@ -87,7 +87,7 @@ export default function AnnouncementsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
+  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
   const [createModalOpen, setCreateModalOpen] = useState(false)
   
   // Use Supabase hooks
@@ -220,6 +220,41 @@ export default function AnnouncementsPage() {
     ))
   }
 
+  const canPin = (item: Views<'content_with_author'>) => {
+    return !!(user && profile && (
+      profile.role === 'admin' || 
+      profile.role === 'leader' || 
+      profile.role === 'vice-leader'
+    ))
+  }
+
+  // Handle pin/unpin
+  const handlePin = async (id: string, pinned: boolean) => {
+    if (!user || !profile) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('content')
+        .update({
+          metadata: { is_pinned: pinned }
+        })
+        .eq('id', id)
+
+      if (error) {
+        throw error
+      }
+
+      toast.success(pinned ? '공지사항이 고정되었습니다.' : '공지사항 고정이 해제되었습니다.')
+      refetch()
+    } catch (error: any) {
+      console.error('Error updating pin status:', error)
+      toast.error(error.message || '고정 상태 변경에 실패했습니다.')
+    }
+  }
+
   // Categories for tabs
   const categories = Object.entries(categoryLabels).map(([value, label]) => ({ value, label }))
 
@@ -271,8 +306,8 @@ export default function AnnouncementsPage() {
         sortOptions={sortOptions}
         activeSortBy={sortBy}
         onSortChange={setSortBy}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        autoResponsiveViewMode={true}
+        showViewToggle={false}
         statsSection={statsSection}
         loading={loading}
         resultCount={filteredAnnouncements.length}
@@ -289,27 +324,31 @@ export default function AnnouncementsPage() {
           )
         }
       >
-        <div className={viewMode === 'grid' 
-          ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
-          : "space-y-4"
-        }>
-          {filteredAnnouncements.map((announcement, index) => (
-            <ContentCard
-              key={announcement.id}
-              content={announcement}
-              viewMode={viewMode}
-              categoryLabels={categoryLabels}
-              categoryColors={categoryColors}
-              categoryIcons={categoryIcons}
-              onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
-              onDelete={handleDelete}
-              canEdit={canEdit(announcement)}
-              canDelete={canDelete(announcement)}
-              linkPrefix="/announcements"
-              index={index}
-            />
+        {(currentViewMode) => (
+          <div className={currentViewMode === 'grid' 
+            ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
+            : "space-y-4"
+          }>
+            {filteredAnnouncements.map((announcement, index) => (
+              <ContentCard
+                key={announcement.id}
+                content={announcement}
+                viewMode={currentViewMode}
+                categoryLabels={categoryLabels}
+                categoryColors={categoryColors}
+                categoryIcons={categoryIcons}
+                onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+                onDelete={handleDelete}
+                onPin={handlePin}
+                canEdit={canEdit(announcement)}
+                canDelete={canDelete(announcement)}
+                canPin={canPin(announcement)}
+                linkPrefix="/announcements"
+                index={index}
+              />
           ))}
         </div>
+        )}
       </ContentListLayout>
 
       {/* Create Modal */}

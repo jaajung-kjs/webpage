@@ -1,6 +1,6 @@
 'use client'
 
-import React, { ReactNode } from 'react'
+import React, { ReactNode, useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
@@ -43,10 +43,13 @@ interface ContentListLayoutProps {
   activeSortBy?: string
   onSortChange?: (value: string) => void
   
-  // View toggle
+  // View toggle (deprecated - now auto-responsive)
   showViewToggle?: boolean
   viewMode?: 'grid' | 'list'
   onViewModeChange?: (mode: 'grid' | 'list') => void
+  
+  // Auto-responsive view mode (overrides manual viewMode)
+  autoResponsiveViewMode?: boolean
   
   // Stats section
   statsSection?: ReactNode
@@ -57,8 +60,8 @@ interface ContentListLayoutProps {
   onAdvancedFiltersToggle?: () => void
   advancedFiltersCount?: number
   
-  // Content
-  children: ReactNode
+  // Content - can be a function that receives the current view mode
+  children: ReactNode | ((viewMode: 'grid' | 'list') => ReactNode)
   loading?: boolean
   emptyMessage?: string
   emptyAction?: ReactNode
@@ -85,6 +88,7 @@ export default function ContentListLayout({
   showViewToggle = true,
   viewMode = 'grid',
   onViewModeChange,
+  autoResponsiveViewMode = false,
   statsSection,
   advancedFilters,
   showAdvancedFilters,
@@ -96,6 +100,32 @@ export default function ContentListLayout({
   emptyAction,
   resultCount,
 }: ContentListLayoutProps) {
+  // Auto-responsive view mode logic
+  const [responsiveViewMode, setResponsiveViewMode] = useState<'grid' | 'list'>('grid')
+  
+  useEffect(() => {
+    if (!autoResponsiveViewMode) return
+    
+    const mediaQuery = window.matchMedia('(min-width: 768px)')
+    
+    const handleMediaChange = (e: MediaQueryListEvent) => {
+      setResponsiveViewMode(e.matches ? 'list' : 'grid')
+    }
+    
+    // Set initial value
+    setResponsiveViewMode(mediaQuery.matches ? 'list' : 'grid')
+    
+    // Listen for changes
+    mediaQuery.addEventListener('change', handleMediaChange)
+    
+    return () => {
+      mediaQuery.removeEventListener('change', handleMediaChange)
+    }
+  }, [autoResponsiveViewMode])
+  
+  // Use responsive mode if enabled, otherwise use provided viewMode
+  const currentViewMode = autoResponsiveViewMode ? responsiveViewMode : viewMode
+  
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -170,7 +200,7 @@ export default function ContentListLayout({
             )}
             
             {/* View Toggle */}
-            {showViewToggle && onViewModeChange && (
+            {showViewToggle && !autoResponsiveViewMode && onViewModeChange && (
               <div className="flex rounded-md border">
                 <Button
                   variant="ghost"
@@ -178,7 +208,7 @@ export default function ContentListLayout({
                   onClick={() => onViewModeChange('grid')}
                   className={cn(
                     "rounded-r-none px-3 sm:px-2 touch-manipulation",
-                    viewMode === 'grid' && "bg-muted"
+                    currentViewMode === 'grid' && "bg-muted"
                   )}
                 >
                   <Grid3X3 className="h-4 w-4" />
@@ -189,7 +219,7 @@ export default function ContentListLayout({
                   onClick={() => onViewModeChange('list')}
                   className={cn(
                     "rounded-l-none px-3 sm:px-2 touch-manipulation",
-                    viewMode === 'list' && "bg-muted"
+                    currentViewMode === 'list' && "bg-muted"
                   )}
                 >
                   <List className="h-4 w-4" />
@@ -285,7 +315,7 @@ export default function ContentListLayout({
             {emptyAction}
           </div>
         ) : (
-          children
+          typeof children === 'function' ? children(currentViewMode) : children
         )}
       </motion.div>
     </div>

@@ -99,7 +99,7 @@ export default function ResourcesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
   const [createModalOpen, setCreateModalOpen] = useState(false)
   
   // Use Supabase hooks
@@ -281,8 +281,8 @@ export default function ResourcesPage() {
         sortOptions={sortOptions}
         activeSortBy={sortBy}
         onSortChange={setSortBy}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        autoResponsiveViewMode={true}
+        showViewToggle={false}
         statsSection={statsSection}
         loading={loading}
         resultCount={filteredResources.length}
@@ -299,27 +299,29 @@ export default function ResourcesPage() {
           )
         }
       >
-        <div className={viewMode === 'grid' 
-          ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
-          : "space-y-4"
-        }>
-          {filteredResources.map((resource, index) => (
-            <ContentCard
-              key={resource.id}
-              content={resource}
-              viewMode={viewMode}
-              categoryLabels={categoryLabels}
-              categoryColors={categoryColors}
-              categoryIcons={categoryIcons}
-              onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
-              onDelete={handleDelete}
-              canEdit={canEdit(resource)}
-              canDelete={canDelete(resource)}
-              linkPrefix="/resources"
-              index={index}
-            />
-          ))}
-        </div>
+        {(currentViewMode) => (
+          <div className={currentViewMode === 'grid' 
+            ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
+            : "space-y-4"
+          }>
+            {filteredResources.map((resource, index) => (
+              <ContentCard
+                key={resource.id}
+                content={resource}
+                viewMode={currentViewMode}
+                categoryLabels={categoryLabels}
+                categoryColors={categoryColors}
+                categoryIcons={categoryIcons}
+                onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+                onDelete={handleDelete}
+                canEdit={canEdit(resource)}
+                canDelete={canDelete(resource)}
+                linkPrefix="/resources"
+                index={index}
+              />
+            ))}
+          </div>
+        )}
       </ContentListLayout>
 
       {/* Create Modal */}

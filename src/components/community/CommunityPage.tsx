@@ -106,7 +106,7 @@ export default function CommunityPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list')
+  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
   const [createModalOpen, setCreateModalOpen] = useState(false)
   
   // Use Supabase hooks
@@ -291,8 +291,8 @@ export default function CommunityPage() {
         sortOptions={sortOptions}
         activeSortBy={sortBy}
         onSortChange={setSortBy}
-        viewMode={viewMode}
-        onViewModeChange={setViewMode}
+        autoResponsiveViewMode={true}
+        showViewToggle={false}
         statsSection={statsSection}
         loading={loading}
         resultCount={filteredPosts.length}
@@ -309,15 +309,16 @@ export default function CommunityPage() {
           )
         }
       >
-        <div className={viewMode === 'grid' 
-          ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
-          : "space-y-4"
-        }>
-          {filteredPosts.map((post, index) => (
-            <ContentCard
-              key={post.id}
-              content={post}
-              viewMode={viewMode}
+        {(currentViewMode) => (
+          <div className={currentViewMode === 'grid' 
+            ? "grid gap-6 md:grid-cols-2 lg:grid-cols-3" 
+            : "space-y-4"
+          }>
+            {filteredPosts.map((post, index) => (
+              <ContentCard
+                key={post.id}
+                content={post}
+                viewMode={currentViewMode}
               categoryLabels={categoryLabels}
               categoryColors={categoryColors}
               categoryIcons={categoryIcons}
@@ -330,6 +331,7 @@ export default function CommunityPage() {
             />
           ))}
         </div>
+        )}
       </ContentListLayout>
 
       {/* Create Modal */}
