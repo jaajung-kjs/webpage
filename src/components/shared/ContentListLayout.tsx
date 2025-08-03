@@ -171,7 +171,7 @@ export default function ContentListLayout({
         className="mb-6 space-y-4"
       >
         {/* Search Bar Row */}
-        <div className="flex flex-col gap-4 sm:flex-row">
+        <div className="flex flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -186,7 +186,7 @@ export default function ContentListLayout({
             {/* Sort Dropdown */}
             {sortOptions && onSortChange && (
               <Select value={activeSortBy} onValueChange={onSortChange}>
-                <SelectTrigger className="w-full sm:w-[180px]">
+                <SelectTrigger className="w-[120px] sm:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -265,14 +265,14 @@ export default function ContentListLayout({
 
         {/* Categories Tabs */}
         {categories && activeCategory && onCategoryChange && (
-          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 scrollbar-hide">
             <Tabs value={activeCategory} onValueChange={onCategoryChange}>
-              <TabsList className="inline-flex h-10 sm:h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+              <TabsList className="inline-flex h-auto items-center justify-start rounded-md bg-muted p-1 text-muted-foreground w-max">
                 {categories.map((category) => (
                   <TabsTrigger
                     key={category.value}
                     value={category.value}
-                    className="whitespace-nowrap px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs font-medium touch-manipulation"
+                    className="whitespace-nowrap px-3 py-1.5 text-sm font-medium touch-manipulation min-h-[32px] flex items-center"
                   >
                     {category.label}
                   </TabsTrigger>

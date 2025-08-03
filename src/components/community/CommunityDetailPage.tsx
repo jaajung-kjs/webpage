@@ -264,12 +264,17 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         onEdit={handleEdit}
         onDelete={handleDelete}
         actionButtons={
-          <Button variant="outline" size="sm" onClick={() => {
-            setReportTarget({ type: 'content', id: postId })
-            setReportDialogOpen(true)
-          }}>
-            <Flag className="mr-2 h-4 w-4" />
-            신고
+          <Button 
+            variant="outline" 
+            size="sm" 
+            className="gap-2 flex-shrink-0"
+            onClick={() => {
+              setReportTarget({ type: 'content', id: postId })
+              setReportDialogOpen(true)
+            }}
+          >
+            <Flag className="h-4 w-4" />
+            <span className="hidden sm:inline">신고</span>
           </Button>
         }
         backLink="/community"

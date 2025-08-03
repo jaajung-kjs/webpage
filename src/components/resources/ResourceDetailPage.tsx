@@ -402,10 +402,10 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
           onClick={handleDownload}
           disabled={!isMember}
           title={!isMember ? "동아리 회원만 다운로드할 수 있습니다" : ""}
-          className="kepco-gradient gap-2"
+          className="kepco-gradient gap-2 flex-shrink-0"
         >
           <Download className="h-4 w-4" />
-          다운로드
+          <span className="hidden sm:inline">다운로드</span>
         </Button>
       }
       backLink="/resources"

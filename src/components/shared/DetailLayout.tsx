@@ -275,16 +275,17 @@ export default function DetailLayout({
 
               {/* Action buttons */}
               <CardContent className="pt-6">
-                <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2 overflow-x-auto">
                   <Button
                     variant={isLiked ? "default" : "outline"}
                     size="sm"
                     onClick={onLike}
                     disabled={likeLoading}
-                    className="gap-2"
+                    className="gap-2 flex-shrink-0"
                   >
                     <Heart className={cn("h-4 w-4", isLiked && "fill-current")} />
-                    좋아요 {likeCount}
+                    <span className="hidden sm:inline">좋아요 {likeCount}</span>
+                    <span className="sm:hidden">{likeCount}</span>
                   </Button>
 
                   <Button
@@ -292,24 +293,24 @@ export default function DetailLayout({
                     size="sm"
                     onClick={onBookmark}
                     disabled={bookmarkLoading}
-                    className="gap-2"
+                    className="gap-2 flex-shrink-0"
                   >
                     {isBookmarked ? (
                       <BookmarkCheck className="h-4 w-4" />
                     ) : (
                       <Bookmark className="h-4 w-4" />
                     )}
-                    {isBookmarked ? '북마크됨' : '북마크'}
+                    <span className="hidden sm:inline">{isBookmarked ? '북마크됨' : '북마크'}</span>
                   </Button>
 
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={onShare}
-                    className="gap-2"
+                    className="gap-2 flex-shrink-0"
                   >
                     <Share2 className="h-4 w-4" />
-                    공유
+                    <span className="hidden sm:inline">공유</span>
                   </Button>
 
                   {/* Custom action buttons */}

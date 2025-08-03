@@ -22,6 +22,7 @@ import {
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { ContentAPI } from '@/lib/api/content'
+import { ReportDialog } from '@/components/ui/report-dialog'
 import PermissionGate from '@/components/shared/PermissionGate'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
@@ -68,13 +69,16 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const router = useRouter()
   
   // Use Supabase hooks
-  const { data: announcementData, loading, error } = useContent(announcementId)
+  const { data: announcementData, loading } = useContent(announcementId)
   const isLikedFromHook = useIsLiked(user?.id, announcementId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
+  const [reportDialogOpen, setReportDialogOpen] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
+  const [parentContentId, setParentContentId] = useState<string | undefined>()
 
   // Increment view count when announcement is loaded
   useEffect(() => {
@@ -94,6 +98,23 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   useEffect(() => {
     setIsLiked(isLikedFromHook)
   }, [isLikedFromHook])
+
+  // Listen for report dialog events
+  useEffect(() => {
+    const handleOpenReportDialog = (event: CustomEvent) => {
+      const { targetType, targetId, parentContentId } = event.detail
+      if (targetType && targetId) {
+        setReportTarget({ type: targetType, id: targetId })
+        setParentContentId(parentContentId)
+        setReportDialogOpen(true)
+      }
+    }
+
+    window.addEventListener('openReportDialog', handleOpenReportDialog as any)
+    return () => {
+      window.removeEventListener('openReportDialog', handleOpenReportDialog as any)
+    }
+  }, [])
 
   // Check if user has bookmarked this announcement
   useEffect(() => {
@@ -337,9 +358,17 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
           </>
         }
         actionButtons={
-          <Button variant="outline" size="sm">
-            <Flag className="mr-2 h-4 w-4" />
-            신고
+          <Button 
+            variant="outline" 
+            size="sm"
+            className="gap-2 flex-shrink-0"
+            onClick={() => {
+              setReportTarget({ type: 'content', id: announcementId })
+              setReportDialogOpen(true)
+            }}
+          >
+            <Flag className="h-4 w-4" />
+            <span className="hidden sm:inline">신고</span>
           </Button>
         }
         backLink="/announcements"
@@ -350,6 +379,24 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
       >
         <CommentSection contentId={announcementId} />
       </DetailLayout>
+
+      {/* Report Dialog */}
+      <ReportDialog
+        open={reportDialogOpen}
+        onOpenChange={(open) => {
+          setReportDialogOpen(open)
+          if (!open) {
+            setReportTarget(null)
+            setParentContentId(undefined)
+          }
+        }}
+        postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
+        commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
+        targetType={reportTarget?.type}
+        targetId={reportTarget?.id}
+        parentContentId={parentContentId}
+        postType={reportTarget?.type === 'comment' ? 'comment' : 'announcement'}
+      />
     </PermissionGate>
   )
 }

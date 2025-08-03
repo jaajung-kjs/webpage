@@ -134,6 +134,16 @@
     line-height: 1.8;
   }
   
+  /* Hide scrollbar but keep functionality */
+  .scrollbar-hide {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;  /* Chrome, Safari and Opera */
+  }
+  
   /* KEPCO brand gradients - Blue theme */
   .kepco-gradient {
     background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
