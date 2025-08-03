@@ -106,7 +106,7 @@ export default function RecentPostsSection() {
           author_avatar_url: caseItem.author_avatar_url,
           author_department: caseItem.author_department,
           tags: caseItem.tags || [],
-          metadata: caseItem.metadata || {}
+          metadata: (caseItem.metadata || {}) as Record<string, any>
         }))
       
       setRecentPosts(transformedData)
