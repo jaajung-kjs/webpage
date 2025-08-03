@@ -1,44 +1,30 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  Eye, 
-  MessageCircle,
-  ArrowLeft,
   Bell,
   AlertCircle,
   Info,
   Megaphone,
   Pin,
-  Share2,
-  Flag,
-  MoreHorizontal,
-  Bookmark,
-  BookmarkCheck,
-  MoreVertical,
-  Edit,
-  Trash2
+  Flag
 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { supabase, Views } from '@/lib/supabase/client'
-import { useDeleteContent } from '@/hooks/useSupabase'
+import { 
+  useContent,
+  useIsLiked,
+  useToggleLike,
+  useDeleteContent
+} from '@/hooks/useSupabase'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
+import { ContentAPI } from '@/lib/api/content'
 import PermissionGate from '@/components/shared/PermissionGate'
+import DetailLayout from '@/components/shared/DetailLayout'
+import CommentSection from '@/components/shared/CommentSection'
 
 interface AnnouncementDetailPageProps {
   announcementId: string
@@ -78,52 +64,36 @@ const categoryIcons = {
 }
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile, isMember } = useOptimizedAuth()
   const router = useRouter()
+  
+  // Use Supabase hooks
+  const { data: announcementData, loading, error } = useContent(announcementId)
+  const isLikedFromHook = useIsLiked(user?.id, announcementId)
+  const { toggleLike, loading: likeLoading } = useToggleLike()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
-  const [announcementData, setAnnouncementData] = useState<Views<'content_with_author'> | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [isLiked, setIsLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
 
-  const fetchAnnouncementDetail = async () => {
-    try {
-      setLoading(true)
-      
-      // Get the announcement data
-      const { data, error } = await supabase
-        .from('content_with_author')
-        .select('*')
-        .eq('id', announcementId)
-        .eq('type', 'announcement')
-        .single()
-      
-      if (error) throw error
-      
-      if (data) {
-        setAnnouncementData(data)
-        
-        // Increment view count
-        await supabase
-          .from('content')
-          .update({ 
-            view_count: (data.view_count || 0) + 1,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', announcementId)
-      }
-    } catch (error) {
-      console.error('Error fetching announcement detail:', error)
-      toast.error('공지사항을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // View count is automatically incremented by getContentById
-
+  // Increment view count when announcement is loaded
   useEffect(() => {
-    fetchAnnouncementDetail()
-  }, [announcementId])
+    if (announcementData?.id) {
+      ContentAPI.incrementViewCount(announcementData.id)
+    }
+  }, [announcementData?.id])
+
+  // Update like count when data changes
+  useEffect(() => {
+    if (announcementData?.like_count !== undefined) {
+      setLikeCount(announcementData.like_count || 0)
+    }
+  }, [announcementData])
+  
+  // Update like state from hook
+  useEffect(() => {
+    setIsLiked(isLikedFromHook)
+  }, [isLikedFromHook])
 
   // Check if user has bookmarked this announcement
   useEffect(() => {
@@ -148,6 +118,57 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     
     checkBookmark()
   }, [user, announcementId, announcementData])
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
+      return
+    }
+
+    // Prevent multiple clicks
+    if (likeLoading) return
+
+    try {
+      const result = await toggleLike(user.id, announcementId)
+      
+      if (result.error) {
+        throw result.error
+      }
+      
+      // Get the updated state by checking the current like status
+      const { data: currentLike } = await supabase
+        .from('interactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('content_id', announcementId)
+        .eq('type', 'like')
+        .single()
+      
+      const isNowLiked = !!currentLike
+      setIsLiked(isNowLiked)
+      
+      // Get updated like count from content
+      const { data: updatedContent } = await supabase
+        .from('content_with_author')
+        .select('like_count')
+        .eq('id', announcementId)
+        .single()
+      
+      if (updatedContent) {
+        setLikeCount(updatedContent.like_count || 0)
+      }
+      
+      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling like:', error)
+      toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    }
+  }
 
   const handleBookmark = async () => {
     if (!user) {
@@ -218,71 +239,32 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const formatContent = (content: string) => {
+    return content.replace(/\n/g, '<br/>')
   }
 
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return '방금 전'
-    if (diffInHours < 24) return `${diffInHours}시간 전`
-    if (diffInHours < 48) return '1일 전'
-    if (diffInHours < 168) return `${Math.floor(diffInHours / 24)}일 전`
-    return formatDate(dateString)
-  }
-
-  const getRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      'leader': '동아리장',
-      'vice_leader': '부동아리장',
-      'executive': '운영진',
-      'member': '일반회원',
-      'admin': '관리자'
-    }
-    return roleLabels[role] || role
-  }
-
-  if (loading) {
+  if (loading || !announcementData) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-32 mb-6"></div>
-            <div className="bg-white rounded-lg shadow p-8">
-              <div className="h-10 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-8"></div>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!announcementData) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mb-4">공지사항을 찾을 수 없습니다.</h1>
-          <Button asChild>
-            <Link href="/announcements">목록으로 돌아가기</Link>
-          </Button>
-        </div>
-      </div>
+      <PermissionGate requireMember={true}>
+        <DetailLayout
+          title={loading ? "로딩 중..." : "공지사항을 찾을 수 없습니다."}
+          content=""
+          author={{ id: "", name: "", avatar: "" }}
+          createdAt={new Date().toISOString()}
+          viewCount={0}
+          likeCount={0}
+          commentCount={0}
+          isLiked={false}
+          isBookmarked={false}
+          canEdit={false}
+          canDelete={false}
+          onLike={() => {}}
+          onBookmark={() => {}}
+          onShare={() => {}}
+          backLink="/announcements"
+          loading={loading}
+        />
+      </PermissionGate>
     )
   }
 
@@ -291,33 +273,40 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
 
   return (
     <PermissionGate requireMember={true}>
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
-        >
-          <Button variant="ghost" asChild className="mb-4">
-            <Link href="/announcements">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              목록으로 돌아가기
-            </Link>
-          </Button>
-        </motion.div>
-
-        {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card className={metadata.is_pinned ? 'border-primary' : ''}>
-            <CardHeader>
-              {/* Category, Priority and Tags */}
-              <div className="mb-4 flex flex-wrap items-center gap-2">
+      <DetailLayout
+        title={announcementData.title || ''}
+        content={formatContent(announcementData.content || '')}
+        author={{
+          id: announcementData.author_id || '',
+          name: announcementData.author_name || '익명',
+          avatar: announcementData.author_avatar_url || undefined,
+          department: announcementData.author_department || undefined
+        }}
+        createdAt={announcementData.created_at || new Date().toISOString()}
+        viewCount={announcementData.view_count || 0}
+        category={{
+          label: categoryLabels[announcementData.category as keyof typeof categoryLabels] || '공지사항',
+          value: announcementData.category || 'notice',
+          color: categoryColors[announcementData.category as keyof typeof categoryColors],
+          icon: CategoryIcon
+        }}
+        tags={announcementData.tags || []}
+        likeCount={likeCount}
+        commentCount={announcementData.comment_count || 0}
+        isLiked={isLiked}
+        isBookmarked={isBookmarked}
+        canEdit={!!(user && user.id === announcementData.author_id)}
+        canDelete={!!(user && (user.id === announcementData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
+        onLike={handleLike}
+        onBookmark={handleBookmark}
+        onShare={handleShare}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        additionalInfo={
+          <>
+            {/* Priority badge */}
+            {metadata.priority && (
+              <div className="mb-4 flex items-center gap-2">
                 {metadata.is_pinned && (
                   <Badge variant="destructive" className="bg-red-100 text-red-800 border-red-200">
                     <Pin className="mr-1 h-3 w-3" />
@@ -325,184 +314,42 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
                   </Badge>
                 )}
                 <Badge 
-                  variant="secondary" 
-                  className={categoryColors[announcementData.category as keyof typeof categoryColors] || ''}
-                >
-                  <CategoryIcon className="mr-1 h-3 w-3" />
-                  {categoryLabels[announcementData.category as keyof typeof categoryLabels] || '공지사항'}
-                </Badge>
-                <Badge 
                   variant="outline"
                   className={priorityColors[metadata.priority as keyof typeof priorityColors] || ''}
                 >
                   {priorityLabels[metadata.priority as keyof typeof priorityLabels] || '일반'}
                 </Badge>
-                {announcementData.tags?.map((tag: string) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
-                    {tag}
-                  </Badge>
-                ))}
               </div>
+            )}
 
-              {/* Title */}
-              <CardTitle className="text-2xl sm:text-3xl leading-tight">
-                {(announcementData as any).title}
-              </CardTitle>
-
-              {/* Author and Meta Info */}
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={(announcementData as any).profiles?.avatar_url || ''} alt={(announcementData as any).profiles?.name || ''} />
-                    <AvatarFallback>
-                      {(announcementData as any).profiles?.name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{(announcementData as any).profiles?.name || '익명'}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {getRoleLabel((announcementData as any).profiles?.role || 'member')}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {(announcementData as any).profiles?.department || '부서 미지정'} • {(announcementData as any).created_at ? formatDate((announcementData as any).created_at) : '날짜 없음'}
-                    </div>
-                  </div>
+            {/* Priority Notice */}
+            {metadata.priority === 'high' && (
+              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-center space-x-2 text-red-800 dark:text-red-300">
+                  <AlertCircle className="h-5 w-5" />
+                  <span className="font-semibold">중요 공지사항</span>
                 </div>
-
-                <div className="flex items-center space-x-2">
-                  {user && (user.id === announcementData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {user.id === announcementData.author_id && (
-                          <>
-                            <DropdownMenuItem onClick={handleEdit}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem 
-                          onClick={handleDelete}
-                          disabled={deleteLoading}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  <div className="flex items-center space-x-4 text-sm text-muted-foreground">
-                    <div className="flex items-center space-x-1">
-                      <Eye className="h-4 w-4" />
-                      <span>{announcementData.view_count || 0}</span>
-                    </div>
-                    <div className="flex items-center space-x-1">
-                      <MessageCircle className="h-4 w-4" />
-                      <span>{announcementData.comment_count || 0}</span>
-                    </div>
-                  </div>
-                </div>
+                <p className="mt-2 text-sm text-red-700 dark:text-red-400">
+                  이 공지사항은 중요도가 높은 내용입니다. 반드시 확인해주세요.
+                </p>
               </div>
-            </CardHeader>
-
-            <CardContent>
-              {/* Priority Notice */}
-              {metadata.priority === 'high' && (
-                <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <div className="flex items-center space-x-2 text-red-800 dark:text-red-300">
-                    <AlertCircle className="h-5 w-5" />
-                    <span className="font-semibold">중요 공지사항</span>
-                  </div>
-                  <p className="mt-2 text-sm text-red-700 dark:text-red-400">
-                    이 공지사항은 중요도가 높은 내용입니다. 반드시 확인해주세요.
-                  </p>
-                </div>
-              )}
-
-              {/* Content */}
-              <div className="prose max-w-none mb-8">
-                <div 
-                  className="whitespace-pre-wrap text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{ 
-                    __html: announcementData.content?.replace(/\n/g, '<br/>') || '' 
-                  }}
-                />
-              </div>
-
-              {/* Updated Date if exists */}
-              {announcementData.updated_at && announcementData.updated_at !== announcementData.created_at && (
-                <div className="mb-6 text-sm text-muted-foreground">
-                  <span>마지막 수정: {formatDate(announcementData.updated_at)}</span>
-                </div>
-              )}
-
-              <Separator className="my-6" />
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={handleShare}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    공유
-                  </Button>
-                  <Button 
-                    variant={isBookmarked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleBookmark}
-                    className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
-                  >
-                    {isBookmarked ? (
-                      <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />
-                    ) : (
-                      <Bookmark className="mr-2 h-4 w-4" />
-                    )}
-                    북마크
-                  </Button>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="sm">
-                    <Flag className="mr-2 h-4 w-4" />
-                    신고
-                  </Button>
-                  <Button variant="ghost" size="sm">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Related Announcements */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-8"
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>관련 공지사항</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-center py-8 text-muted-foreground">
-                관련 공지사항이 없습니다.
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </div>
+            )}
+          </>
+        }
+        actionButtons={
+          <Button variant="outline" size="sm">
+            <Flag className="mr-2 h-4 w-4" />
+            신고
+          </Button>
+        }
+        backLink="/announcements"
+        backLinkText="공지사항 목록"
+        loading={loading}
+        likeLoading={likeLoading}
+        deleteLoading={deleteLoading}
+      >
+        <CommentSection contentId={announcementId} />
+      </DetailLayout>
     </PermissionGate>
   )
 }

@@ -1,0 +1,315 @@
+/* KEPCO AI Community Color System */
+
+@layer base {
+  :root {
+    /* KEPCO Brand Colors */
+    --kepco-primary: 240 100% 60%; /* HSL values for better control */
+    --kepco-primary-dark: 240 100% 50%;
+    --kepco-primary-light: 240 100% 70%;
+    --kepco-secondary: 260 85% 65%;
+    --kepco-secondary-dark: 260 85% 55%;
+    --kepco-secondary-light: 260 85% 75%;
+    
+    /* Gradient definitions using CSS variables */
+    --kepco-gradient-start: hsl(var(--kepco-primary));
+    --kepco-gradient-end: hsl(var(--kepco-secondary));
+    --kepco-gradient-angle: 135deg;
+    
+    /* Extended gradient variations */
+    --kepco-gradient-soft-start: hsl(var(--kepco-primary-light));
+    --kepco-gradient-soft-end: hsl(var(--kepco-secondary-light));
+    --kepco-gradient-intense-start: hsl(var(--kepco-primary-dark));
+    --kepco-gradient-intense-end: hsl(var(--kepco-secondary-dark));
+    
+    /* Semantic colors based on KEPCO brand */
+    --kepco-success: 120 60% 50%;
+    --kepco-warning: 45 90% 50%;
+    --kepco-error: 0 70% 50%;
+    --kepco-info: var(--kepco-primary);
+    
+    /* Neutral colors */
+    --kepco-gray-50: 0 0% 98%;
+    --kepco-gray-100: 0 0% 96%;
+    --kepco-gray-200: 0 0% 90%;
+    --kepco-gray-300: 0 0% 80%;
+    --kepco-gray-400: 0 0% 70%;
+    --kepco-gray-500: 0 0% 50%;
+    --kepco-gray-600: 0 0% 40%;
+    --kepco-gray-700: 0 0% 30%;
+    --kepco-gray-800: 0 0% 20%;
+    --kepco-gray-900: 0 0% 10%;
+    --kepco-gray-950: 0 0% 5%;
+  }
+
+  .dark {
+    /* Adjusted KEPCO colors for dark mode */
+    --kepco-primary: 240 80% 70%;
+    --kepco-primary-dark: 240 80% 60%;
+    --kepco-primary-light: 240 80% 80%;
+    --kepco-secondary: 260 70% 75%;
+    --kepco-secondary-dark: 260 70% 65%;
+    --kepco-secondary-light: 260 70% 85%;
+    
+    /* Dark mode semantic adjustments */
+    --kepco-success: 120 50% 60%;
+    --kepco-warning: 45 80% 60%;
+    --kepco-error: 0 60% 60%;
+  }
+}
+
+/* KEPCO Gradient Classes */
+.kepco-gradient {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+}
+
+.kepco-gradient-soft {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-soft-start) 0%,
+    var(--kepco-gradient-soft-end) 100%
+  );
+}
+
+.kepco-gradient-intense {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-intense-start) 0%,
+    var(--kepco-gradient-intense-end) 100%
+  );
+}
+
+/* Radial gradient variants */
+.kepco-gradient-radial {
+  background: radial-gradient(
+    circle at center,
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+}
+
+.kepco-gradient-radial-soft {
+  background: radial-gradient(
+    circle at center,
+    var(--kepco-gradient-soft-start) 0%,
+    var(--kepco-gradient-soft-end) 100%
+  );
+}
+
+/* Text gradients */
+.kepco-text-gradient {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.kepco-text-gradient-soft {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-soft-start) 0%,
+    var(--kepco-gradient-soft-end) 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hover states */
+.kepco-gradient-hover {
+  position: relative;
+  background: hsl(var(--kepco-primary));
+  transition: all 0.3s ease;
+}
+
+.kepco-gradient-hover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  border-radius: inherit;
+}
+
+.kepco-gradient-hover:hover::before {
+  opacity: 1;
+}
+
+/* Border gradients */
+.kepco-border-gradient {
+  position: relative;
+  background: hsl(var(--card));
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+.kepco-border-gradient::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: -1;
+  margin: -2px;
+  border-radius: inherit;
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+}
+
+/* Shadow utilities */
+.kepco-shadow-primary {
+  box-shadow: 0 4px 20px -2px hsla(var(--kepco-primary), 0.25);
+}
+
+.kepco-shadow-secondary {
+  box-shadow: 0 4px 20px -2px hsla(var(--kepco-secondary), 0.25);
+}
+
+.kepco-shadow-gradient {
+  box-shadow: 
+    0 4px 20px -2px hsla(var(--kepco-primary), 0.15),
+    0 4px 20px -2px hsla(var(--kepco-secondary), 0.15);
+}
+
+/* Status colors */
+.kepco-success {
+  color: hsl(var(--kepco-success));
+}
+
+.kepco-warning {
+  color: hsl(var(--kepco-warning));
+}
+
+.kepco-error {
+  color: hsl(var(--kepco-error));
+}
+
+.kepco-info {
+  color: hsl(var(--kepco-info));
+}
+
+/* Background variants */
+.kepco-bg-success {
+  background-color: hsl(var(--kepco-success) / 0.1);
+  color: hsl(var(--kepco-success));
+}
+
+.kepco-bg-warning {
+  background-color: hsl(var(--kepco-warning) / 0.1);
+  color: hsl(var(--kepco-warning));
+}
+
+.kepco-bg-error {
+  background-color: hsl(var(--kepco-error) / 0.1);
+  color: hsl(var(--kepco-error));
+}
+
+.kepco-bg-info {
+  background-color: hsl(var(--kepco-info) / 0.1);
+  color: hsl(var(--kepco-info));
+}
+
+/* Gray scale utilities */
+.kepco-gray-50 { color: hsl(var(--kepco-gray-50)); }
+.kepco-gray-100 { color: hsl(var(--kepco-gray-100)); }
+.kepco-gray-200 { color: hsl(var(--kepco-gray-200)); }
+.kepco-gray-300 { color: hsl(var(--kepco-gray-300)); }
+.kepco-gray-400 { color: hsl(var(--kepco-gray-400)); }
+.kepco-gray-500 { color: hsl(var(--kepco-gray-500)); }
+.kepco-gray-600 { color: hsl(var(--kepco-gray-600)); }
+.kepco-gray-700 { color: hsl(var(--kepco-gray-700)); }
+.kepco-gray-800 { color: hsl(var(--kepco-gray-800)); }
+.kepco-gray-900 { color: hsl(var(--kepco-gray-900)); }
+.kepco-gray-950 { color: hsl(var(--kepco-gray-950)); }
+
+/* Background gray utilities */
+.kepco-bg-gray-50 { background-color: hsl(var(--kepco-gray-50)); }
+.kepco-bg-gray-100 { background-color: hsl(var(--kepco-gray-100)); }
+.kepco-bg-gray-200 { background-color: hsl(var(--kepco-gray-200)); }
+.kepco-bg-gray-300 { background-color: hsl(var(--kepco-gray-300)); }
+.kepco-bg-gray-400 { background-color: hsl(var(--kepco-gray-400)); }
+.kepco-bg-gray-500 { background-color: hsl(var(--kepco-gray-500)); }
+.kepco-bg-gray-600 { background-color: hsl(var(--kepco-gray-600)); }
+.kepco-bg-gray-700 { background-color: hsl(var(--kepco-gray-700)); }
+.kepco-bg-gray-800 { background-color: hsl(var(--kepco-gray-800)); }
+.kepco-bg-gray-900 { background-color: hsl(var(--kepco-gray-900)); }
+.kepco-bg-gray-950 { background-color: hsl(var(--kepco-gray-950)); }
+
+/* Animated gradients */
+@keyframes kepco-gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.kepco-gradient-animated {
+  background: linear-gradient(
+    -45deg,
+    var(--kepco-gradient-start),
+    var(--kepco-gradient-end),
+    var(--kepco-gradient-start),
+    var(--kepco-gradient-end)
+  );
+  background-size: 400% 400%;
+  animation: kepco-gradient-shift 6s ease infinite;
+}
+
+/* Focus states with KEPCO colors */
+.kepco-focus:focus {
+  outline: 2px solid hsl(var(--kepco-primary));
+  outline-offset: 2px;
+}
+
+.kepco-focus-visible:focus-visible {
+  outline: 2px solid hsl(var(--kepco-primary));
+  outline-offset: 2px;
+}
+
+/* Selection colors */
+::selection {
+  background: hsl(var(--kepco-primary) / 0.3);
+  color: hsl(var(--kepco-primary-dark));
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    var(--kepco-gradient-intense-start) 0%,
+    var(--kepco-gradient-intense-end) 100%
+  );
+}

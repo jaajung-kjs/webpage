@@ -1,53 +1,32 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  ArrowLeft,
   Download,
-  Eye,
-  Share2,
   BookOpen,
   FileText,
   Video,
   Presentation,
   File,
-  Calendar,
-  User,
   ExternalLink,
-  Heart,
-  Bookmark,
-  BookmarkCheck,
-  Tag,
-  MoreVertical,
-  Edit,
-  Trash2
+  Tag
 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { 
   useContent,
   useIsLiked,
   useToggleLike,
-  useSupabaseMutation,
   useUpdateContent,
   useDeleteContent
 } from '@/hooks/useSupabase'
-import { Views } from '@/lib/supabase/client'
+import { Views, supabase } from '@/lib/supabase/client'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
+import { ContentAPI } from '@/lib/api/content'
+import DetailLayout from '@/components/shared/DetailLayout'
+import CommentSection from '@/components/shared/CommentSection'
 
 interface ResourceDetailPageProps {
   resourceId: string
@@ -93,20 +72,38 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   
   // Use Supabase hooks
   const { data: resourceData, loading, error } = useContent(resourceId)
-  const isBookmarked = useIsLiked(user?.id, resourceId)
+  const isLikedFromHook = useIsLiked(user?.id, resourceId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
   const { updateContent, loading: updateLoading } = useUpdateContent()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   
+  const [isLiked, setIsLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(0)
+  const [isBookmarked, setIsBookmarked] = useState(false)
   const [downloadCount, setDownloadCount] = useState(0)
 
-  // Update download count when resource data changes
+  // Increment view count when resource is loaded
   useEffect(() => {
+    if (resourceData?.id) {
+      ContentAPI.incrementViewCount(resourceData.id)
+    }
+  }, [resourceData?.id])
+
+  // Update like count and download count when resource data changes
+  useEffect(() => {
+    if (resourceData?.like_count !== undefined) {
+      setLikeCount(resourceData.like_count || 0)
+    }
     if (resourceData?.metadata) {
       const metadata = resourceData.metadata as any
       setDownloadCount(metadata?.downloads || 0)
     }
   }, [resourceData])
+  
+  // Update like state from hook
+  useEffect(() => {
+    setIsLiked(isLikedFromHook)
+  }, [isLikedFromHook])
 
   // Handle error state
   useEffect(() => {
@@ -115,6 +112,81 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       toast.error('자료를 불러오는데 실패했습니다.')
     }
   }, [error])
+
+  // Check if user has bookmarked this resource
+  useEffect(() => {
+    const checkBookmark = async () => {
+      if (!user || !resourceData) return
+      
+      try {
+        const { data } = await supabase
+          .from('interactions')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('content_id', resourceId)
+          .eq('type', 'bookmark')
+          .single()
+          
+        setIsBookmarked(!!data)
+      } catch (error) {
+        console.error('Error checking bookmark:', error)
+        setIsBookmarked(false)
+      }
+    }
+    
+    checkBookmark()
+  }, [user, resourceId, resourceData])
+
+  const handleLike = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
+      return
+    }
+
+    // Prevent multiple clicks
+    if (likeLoading) return
+
+    try {
+      const result = await toggleLike(user.id, resourceId)
+      
+      if (result.error) {
+        throw result.error
+      }
+      
+      // Get the updated state by checking the current like status
+      const { data: currentLike } = await supabase
+        .from('interactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('content_id', resourceId)
+        .eq('type', 'like')
+        .single()
+      
+      const isNowLiked = !!currentLike
+      setIsLiked(isNowLiked)
+      
+      // Get updated like count from content
+      const { data: updatedContent } = await supabase
+        .from('content_with_author')
+        .select('like_count')
+        .eq('id', resourceId)
+        .single()
+      
+      if (updatedContent) {
+        setLikeCount(updatedContent.like_count || 0)
+      }
+      
+      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling like:', error)
+      toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    }
+  }
 
   const handleDownload = async () => {
     if (!resourceData) return
@@ -149,18 +221,20 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
 
       // Handle download based on resource type
       if (metadata?.url) {
-        // External URL
         window.open(metadata.url, '_blank')
-        toast.success('외부 링크로 이동합니다.')
-      } else if (metadata?.file_path) {
-        // File download
-        toast.info('파일 다운로드 기능은 준비 중입니다.')
-      } else {
-        toast.error('다운로드할 수 있는 자료가 없습니다.')
+      } else if (metadata?.file_url) {
+        const link = document.createElement('a')
+        link.href = metadata.file_url
+        link.download = resourceData.title || 'download'
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
       }
+
+      toast.success('다운로드가 시작되었습니다.')
     } catch (error: any) {
-      console.error('Error handling download:', error)
-      toast.error(error.message || '다운로드 처리에 실패했습니다.')
+      console.error('Error updating download count:', error)
+      toast.error(error.message || '다운로드에 실패했습니다.')
     }
   }
 
@@ -176,13 +250,32 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
 
     try {
-      const result = await toggleLike(user.id, resourceId)
-      
-      if (result.error) {
-        throw result.error
+      if (isBookmarked) {
+        // Remove bookmark
+        const { error } = await supabase
+          .from('interactions')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('content_id', resourceId)
+          .eq('type', 'bookmark')
+          
+        if (error) throw error
+        setIsBookmarked(false)
+        toast.success('북마크에서 제거되었습니다.')
+      } else {
+        // Add bookmark
+        const { error } = await supabase
+          .from('interactions')
+          .insert({
+            user_id: user.id,
+            content_id: resourceId,
+            type: 'bookmark'
+          })
+          
+        if (error) throw error
+        setIsBookmarked(true)
+        toast.success('북마크에 추가되었습니다.')
       }
-      
-      toast.success(isBookmarked ? '북마크에서 제거되었습니다.' : '북마크에 추가되었습니다.')
     } catch (error: any) {
       console.error('Error toggling bookmark:', error)
       toast.error(error.message || '북마크 처리에 실패했습니다.')
@@ -219,59 +312,30 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const formatContent = (content: string) => {
+    return content.replace(/\n/g, '<br/>')
   }
 
-  const getRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      'leader': '동아리장',
-      'vice_leader': '부동아리장',
-      'executive': '운영진',
-      'member': '일반회원',
-      'admin': '관리자'
-    }
-    return roleLabels[role] || role
-  }
-
-  if (loading) {
+  if (loading || !resourceData) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-32 mb-6"></div>
-            <div className="bg-white rounded-lg shadow p-8">
-              <div className="h-10 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-8"></div>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!resourceData) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mb-4">자료를 찾을 수 없습니다.</h1>
-          <Button asChild>
-            <Link href="/resources">목록으로 돌아가기</Link>
-          </Button>
-        </div>
-      </div>
+      <DetailLayout
+        title={loading ? "로딩 중..." : "자료를 찾을 수 없습니다."}
+        content=""
+        author={{ id: "", name: "", avatar: "" }}
+        createdAt={new Date().toISOString()}
+        viewCount={0}
+        likeCount={0}
+        commentCount={0}
+        isLiked={false}
+        isBookmarked={false}
+        canEdit={false}
+        canDelete={false}
+        onLike={() => {}}
+        onBookmark={() => {}}
+        onShare={() => {}}
+        backLink="/resources"
+        loading={loading}
+      />
     )
   }
 
@@ -279,241 +343,78 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   const TypeIcon = typeIcons[metadata?.type as keyof typeof typeIcons] || File
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
+    <DetailLayout
+      title={resourceData.title || ''}
+      content={formatContent(resourceData.content || '')}
+      author={{
+        id: resourceData.author_id || '',
+        name: resourceData.author_name || '익명',
+        avatar: resourceData.author_avatar_url || undefined,
+        department: resourceData.author_department || undefined
+      }}
+      createdAt={resourceData.created_at || new Date().toISOString()}
+      viewCount={resourceData.view_count || 0}
+      category={{
+        label: categoryLabels[resourceData.category as keyof typeof categoryLabels] || '자료',
+        value: resourceData.category || 'resource',
+        color: categoryColors[resourceData.category as keyof typeof categoryColors],
+        icon: BookOpen
+      }}
+      tags={resourceData.tags || []}
+      likeCount={likeCount}
+      commentCount={resourceData.comment_count || 0}
+      isLiked={isLiked}
+      isBookmarked={isBookmarked}
+      canEdit={!!(user && user.id === resourceData.author_id)}
+      canDelete={!!(user && (user.id === resourceData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
+      onLike={handleLike}
+      onBookmark={handleBookmark}
+      onShare={handleShare}
+      onEdit={handleEdit}
+      onDelete={handleDelete}
+      additionalInfo={
+        <>
+          {/* Resource type badge */}
+          <div className="mb-4">
+            <Badge variant="outline">
+              <TypeIcon className="mr-1 h-3 w-3" />
+              {typeLabels[metadata?.type as keyof typeof typeLabels] || '자료'}
+            </Badge>
+          </div>
+
+          {/* Resource info */}
+          {(metadata?.url || metadata?.file_url) && (
+            <div className="space-y-4">
+              <h4 className="font-semibold">자료 정보</h4>
+              <div className="rounded-lg bg-gray-50 dark:bg-gray-900 p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">다운로드 횟수</span>
+                  <span className="text-sm text-muted-foreground">{downloadCount}회</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
+      }
+      actionButtons={
+        <Button 
+          size="sm"
+          onClick={handleDownload}
+          disabled={!isMember}
+          title={!isMember ? "동아리 회원만 다운로드할 수 있습니다" : ""}
+          className="kepco-gradient gap-2"
         >
-          <Button variant="ghost" asChild className="mb-4">
-            <Link href="/resources">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              목록으로 돌아가기
-            </Link>
-          </Button>
-        </motion.div>
-
-        {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              {/* Category and Type */}
-              <div className="mb-4 flex flex-wrap items-center gap-2">
-                <Badge 
-                  variant="secondary" 
-                  className={categoryColors[resourceData.category as keyof typeof categoryColors]}
-                >
-                  {categoryLabels[resourceData.category as keyof typeof categoryLabels]}
-                </Badge>
-                <Badge variant="outline">
-                  <TypeIcon className="mr-1 h-3 w-3" />
-                  {typeLabels[metadata?.type as keyof typeof typeLabels] || '자료'}
-                </Badge>
-                {resourceData.tags?.map((tag: string) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
-                    <Tag className="mr-1 h-3 w-3" />
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-
-              {/* Title */}
-              <CardTitle className="text-2xl sm:text-3xl leading-tight">
-                {resourceData.title}
-              </CardTitle>
-
-              {/* Author and Meta Info */}
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={resourceData.author_avatar_url || ''} alt={resourceData.author_name || ''} />
-                    <AvatarFallback>
-                      {resourceData.author_name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{resourceData.author_name || '익명'}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {getRoleLabel(resourceData.author_role || 'member')}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {resourceData.author_department || '부서 미지정'} • {resourceData.created_at ? formatDate(resourceData.created_at) : '날짜 없음'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {user && (user.id === resourceData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {user.id === resourceData.author_id && (
-                          <>
-                            <DropdownMenuItem onClick={handleEdit}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem 
-                          onClick={handleDelete}
-                          disabled={deleteLoading}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <Download className="h-4 w-4" />
-                    <span>{downloadCount}</span>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              {/* Description */}
-              <div className="prose max-w-none mb-8">
-                <div 
-                  className="whitespace-pre-wrap text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{ 
-                    __html: (resourceData.content || '').replace(/\n/g, '<br/>') 
-                  }}
-                />
-              </div>
-
-              {/* Resource Info */}
-              <div className="mb-8 grid grid-cols-1 gap-4 rounded-lg bg-gray-50 p-4 sm:grid-cols-2">
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">카테고리</div>
-                  <div className="mt-1 font-medium">
-                    {categoryLabels[resourceData.category as keyof typeof categoryLabels]}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-muted-foreground">파일 형식</div>
-                  <div className="mt-1 font-medium">
-                    {typeLabels[metadata?.type as keyof typeof typeLabels] || '자료'}
-                  </div>
-                </div>
-              </div>
-
-              {/* Download Section */}
-              <div className="mb-8 rounded-lg border p-6 text-center">
-                <TypeIcon className="mx-auto mb-4 h-12 w-12 text-primary" />
-                <h3 className="mb-2 text-lg font-semibold">자료 다운로드</h3>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  {metadata?.url ? '외부 링크로 이동합니다' : '파일을 다운로드할 수 있습니다'}
-                </p>
-                <Button 
-                  onClick={handleDownload}
-                  className="kepco-gradient"
-                  size="lg"
-                  disabled={!isMember}
-                  title={!isMember ? "동아리 회원만 자료를 다운로드할 수 있습니다" : ""}
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  {metadata?.url ? '링크 열기' : '다운로드'}
-                </Button>
-                {!isMember && (
-                  <p className="mt-2 text-xs text-muted-foreground">
-                    동아리 회원만 자료를 다운로드할 수 있습니다
-                  </p>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center justify-between border-t pt-6">
-                <div className="flex items-center space-x-2">
-                  <Button variant="outline" size="sm" onClick={handleShare}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    공유
-                  </Button>
-                  <Button 
-                    variant={isBookmarked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleBookmark}
-                    className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
-                    disabled={!isMember}
-                    title={!isMember ? "동아리 회원만 북마크할 수 있습니다" : ""}
-                  >
-                    {isBookmarked ? (
-                      <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />
-                    ) : (
-                      <Bookmark className="mr-2 h-4 w-4" />
-                    )}
-                    북마크
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Related Resources */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-8"
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>관련 자료</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Link href="/resources" className="group">
-                  <div className="rounded-lg border p-4 transition-colors group-hover:bg-gray-50">
-                    <h4 className="font-semibold group-hover:text-primary">
-                      AI 활용 가이드라인
-                    </h4>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      AI 도구 사용 시 참고할 수 있는 가이드라인
-                    </p>
-                    <div className="mt-2 flex items-center space-x-2">
-                      <Badge variant="outline" className="text-xs">가이드라인</Badge>
-                      <Badge variant="outline" className="text-xs">PDF</Badge>
-                    </div>
-                  </div>
-                </Link>
-                
-                <Link href="/resources" className="group">
-                  <div className="rounded-lg border p-4 transition-colors group-hover:bg-gray-50">
-                    <h4 className="font-semibold group-hover:text-primary">
-                      프롬프트 작성 템플릿
-                    </h4>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      효과적인 프롬프트 작성을 위한 템플릿
-                    </p>
-                    <div className="mt-2 flex items-center space-x-2">
-                      <Badge variant="outline" className="text-xs">템플릿</Badge>
-                      <Badge variant="outline" className="text-xs">문서</Badge>
-                    </div>
-                  </div>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
-    </div>
+          <Download className="h-4 w-4" />
+          다운로드
+        </Button>
+      }
+      backLink="/resources"
+      backLinkText="학습자료 목록"
+      loading={loading}
+      likeLoading={likeLoading}
+      deleteLoading={deleteLoading}
+    >
+      <CommentSection contentId={resourceId} />
+    </DetailLayout>
   )
 }

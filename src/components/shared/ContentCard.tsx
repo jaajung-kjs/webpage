@@ -3,6 +3,7 @@
 import React from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
+import { fadeInUp, cardHover } from '@/lib/animations'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -213,15 +214,19 @@ export default function ContentCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
+      {...fadeInUp}
       transition={{ duration: 0.3, delay: 0.05 * index }}
+      whileHover="hover"
+      whileTap="tap"
+      variants={cardHover}
     >
       <Card className={cn(
-        "h-full transition-all hover:shadow-lg hover:-translate-y-1",
+        "h-full transition-all hover:shadow-lg hover:-translate-y-1 touch-manipulation",
         isPinned && "border-primary bg-primary/5"
       )}>
-        {cardContent}
+        <Link href={`${linkPrefix}/${content.id}`} className="block touch-manipulation">
+          {cardContent}
+        </Link>
       </Card>
     </motion.div>
   )

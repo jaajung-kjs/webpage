@@ -23,6 +23,7 @@ import {
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import ContentCard from '@/components/shared/ContentCard'
 import ContentCreateModal from '@/components/shared/ContentCreateModal'
+import StatsCard from '@/components/shared/StatsCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
@@ -245,47 +246,31 @@ export default function CommunityPage() {
   // Stats Section
   const statsSection = (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">전체 게시글</CardTitle>
-          <MessageSquare className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalPosts}</div>
-          <p className="text-xs text-muted-foreground">
-            오늘 +{stats.todayPosts}
-          </p>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">전체 조회수</CardTitle>
-          <Eye className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalViews.toLocaleString()}</div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">전체 댓글</CardTitle>
-          <MessageCircle className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{stats.totalComments}</div>
-        </CardContent>
-      </Card>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">고정 게시글</CardTitle>
-          <Tag className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {loading ? '-' : posts?.filter(p => (p.metadata as any)?.is_pinned).length || 0}
-          </div>
-        </CardContent>
-      </Card>
+      <StatsCard
+        title="전체 게시글"
+        value={stats.totalPosts}
+        icon={MessageSquare}
+        subtitle={`오늘 +${stats.todayPosts}`}
+        loading={loading}
+      />
+      <StatsCard
+        title="전체 조회수"
+        value={stats.totalViews.toLocaleString()}
+        icon={Eye}
+        loading={loading}
+      />
+      <StatsCard
+        title="전체 댓글"
+        value={stats.totalComments}
+        icon={MessageCircle}
+        loading={loading}
+      />
+      <StatsCard
+        title="고정 게시글"
+        value={loading ? 0 : posts?.filter(p => (p.metadata as any)?.is_pinned).length || 0}
+        icon={Tag}
+        loading={loading}
+      />
     </div>
   )
 

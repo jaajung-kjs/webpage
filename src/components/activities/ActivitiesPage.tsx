@@ -53,7 +53,6 @@ import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/clie
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
-import ContentFilters from '@/components/shared/ContentFilters'
 import StatsCard from '@/components/shared/StatsCard'
 
 const categoryLabels = {
@@ -517,26 +516,22 @@ function ActivitiesPage() {
   // Advanced filters
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const advancedFilters = (
-    <ContentFilters
-      filterGroups={[
-        {
-          id: 'status',
-          label: '상태',
-          type: 'radio',
-          options: Object.entries(statusLabels).map(([value, label]) => ({
-            value,
-            label,
-            count: value === 'all' 
-              ? activities?.length || 0
-              : activities?.filter(a => a.status === value).length || 0
-          })),
-          value: activeStatus,
-          onChange: handleStatusChange
-        }
-      ]}
-      onReset={() => setActiveStatus('all')}
-      activeFiltersCount={activeStatus !== 'all' ? 1 : 0}
-    />
+    <div className="p-4 border rounded-lg">
+      <h3 className="font-semibold mb-2">상태 필터</h3>
+      <div className="space-y-2">
+        {Object.entries(statusLabels).map(([value, label]) => (
+          <Button
+            key={value}
+            variant={activeStatus === value ? "default" : "ghost"}
+            size="sm"
+            onClick={() => handleStatusChange(value)}
+            className="w-full justify-start"
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+    </div>
   )
 
   return (

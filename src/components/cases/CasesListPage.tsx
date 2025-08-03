@@ -3,7 +3,6 @@
 import { useState, useMemo } from 'react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useContentList, useDeleteContent, useCreateContent } from '@/hooks/useSupabase'
-import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Views, type Enums, TablesInsert } from '@/lib/supabase/client'
 import * as z from 'zod'
@@ -71,16 +70,6 @@ const createFields = [
     })
   },
   {
-    name: 'description',
-    label: '내용 요약',
-    type: 'textarea' as const,
-    placeholder: '활용사례의 핵심 내용을 간단히 요약해주세요',
-    description: '목록 페이지에서 보여질 요약 설명입니다 (20-200자)',
-    rows: 3,
-    maxLength: 200,
-    validation: z.string().min(20, '내용 요약은 최소 20자 이상이어야 합니다').max(200, '내용 요약은 200자 이하여야 합니다')
-  },
-  {
     name: 'content',
     label: '본문',
     type: 'textarea' as const,
@@ -107,7 +96,6 @@ export default function CasesListPage() {
   const [createModalOpen, setCreateModalOpen] = useState(false)
   
   const { user, profile } = useOptimizedAuth()
-  const router = useRouter()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
   const { createContent, loading: createLoading } = useCreateContent()
   
@@ -188,14 +176,7 @@ export default function CasesListPage() {
         tags: values.tags,
         author_id: user.id,
         status: 'published',
-        metadata: {
-          subcategory: 'automation',
-          tools: ['AI Assistant'],
-          difficulty: 'beginner',
-          time_required: '1-2시간',
-          is_featured: false,
-          description: values.description
-        }
+        metadata: {}
       }
 
       const result = await createContent(caseData)

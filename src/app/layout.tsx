@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+import "@/styles/colors.css";
+import "@/styles/mobile.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
 import { PerformanceProvider } from "@/components/providers/performance-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -35,9 +37,10 @@ export const metadata: Metadata = {
 export const viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
   themeColor: "#3b82f6",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

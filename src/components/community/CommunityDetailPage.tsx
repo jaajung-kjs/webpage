@@ -1,48 +1,29 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  Eye, 
   MessageCircle,
-  Heart,
-  Share2,
-  BookOpen,
-  ArrowLeft,
-  Flag,
-  MoreVertical,
   Coffee,
   Lightbulb,
   HelpCircle,
-  Bookmark,
-  BookmarkCheck,
-  Edit,
-  Trash2
+  BookOpen,
+  Flag
 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { 
   useContent,
   useIsLiked,
   useToggleLike,
   useDeleteContent
 } from '@/hooks/useSupabase'
-import { Views } from '@/lib/supabase/client'
+import { Views, supabase } from '@/lib/supabase/client'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
+import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
+import DetailLayout from '@/components/shared/DetailLayout'
 
 interface CommunityDetailPageProps {
   postId: string
@@ -81,9 +62,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   
   // Use Supabase hooks
   const { data: postData, loading, error } = useContent(postId)
-  const isLiked = useIsLiked(user?.id, postId)
+  const isLikedFromHook = useIsLiked(user?.id, postId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -91,14 +73,24 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
 
 
-  // View count is incremented automatically by getContentById
-
-  // Update like count when data changes
+  // Increment view count when post is loaded
   useEffect(() => {
-    if (postData?.like_count) {
-      setLikeCount(postData.like_count)
+    if (postData?.id) {
+      ContentAPI.incrementViewCount(postData.id)
+    }
+  }, [postData?.id])
+
+  // Update like count and like state when data changes
+  useEffect(() => {
+    if (postData?.like_count !== undefined) {
+      setLikeCount(postData.like_count || 0)
     }
   }, [postData])
+  
+  // Update like state from hook
+  useEffect(() => {
+    setIsLiked(isLikedFromHook)
+  }, [isLikedFromHook])
 
   // Listen for report dialog events
   const [parentContentId, setParentContentId] = useState<string | undefined>()
@@ -130,6 +122,9 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       return
     }
 
+    // Prevent multiple clicks
+    if (likeLoading) return
+
     try {
       const result = await toggleLike(user.id, postId)
       
@@ -137,10 +132,30 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         throw result.error
       }
       
-      // Update local like count
-      setLikeCount(prev => isLiked ? prev - 1 : prev + 1)
+      // Get the updated state by checking the current like status
+      const { data: currentLike } = await supabase
+        .from('interactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('content_id', postId)
+        .eq('type', 'like')
+        .single()
       
-      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
+      const isNowLiked = !!currentLike
+      setIsLiked(isNowLiked)
+      
+      // Get updated like count from content
+      const { data: updatedContent } = await supabase
+        .from('content_with_author')
+        .select('like_count')
+        .eq('id', postId)
+        .single()
+      
+      if (updatedContent) {
+        setLikeCount(updatedContent.like_count || 0)
+      }
+      
+      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
@@ -188,250 +203,101 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const formatContent = (content: string) => {
+    return content.replace(/\n/g, '<br/>')
   }
 
-  const getRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      'leader': '동아리장',
-      'vice_leader': '부동아리장',
-      'executive': '운영진',
-      'member': '일반회원',
-      'admin': '관리자'
-    }
-    return roleLabels[role] || role
-  }
-
-  if (loading) {
+  if (loading || !postData) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-32 mb-6"></div>
-            <div className="bg-white rounded-lg shadow p-8">
-              <div className="h-10 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-8"></div>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!postData) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mb-4">게시글을 찾을 수 없습니다.</h1>
-          <Button asChild>
-            <Link href="/community">목록으로 돌아가기</Link>
-          </Button>
-        </div>
-      </div>
+      <DetailLayout
+        title={loading ? "로딩 중..." : "게시글을 찾을 수 없습니다."}
+        content=""
+        author={{ id: "", name: "", avatar: "" }}
+        createdAt={new Date().toISOString()}
+        viewCount={0}
+        likeCount={0}
+        commentCount={0}
+        isLiked={false}
+        isBookmarked={false}
+        canEdit={false}
+        canDelete={false}
+        onLike={() => {}}
+        onBookmark={() => {}}
+        onShare={() => {}}
+        backLink="/community"
+        loading={loading}
+      />
     )
   }
 
   const CategoryIcon = categoryIcons[postData.category as keyof typeof categoryIcons] || MessageCircle
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
-        >
-          <Button variant="ghost" asChild className="mb-4">
-            <Link href="/community">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              목록으로 돌아가기
-            </Link>
+    <>
+      <DetailLayout
+        title={postData.title || ''}
+        content={formatContent(postData.content || '')}
+        author={{
+          id: postData.author_id || '',
+          name: postData.author_name || '익명',
+          avatar: postData.author_avatar_url || undefined,
+          department: postData.author_department || undefined
+        }}
+        createdAt={postData.created_at || new Date().toISOString()}
+        viewCount={postData.view_count || 0}
+        category={{
+          label: categoryLabels[postData.category as keyof typeof categoryLabels] || '토론',
+          value: postData.category || 'discussion',
+          color: categoryColors[postData.category as keyof typeof categoryColors],
+          icon: CategoryIcon
+        }}
+        tags={postData.tags || []}
+        likeCount={likeCount}
+        commentCount={postData.comment_count || 0}
+        isLiked={isLiked}
+        isBookmarked={isBookmarked}
+        canEdit={!!(user && user.id === postData.author_id)}
+        canDelete={!!(user && (user.id === postData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
+        onLike={handleLike}
+        onBookmark={handleBookmark}
+        onShare={handleShare}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        actionButtons={
+          <Button variant="outline" size="sm" onClick={() => {
+            setReportTarget({ type: 'content', id: postId })
+            setReportDialogOpen(true)
+          }}>
+            <Flag className="mr-2 h-4 w-4" />
+            신고
           </Button>
-        </motion.div>
+        }
+        backLink="/community"
+        backLinkText="자유게시판 목록"
+        loading={loading}
+        likeLoading={likeLoading}
+        deleteLoading={deleteLoading}
+      >
+        <CommentSection contentId={postId} />
+      </DetailLayout>
 
-        {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              <div className="mb-4 flex items-center space-x-2">
-                <Badge 
-                  variant="secondary" 
-                  className={categoryColors[postData.category as keyof typeof categoryColors]}
-                >
-                  <CategoryIcon className="mr-1 h-3 w-3" />
-                  {categoryLabels[postData.category as keyof typeof categoryLabels]}
-                </Badge>
-              </div>
-
-              <CardTitle className="text-2xl sm:text-3xl leading-tight">
-                {postData.title}
-              </CardTitle>
-
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={postData.author_avatar_url || ''} alt={postData.author_name || ''} />
-                    <AvatarFallback>
-                      {postData.author_name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{postData.author_name || '익명'}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {getRoleLabel(postData.author_role || 'member')}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {postData.author_department || '부서 미지정'} • {postData.created_at ? formatDate(postData.created_at) : '날짜 없음'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {user && (user.id === postData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {user.id === postData.author_id && (
-                          <>
-                            <DropdownMenuItem onClick={handleEdit}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem 
-                          onClick={handleDelete}
-                          disabled={deleteLoading}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  <div className="flex items-center space-x-1">
-                    <Eye className="h-4 w-4" />
-                    <span>{postData.view_count || 0}</span>
-                  </div>
-                  <div className="flex items-center space-x-1">
-                    <Heart className="h-4 w-4" />
-                    <span>{likeCount}</span>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <div className="prose max-w-none mb-8">
-                <div 
-                  className="whitespace-pre-wrap text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{ 
-                    __html: (postData.content || '').replace(/\n/g, '<br/>') 
-                  }}
-                />
-              </div>
-
-              <div className="flex items-center justify-between border-t pt-6">
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant={isLiked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleLike}
-                    disabled={likeLoading || !isMember}
-                    className={isLiked ? "bg-red-500 hover:bg-red-600 text-white" : ""}
-                    title={!isMember ? "동아리 회원만 좋아요를 누를 수 있습니다" : ""}
-                  >
-                    <Heart className={`mr-2 h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-                    좋아요 {likeCount > 0 && `(${likeCount})`}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleShare}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    공유
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setReportTarget({ type: 'content', id: postId })
-                    setReportDialogOpen(true)
-                  }}>
-                    <Flag className="mr-2 h-4 w-4" />
-                    신고
-                  </Button>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant={isBookmarked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleBookmark}
-                    className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
-                  >
-                    {isBookmarked ? (
-                      <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />
-                    ) : (
-                      <Bookmark className="mr-2 h-4 w-4" />
-                    )}
-                    북마크
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Comments Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-8"
-        >
-          <CommentSection contentId={postId} />
-        </motion.div>
-
-        {/* Report Dialog */}
-        <ReportDialog
-          open={reportDialogOpen}
-          onOpenChange={(open) => {
-            setReportDialogOpen(open)
-            if (!open) {
-              setReportTarget(null)
-              setParentContentId(undefined)
-            }
-          }}
-          postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
-          commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
-          targetType={reportTarget?.type}
-          targetId={reportTarget?.id}
-          parentContentId={parentContentId}
-          postType={reportTarget?.type === 'comment' ? 'comment' : 'community'}
-        />
-      </div>
-    </div>
+      {/* Report Dialog */}
+      <ReportDialog
+        open={reportDialogOpen}
+        onOpenChange={(open) => {
+          setReportDialogOpen(open)
+          if (!open) {
+            setReportTarget(null)
+            setParentContentId(undefined)
+          }
+        }}
+        postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
+        commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
+        targetType={reportTarget?.type}
+        targetId={reportTarget?.id}
+        parentContentId={parentContentId}
+        postType={reportTarget?.type === 'comment' ? 'comment' : 'community'}
+      />
+    </>
   )
 }

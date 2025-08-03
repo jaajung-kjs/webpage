@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,7 +12,6 @@ import {
   MessageCircle,
   Send,
   ThumbsUp,
-  Loader2,
   MessageSquare,
   ChevronDown,
   ChevronUp,
@@ -20,7 +19,10 @@ import {
   Edit2,
   Trash2,
   Reply,
-  Flag
+  Flag,
+  Clock,
+  User,
+  Heart
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -29,18 +31,29 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
+import { formatDistanceToNow } from 'date-fns'
+import { ko } from 'date-fns/locale'
 import { 
   useComments, 
   useCreateComment, 
   useUpdateComment, 
   useDeleteComment,
-  useToggleCommentLike,
-  useSupabaseMutation
+  useToggleCommentLike
 } from '@/hooks/useSupabase'
 import { Views, supabase } from '@/lib/supabase/client'
+import { LoadingDots, EmptyState } from '@/components/shared/LoadingStates'
+import { Skeleton, SkeletonList } from '@/components/ui/skeleton'
 
 interface CommentSectionProps {
   contentId: string
@@ -50,6 +63,21 @@ interface CommentSectionProps {
   autoCollapseDepth?: number // 자동 접기 깊이
 }
 
+type CommentWithReplies = Views<'comments_with_author'> & {
+  replies?: CommentWithReplies[]
+}
+
+// Helper function for role labels
+function getRoleLabel(role: string) {
+  const labels: Record<string, string> = {
+    'admin': '관리자',
+    'leader': '동아리장',
+    'vice-leader': '부동아리장',
+    'member': '회원'
+  }
+  return labels[role] || role
+}
+
 export default function CommentSection({ 
   contentId, 
   contentType = 'post',
@@ -57,111 +85,212 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useOptimizedAuth()
   
-  // Use Supabase hooks
   const { data: commentsData, loading, refetch } = useComments(contentId)
   const { createComment, loading: createLoading } = useCreateComment()
   const { updateComment, loading: updateLoading } = useUpdateComment()
   const { deleteComment, loading: deleteLoading } = useDeleteComment()
   const { toggleCommentLike, loading: likeLoading } = useToggleCommentLike()
   
-  const [comments, setComments] = useState<Views<'comments_with_author'>[]>([])
+  const [comments, setComments] = useState<CommentWithReplies[]>([])
   const [newComment, setNewComment] = useState('')
   const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
-  const [replyingTo, setReplyingTo] = useState<string | null>(null)
-  const [replyContent, setReplyContent] = useState('')
-  const [editingComment, setEditingComment] = useState<string | null>(null)
-  const [editContent, setEditContent] = useState('')
-  const [collapsedThreads, setCollapsedThreads] = useState<Set<string>>(new Set())
+  const [replyingToComments, setReplyingToComments] = useState<{ [key: string]: boolean }>({})
+  const [editingComments, setEditingComments] = useState<{ [key: string]: boolean }>({})
+  const [replyContents, setReplyContents] = useState<{ [key: string]: string }>({})
+  const [editContents, setEditContents] = useState<{ [key: string]: string }>({})
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popular'>('newest')
-  const commentRefs = useRef<{ [key: string]: HTMLDivElement | null }>({})
+  
+  const commentActionLoading = createLoading || updateLoading || deleteLoading
 
-  const commentLoading = createLoading || updateLoading || deleteLoading || likeLoading
-
-  // Update local state when comments data changes
-  useEffect(() => {
-    if (commentsData) {
-      const sortedComments = sortComments(commentsData, sortBy)
-      setComments(sortedComments)
-      // Check like status for all comments
-      checkCommentLikeStatus(commentsData)
-    }
-  }, [commentsData, sortBy])
-
-  const fetchComments = async () => {
-    try {
-      // Refetch comments using the hook
-      await refetch()
-    } catch (error) {
-      console.error('Error fetching comments:', error)
-      toast.error('댓글을 불러오는데 실패했습니다.')
-    }
+  // Helper functions for individual comment state management
+  const startReply = (commentId: string) => {
+    setReplyingToComments(prev => ({ ...prev, [commentId]: true }))
+    setReplyContents(prev => ({ ...prev, [commentId]: '' }))
   }
 
-  const checkCommentLikeStatus = async (comments: Views<'comments_with_author'>[]) => {
+  const cancelReply = (commentId: string) => {
+    setReplyingToComments(prev => ({ ...prev, [commentId]: false }))
+    setReplyContents(prev => ({ ...prev, [commentId]: '' }))
+  }
+
+  const startEdit = (commentId: string, currentContent: string) => {
+    setEditingComments(prev => ({ ...prev, [commentId]: true }))
+    setEditContents(prev => ({ ...prev, [commentId]: currentContent }))
+  }
+
+  const cancelEdit = (commentId: string) => {
+    setEditingComments(prev => ({ ...prev, [commentId]: false }))
+    setEditContents(prev => ({ ...prev, [commentId]: '' }))
+  }
+
+  // Sort and organize comments
+  useEffect(() => {
+    if (commentsData) {
+      // Organize comments into tree structure
+      const commentMap = new Map<string, Views<'comments_with_author'>[]>()
+      const rootComments: Views<'comments_with_author'>[] = []
+      
+      // First pass: separate root comments and create map for replies
+      commentsData.forEach(comment => {
+        if (!comment.parent_id) {
+          rootComments.push(comment)
+        } else {
+          if (!commentMap.has(comment.parent_id)) {
+            commentMap.set(comment.parent_id, [])
+          }
+          commentMap.get(comment.parent_id)!.push(comment)
+        }
+      })
+      
+      // Sort root comments
+      const sorted = rootComments.sort((a, b) => {
+        switch (sortBy) {
+          case 'newest':
+            return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+          case 'oldest':
+            return new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
+          case 'popular':
+            return (b.like_count || 0) - (a.like_count || 0)
+          default:
+            return 0
+        }
+      })
+      
+      // Attach replies to comments (flat structure - only one level deep)
+      const attachReplies = (comments: Views<'comments_with_author'>[]): CommentWithReplies[] => {
+        return comments.map(comment => ({
+          ...comment,
+          replies: comment.id ? (commentMap.get(comment.id) || []).map(reply => ({
+            ...reply,
+            replies: [] // Always flat - no nested replies
+          })) : []
+        }))
+      }
+      
+      const commentsWithReplies = attachReplies(sorted)
+      setComments(commentsWithReplies)
+      
+      // Check like status for all comments
+      if (user) {
+        checkCommentLikeStatus(commentsWithReplies)
+      }
+    }
+  }, [commentsData, sortBy, user])
+
+  const getAllCommentIds = (comments: CommentWithReplies[]): string[] => {
+    const ids: string[] = []
+    
+    const collectIds = (commentList: CommentWithReplies[]) => {
+      commentList.forEach(comment => {
+        if (comment.id) {
+          ids.push(comment.id)
+        }
+        if (comment.replies && comment.replies.length > 0) {
+          collectIds(comment.replies)
+        }
+      })
+    }
+    
+    collectIds(comments)
+    return ids
+  }
+
+  // Helper function to find the root parent comment ID
+  const findRootParentId = (commentId: string): string => {
+    const findInComments = (commentList: CommentWithReplies[]): string | null => {
+      for (const comment of commentList) {
+        if (comment.id === commentId) {
+          return comment.id // This is a root comment
+        }
+        if (comment.replies) {
+          for (const reply of comment.replies) {
+            if (reply.id === commentId) {
+              return comment.id // This reply's parent is the root
+            }
+          }
+        }
+      }
+      return null
+    }
+    
+    const rootId = findInComments(comments)
+    return rootId || commentId // Fallback to the original ID
+  }
+
+  const checkCommentLikeStatus = async (comments: CommentWithReplies[]) => {
     if (!user) return
 
     try {
-      const likesStatus: { [key: string]: boolean } = {}
+      const allCommentIds = getAllCommentIds(comments)
       
-      // Check like status for all comments in batch
-      const commentIds = comments.map(c => c.id).filter((id): id is string => id !== null)
+      if (allCommentIds.length === 0) return
       
       const { data: likes } = await supabase
         .from('interactions')
         .select('comment_id')
         .eq('user_id', user.id)
         .eq('type', 'like')
-        .in('comment_id', commentIds)
+        .in('comment_id', allCommentIds)
       
-      // Create lookup map
-      const likedCommentIds = new Set(likes?.map(l => l.comment_id).filter(id => id !== null) || [])
+      const likedCommentIds = new Set(likes?.map(l => l.comment_id).filter(Boolean) || [])
+      const newLikeStatus: { [key: string]: boolean } = {}
       
-      // Set like status for each comment
-      commentIds.forEach(id => {
-        likesStatus[id] = likedCommentIds.has(id)
+      allCommentIds.forEach(commentId => {
+        newLikeStatus[commentId] = likedCommentIds.has(commentId)
       })
       
-      setCommentLikes(likesStatus)
+      setCommentLikes(newLikeStatus)
     } catch (error) {
       console.error('Error checking comment like status:', error)
     }
   }
 
-  const handleCommentSubmit = async () => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-    
-    if (!isMember) {
-      toast.error('동아리 회원만 댓글을 작성할 수 있습니다.')
-      return
-    }
 
-    if (!newComment.trim()) {
-      toast.error('댓글 내용을 입력해주세요.')
-      return
-    }
+  const handleSubmit = async () => {
+    if (!user || !newComment.trim() || !isMember) return
 
     try {
-      const result = await createComment({
+      await createComment({
         content_id: contentId,
         author_id: user.id,
-        comment: newComment.trim()
+        comment: newComment.trim(),
+        parent_id: null
       })
       
-      if (result.error) {
-        throw result.error
-      }
-      
       setNewComment('')
-      await fetchComments() // Refresh comments
-      toast.success('댓글이 등록되었습니다.')
+      await refetch()
+      toast.success('댓글이 작성되었습니다.')
     } catch (error) {
       console.error('Error creating comment:', error)
       toast.error('댓글 작성에 실패했습니다.')
+    }
+  }
+
+  const handleReply = async (parentId: string) => {
+    if (!user || !isMember) return
+    
+    const content = replyContents[parentId]?.trim()
+    if (!content) return
+
+    try {
+      // For flat structure: always use the root parent ID
+      const rootParentId = findRootParentId(parentId)
+      
+      await createComment({
+        content_id: contentId,
+        author_id: user.id,
+        comment: content,
+        parent_id: rootParentId
+      })
+      
+      cancelReply(parentId)
+      await refetch()
+      toast.success('답글이 작성되었습니다.')
+    } catch (error) {
+      console.error('Error creating reply:', error)
+      toast.error('답글 작성에 실패했습니다.')
     }
   }
 
@@ -176,24 +305,15 @@ export default function CommentSection({
       return
     }
 
-    if (likeLoading) return
-
     try {
       const wasLiked = commentLikes[commentId] || false
       
-      const result = await toggleCommentLike(user.id, commentId, contentId)
-      
-      if (result.error) {
-        throw result.error
-      }
-      
-      // Update local state optimistically
+      // Optimistically update UI
       setCommentLikes(prev => ({
         ...prev,
         [commentId]: !wasLiked
       }))
       
-      // Update likes count in comments array
       setComments(prev => prev.map(comment => {
         if (comment.id === commentId) {
           return { 
@@ -201,71 +321,71 @@ export default function CommentSection({
             like_count: (comment.like_count || 0) + (wasLiked ? -1 : 1) 
           }
         }
+        // Check nested replies
+        if (comment.replies) {
+          const updatedReplies = comment.replies.map(reply => {
+            if (reply.id === commentId) {
+              return {
+                ...reply,
+                like_count: (reply.like_count || 0) + (wasLiked ? -1 : 1)
+              }
+            }
+            return reply
+          })
+          return { ...comment, replies: updatedReplies }
+        }
         return comment
       }))
+      
+      const result = await toggleCommentLike(user.id, commentId, contentId)
+      
+      if (result.error) {
+        // Revert on error
+        setCommentLikes(prev => ({
+          ...prev,
+          [commentId]: wasLiked
+        }))
+        
+        setComments(prev => prev.map(comment => {
+          if (comment.id === commentId) {
+            return { 
+              ...comment, 
+              like_count: (comment.like_count || 0) + (wasLiked ? 1 : -1) 
+            }
+          }
+          // Check nested replies
+          if (comment.replies) {
+            const updatedReplies = comment.replies.map(reply => {
+              if (reply.id === commentId) {
+                return {
+                  ...reply,
+                  like_count: (reply.like_count || 0) + (wasLiked ? 1 : -1)
+                }
+              }
+              return reply
+            })
+            return { ...comment, replies: updatedReplies }
+          }
+          return comment
+        }))
+        
+        throw result.error
+      }
     } catch (error) {
       console.error('Error toggling comment like:', error)
       toast.error('좋아요 처리에 실패했습니다.')
     }
   }
 
-  // Helper functions
-  const sortComments = (comments: Views<'comments_with_author'>[], sort: 'newest' | 'oldest' | 'popular') => {
-    const sorted = [...comments]
-    switch (sort) {
-      case 'newest':
-        return sorted.sort((a, b) => {
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateB - dateA
-        })
-      case 'oldest':
-        return sorted.sort((a, b) => {
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateA - dateB
-        })
-      case 'popular':
-        return sorted.sort((a, b) => (b.like_count || 0) - (a.like_count || 0))
-      default:
-        return sorted
-    }
-  }
-
-  const getCommentDepth = (comment: Views<'comments_with_author'>, allComments: Views<'comments_with_author'>[]): number => {
-    if (!comment.parent_id) return 0
-    const parent = allComments.find(c => c.id === comment.parent_id)
-    if (!parent) return 0
-    return getCommentDepth(parent, allComments) + 1
-  }
-
-  const toggleThreadCollapse = (commentId: string) => {
-    setCollapsedThreads(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(commentId)) {
-        newSet.delete(commentId)
-      } else {
-        newSet.add(commentId)
-      }
-      return newSet
-    })
-  }
-
-  const scrollToComment = (commentId: string) => {
-    const element = commentRefs.current[commentId]
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      element.classList.add('highlight-comment')
-      setTimeout(() => element.classList.remove('highlight-comment'), 2000)
-    }
-  }
-
-  const handleEdit = async (commentId: string) => {
-    if (!user || !editContent.trim()) return
+  const handleCommentEdit = async (commentId: string) => {
+    if (!user) return
+    
+    const content = editContents[commentId]?.trim()
+    if (!content) return
 
     try {
       const result = await updateComment(commentId, {
-        comment: editContent.trim(),
+        comment: content,
         updated_at: new Date().toISOString()
       }, contentId)
       
@@ -273,9 +393,8 @@ export default function CommentSection({
         throw result.error
       }
       
-      setEditingComment(null)
-      setEditContent('')
-      await fetchComments()
+      cancelEdit(commentId)
+      await refetch()
       toast.success('댓글이 수정되었습니다.')
     } catch (error) {
       console.error('Error editing comment:', error)
@@ -283,7 +402,7 @@ export default function CommentSection({
     }
   }
 
-  const handleDelete = async (commentId: string) => {
+  const handleCommentDelete = async (commentId: string) => {
     if (!user) return
     
     if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) return
@@ -295,7 +414,7 @@ export default function CommentSection({
         throw result.error
       }
       
-      await fetchComments()
+      await refetch()
       toast.success('댓글이 삭제되었습니다.')
     } catch (error) {
       console.error('Error deleting comment:', error)
@@ -303,670 +422,513 @@ export default function CommentSection({
     }
   }
 
-  const handleReply = async (parentId: string) => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-    
-    if (!isMember) {
-      toast.error('동아리 회원만 답글을 작성할 수 있습니다.')
-      return
-    }
-
-    if (!replyContent.trim()) {
-      toast.error('답글 내용을 입력해주세요.')
-      return
-    }
-
-    try {
-      const result = await createComment({
-        content_id: contentId,
-        parent_id: parentId,
-        author_id: user.id,
-        comment: replyContent.trim()
-      })
-      
-      if (result.error) {
-        throw result.error
-      }
-      
-      setReplyContent('')
-      setReplyingTo(null)
-      await fetchComments() // Refresh comments
-      toast.success('답글이 등록되었습니다.')
-    } catch (error) {
-      console.error('Error creating reply:', error)
-      toast.error('답글 작성에 실패했습니다.')
-    }
-  }
-
-  const formatRelativeTime = (dateString: string) => {
-    const date = new Date(dateString)
-    const now = new Date()
-    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60))
-    
-    if (diffInHours < 1) return '방금 전'
-    if (diffInHours < 24) return `${diffInHours}시간 전`
-    if (diffInHours < 48) return '1일 전'
-    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
-  }
-
-  const getRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      'leader': '동아리장',
-      'vice-leader': '부동아리장',
-      'admin': '운영진',
-      'member': '일반회원'
-    }
-    return roleLabels[role] || role
-  }
-
-  // Organize comments into tree structure
-  const organizeComments = (comments: Views<'comments_with_author'>[]) => {
-    const rootComments = comments.filter(c => !c.parent_id)
-    const commentMap = new Map<string, Views<'comments_with_author'>[]>()
-    
-    comments.forEach(comment => {
-      if (comment.parent_id) {
-        if (!commentMap.has(comment.parent_id)) {
-          commentMap.set(comment.parent_id, [])
-        }
-        const replies = commentMap.get(comment.parent_id)!
-        replies.push(comment)
-        // Sort replies by date
-        replies.sort((a, b) => {
-          const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
-          const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
-          return dateA - dateB
-        })
-      }
-    })
-    
-    return { rootComments, commentMap }
-  }
-
-  const { rootComments, commentMap } = organizeComments(comments)
-
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </CardContent>
-      </Card>
-    )
-  }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center space-x-2">
-            <MessageCircle className="h-5 w-5" />
-            <span>댓글 ({rootComments.length}{commentMap.size > 0 && ` · 답글 ${comments.length - rootComments.length}`})</span>
-          </CardTitle>
-          {comments.length > 0 && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm">
-                  정렬: {sortBy === 'newest' ? '최신순' : sortBy === 'oldest' ? '오래된순' : '인기순'}
-                  <ChevronDown className="ml-2 h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => setSortBy('newest')}>
-                  최신순
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('oldest')}>
-                  오래된순
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setSortBy('popular')}>
-                  인기순
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </CardHeader>
-      
-      <CardContent>
-        {/* New Comment Form */}
-        {isMember ? (
-          <div className="mb-6">
-            <Textarea
-              placeholder="댓글을 작성해보세요..."
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              className="mb-3"
-              rows={3}
-            />
-            <div className="flex justify-end">
-              <Button 
-                onClick={handleCommentSubmit} 
-                className="kepco-gradient"
-                disabled={commentLoading || !newComment.trim()}
-              >
-                {commentLoading ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-4 w-4" />
-                )}
-                댓글 작성
-              </Button>
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5 }}
+    >
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              댓글 {comments.length}
+            </CardTitle>
+            
+            <Select value={sortBy} onValueChange={(value: any) => setSortBy(value)}>
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">최신순</SelectItem>
+                <SelectItem value="oldest">오래된순</SelectItem>
+                <SelectItem value="popular">인기순</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+        
+        <CardContent>
+          {/* Comment Input */}
+          {user && isMember ? (
+            <div className="space-y-4 mb-6">
+              <div className="flex gap-3">
+                <Avatar>
+                  <AvatarImage src={user.user_metadata?.avatar_url || profile?.avatar_url} />
+                  <AvatarFallback>
+                    {(profile?.name || user.email)?.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                
+                <div className="flex-1 space-y-3">
+                  <Textarea
+                    placeholder="댓글을 작성하세요..."
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    className="min-h-[100px] resize-none"
+                  />
+                  
+                  <div className="flex justify-end">
+                    <Button
+                      className="kepco-gradient"
+                      size="sm"
+                      onClick={handleSubmit}
+                      disabled={!newComment.trim() || commentActionLoading}
+                    >
+                      {commentActionLoading ? (
+                        <LoadingDots text="작성 중" />
+                      ) : (
+                        <>
+                          <Send className="h-4 w-4" />
+                          댓글 작성
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        ) : (
-          <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 rounded-lg text-center">
-            <MessageCircle className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-            <p className="text-gray-600 dark:text-gray-400 mb-2">
-              동아리 회원만 댓글을 작성할 수 있습니다.
-            </p>
-            {!user && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('openLoginDialog', { 
-                    detail: { tab: 'login' } 
-                  }))
-                }}
-              >
-                로그인하기
-              </Button>
-            )}
-          </div>
-        )}
+          ) : (
+            <div className="mb-6 p-4 rounded-lg bg-muted text-center">
+              <p className="text-sm text-muted-foreground">
+                {!user ? '댓글을 작성하려면 로그인하세요.' : '동아리 회원만 댓글을 작성할 수 있습니다.'}
+              </p>
+            </div>
+          )}
 
-        <Separator className="mb-6" />
+          <Separator className="mb-6" />
 
-        {/* Comments List */}
-        {rootComments.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            아직 댓글이 없습니다. 첫 번째 댓글을 작성해보세요!
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {rootComments.map((comment) => (
-              <CommentThread
-                key={comment.id}
-                comment={comment}
-                replies={comment.id ? (commentMap.get(comment.id) || []) : []}
-                onLike={handleCommentLike}
-                onReply={handleReply}
-                onEdit={handleEdit}
-                onDelete={handleDelete}
-                isLiked={comment.id ? (commentLikes[comment.id] || false) : false}
-                replyingTo={replyingTo}
-                setReplyingTo={setReplyingTo}
-                replyContent={replyContent}
-                setReplyContent={setReplyContent}
-                editingComment={editingComment}
-                setEditingComment={setEditingComment}
-                editContent={editContent}
-                setEditContent={setEditContent}
-                commentLoading={commentLoading}
-                getRoleLabel={getRoleLabel}
-                formatRelativeTime={formatRelativeTime}
-                commentLikes={commentLikes}
-                depth={0}
-                maxDepth={maxDepth}
-                commentRefs={commentRefs}
-                currentUserId={user?.id}
-                commentMap={commentMap}
-                isMember={isMember}
-                contentId={contentId}
-              />
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {/* Comments List */}
+          {loading ? (
+            <SkeletonList />
+          ) : comments.length === 0 ? (
+            <EmptyState
+              title="첫 댓글을 작성해보세요"
+              message="아직 댓글이 없습니다."
+            />
+          ) : (
+            <motion.div 
+              variants={staggerContainer}
+              initial="initial"
+              animate="animate"
+              className="space-y-4"
+            >
+              {comments.map((comment) => (
+                <motion.div key={comment.id} variants={staggerItem}>
+                  <CommentItem
+                    comment={comment}
+                    depth={0}
+                    maxDepth={maxDepth}
+                    enableThreading={enableThreading}
+                    isLiked={comment.id ? (commentLikes[comment.id] || false) : false}
+                    onLike={handleCommentLike}
+                    onReply={startReply}
+                    onEdit={startEdit}
+                    onEditCancel={cancelEdit}
+                    onEditSave={handleCommentEdit}
+                    onDelete={handleCommentDelete}
+                    onReport={() => {}}
+                    isAuthor={comment.author_id === user?.id}
+                    canModerate={false}
+                    isReplying={comment.id ? (replyingToComments[comment.id] || false) : false}
+                    isEditing={comment.id ? (editingComments[comment.id] || false) : false}
+                    editContent={comment.id ? (editContents[comment.id] || '') : ''}
+                    setEditContent={(content) => {
+                      if (comment.id) {
+                        setEditContents(prev => ({ ...prev, [comment.id as string]: content }))
+                      }
+                    }}
+                    handleReply={handleReply}
+                    replyContent={comment.id ? (replyContents[comment.id] || '') : ''}
+                    setReplyContent={(content) => {
+                      if (comment.id) {
+                        setReplyContents(prev => ({ ...prev, [comment.id as string]: content }))
+                      }
+                    }}
+                    cancelReply={cancelReply}
+                    user={user}
+                    profile={profile}
+                    commentLikes={commentLikes}
+                    replyingToComments={replyingToComments}
+                    editingComments={editingComments}
+                    editContents={editContents}
+                    replyContents={replyContents}
+                    setEditContents={setEditContents}
+                    setReplyContents={setReplyContents}
+                  />
+                </motion.div>
+              ))}
+            </motion.div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
-// Comment Thread Component
-interface CommentThreadProps {
-  comment: Views<'comments_with_author'>
-  replies: Views<'comments_with_author'>[]
-  onLike: (commentId: string) => void
-  onReply: (parentId: string) => void
-  onEdit: (commentId: string) => void
-  onDelete: (commentId: string) => void
+interface CommentItemProps {
+  comment: CommentWithReplies
+  depth: number
+  maxDepth: number
+  enableThreading: boolean
   isLiked: boolean
-  replyingTo: string | null
-  setReplyingTo: (id: string | null) => void
-  replyContent: string
-  setReplyContent: (content: string) => void
-  editingComment: string | null
-  setEditingComment: (id: string | null) => void
+  onLike: (commentId: string) => void
+  onReply: (commentId: string) => void
+  onEdit: (commentId: string, content: string) => void
+  onEditCancel: (commentId: string) => void
+  onEditSave: (commentId: string) => void
+  onDelete: (commentId: string) => void
+  onReport: (commentId: string) => void
+  isAuthor: boolean
+  canModerate: boolean
+  isReplying: boolean
+  isEditing: boolean
   editContent: string
   setEditContent: (content: string) => void
-  commentLoading: boolean
-  getRoleLabel: (role: string) => string
-  formatRelativeTime: (date: string) => string
+  handleReply: (parentId: string) => void
+  replyContent: string
+  setReplyContent: (content: string) => void
+  cancelReply: (commentId: string) => void
+  user: any
+  profile: any
   commentLikes: { [key: string]: boolean }
-  depth?: number
-  maxDepth: number
-  commentRefs: React.MutableRefObject<{ [key: string]: HTMLDivElement | null }>
-  currentUserId?: string
-  commentMap?: Map<string, Views<'comments_with_author'>[]>
-  isMember: boolean
-  contentId: string
+  // Add state objects for nested access
+  replyingToComments: { [key: string]: boolean }
+  editingComments: { [key: string]: boolean }
+  editContents: { [key: string]: string }
+  replyContents: { [key: string]: string }
+  setEditContents: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>
+  setReplyContents: React.Dispatch<React.SetStateAction<{ [key: string]: string }>>
 }
 
-function CommentThread({
+function CommentItem({
   comment,
-  replies,
+  depth,
+  maxDepth,
+  enableThreading,
+  isLiked,
   onLike,
   onReply,
   onEdit,
+  onEditCancel,
+  onEditSave,
   onDelete,
-  isLiked,
-  replyingTo,
-  setReplyingTo,
+  onReport,
+  isAuthor,
+  canModerate,
+  isReplying,
+  isEditing,
+  editContent,
+  setEditContent,
+  handleReply,
   replyContent,
   setReplyContent,
-  editingComment,
-  setEditingComment,
-  editContent,
-  setEditContent,
-  commentLoading,
-  getRoleLabel,
-  formatRelativeTime,
+  cancelReply,
+  user,
+  profile,
   commentLikes,
-  depth = 0,
-  maxDepth,
-  commentRefs,
-  currentUserId,
-  commentMap,
-  isMember,
-  contentId
-}: CommentThreadProps) {
-  const hasReplies = replies.length > 0
-  const isMaxDepth = depth >= maxDepth
-  return (
-    <div ref={el => { if (el && comment.id) commentRefs.current[comment.id] = el }}>
-      <CommentItem
-        comment={comment}
-        onLike={onLike}
-        onReply={() => !isMaxDepth && comment.id && setReplyingTo(comment.id)}
-        onEdit={() => {
-          if (comment.id) {
-            setEditingComment(comment.id)
-            setEditContent(comment.comment || '')
-          }
-        }}
-        onDelete={() => comment.id && onDelete(comment.id)}
-        isLiked={isLiked}
-        replyingTo={replyingTo}
-        setReplyingTo={setReplyingTo}
-        replyContent={replyContent}
-        setReplyContent={setReplyContent}
-        handleReply={onReply}
-        editingComment={editingComment}
-        editContent={editContent}
-        setEditContent={setEditContent}
-        handleEdit={() => comment.id && onEdit(comment.id)}
-        setEditingComment={setEditingComment}
-        commentLoading={commentLoading}
-        getRoleLabel={getRoleLabel}
-        formatRelativeTime={formatRelativeTime}
-        hasReplies={hasReplies}
-        isCollapsed={false}
-        onToggleCollapse={undefined}
-        canReply={!isMaxDepth && isMember}
-        depth={depth}
-        isOwner={currentUserId === comment.author_id}
-        isMember={isMember}
-        contentId={contentId}
-      />
-      
-      {/* Replies */}
-      {hasReplies && !isMaxDepth && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2 }}
-          className={cn(
-            "mt-4 space-y-3",
-            depth === 0 ? "ml-12" : "ml-8 border-l-2 border-gray-100 dark:border-gray-800 pl-4"
-          )}
-        >
-          {replies.map((reply) => {
-            // 재귀적으로 대댓글의 대댓글도 찾기
-            const subReplies = commentMap && reply.id ? (commentMap.get(reply.id) || []) : []
-            return (
-              <CommentThread
-                key={reply.id}
-                comment={reply}
-                replies={subReplies}
-                onLike={onLike}
-                onReply={onReply}
-                onEdit={onEdit}
-                onDelete={onDelete}
-                isLiked={reply.id ? (commentLikes[reply.id] || false) : false}
-                replyingTo={replyingTo}
-                setReplyingTo={setReplyingTo}
-                replyContent={replyContent}
-                setReplyContent={setReplyContent}
-                editingComment={editingComment}
-                setEditingComment={setEditingComment}
-                editContent={editContent}
-                setEditContent={setEditContent}
-                commentLoading={commentLoading}
-                getRoleLabel={getRoleLabel}
-                formatRelativeTime={formatRelativeTime}
-                commentLikes={commentLikes}
-                depth={depth + 1}
-                maxDepth={maxDepth}
-                commentRefs={commentRefs}
-                currentUserId={currentUserId}
-                commentMap={commentMap}
-                isMember={isMember}
-                contentId={contentId}
-              />
-            )
-          })}
-        </motion.div>
-      )}
-      
-      {/* Show collapsed indicator for max depth */}
-      {isMaxDepth && hasReplies && (
-        <div className="ml-12 mt-2">
-          <span className="text-xs text-muted-foreground">
-            <MessageSquare className="inline mr-1 h-3 w-3" />
-            {replies.length}개의 추가 답글
-          </span>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Comment Item Component
-interface CommentItemProps {
-  comment: Views<'comments_with_author'>
-  onLike: (commentId: string) => void
-  onReply: () => void
-  onEdit?: () => void
-  onDelete?: () => void
-  isLiked: boolean
-  replyingTo: string | null
-  setReplyingTo?: (id: string | null) => void
-  replyContent: string
-  setReplyContent: (content: string) => void
-  handleReply: (parentId: string) => void
-  editingComment: string | null
-  editContent: string
-  setEditContent: (content: string) => void
-  handleEdit: () => void
-  setEditingComment: (id: string | null) => void
-  commentLoading: boolean
-  getRoleLabel: (role: string) => string
-  formatRelativeTime: (date: string) => string
-  hasReplies?: boolean
-  isCollapsed?: boolean
-  onToggleCollapse?: () => void
-  canReply?: boolean
-  depth?: number
-  isOwner?: boolean
-  isMember?: boolean
-  contentId?: string
-}
-
-function CommentItem({ 
-  comment, 
-  onLike, 
-  onReply,
-  onEdit,
-  onDelete, 
-  isLiked, 
-  replyingTo,
-  setReplyingTo,
-  replyContent, 
-  setReplyContent, 
-  handleReply,
-  editingComment,
-  editContent,
-  setEditContent,
-  handleEdit,
-  setEditingComment,
-  commentLoading,
-  getRoleLabel,
-  formatRelativeTime,
-  hasReplies = false,
-  isCollapsed = false,
-  onToggleCollapse,
-  canReply = true,
-  depth = 0,
-  isOwner = false,
-  isMember = false,
-  contentId
+  replyingToComments,
+  editingComments,
+  editContents,
+  replyContents,
+  setEditContents,
+  setReplyContents
 }: CommentItemProps) {
-  const isEditing = editingComment === comment.id
+  const [isCollapsed, setIsCollapsed] = useState(true)
+  
+  // For flat structure: limit visual depth to 1
+  const visualDepth = Math.min(depth, 1)
+  const canReply = enableThreading && depth < maxDepth
+
   return (
-    <>
-      <motion.div 
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className={cn(
-          "flex items-start space-x-3 p-3 rounded-lg transition-all",
-          depth > 0 && "bg-gray-50/50 dark:bg-gray-800/50",
-          "hover:bg-gray-50 dark:hover:bg-gray-800"
-        )}
-      >
-        <Avatar className={cn(
-          "transition-all",
-          depth > 0 ? "h-8 w-8" : "h-10 w-10"
-        )}>
-          <AvatarImage src={comment.author_avatar_url || ''} alt={comment.author_name || '익명'} />
-          <AvatarFallback>
-            {(comment.author_name || '익명').charAt(0)}
-          </AvatarFallback>
-        </Avatar>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between mb-1">
-            <div className="flex items-center space-x-2 flex-wrap">
-              <span className={cn(
-                "font-semibold",
-                depth > 0 && "text-sm"
-              )}>{comment.author_name || '익명'}</span>
-              <Badge variant="outline" className="text-xs">
-                {getRoleLabel(comment.author_role || 'member')}
-              </Badge>
-              <span className="text-sm text-muted-foreground">
-                {comment.created_at ? formatRelativeTime(comment.created_at) : '날짜 없음'}
-              </span>
-            </div>
+    <motion.div
+      {...fadeInUp}
+      className={cn(
+        "group relative",
+        visualDepth > 0 && "ml-4 sm:ml-8 mt-4"
+      )}
+    >
+      {/* Thread Line */}
+      {visualDepth > 0 && (
+        <div className="absolute left-0 top-0 bottom-0 w-px bg-border -ml-4 sm:-ml-8" />
+      )}
+      
+      <div className={cn(
+        "rounded-lg transition-all",
+        visualDepth === 0 ? "bg-card border p-4" : "bg-muted/50 p-3",
+        "hover:shadow-sm"
+      )}>
+        {/* Comment Header */}
+        <div className="flex items-start justify-between mb-3">
+          <div className="flex items-center gap-3">
+            <Avatar className={cn(
+              "transition-all",
+              visualDepth === 0 ? "h-10 w-10" : "h-8 w-8"
+            )}>
+              <AvatarImage src={comment.author_avatar_url || undefined} />
+              <AvatarFallback>
+                {comment.author_name?.charAt(0) || 'U'}
+              </AvatarFallback>
+            </Avatar>
             
-            {/* Comment actions menu */}
-            {isOwner && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={onEdit}>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-sm">
+                  {comment.author_name || '익명'}
+                </span>
+                {comment.author_role && (
+                  <Badge variant="outline" className="text-xs">
+                    {getRoleLabel(comment.author_role)}
+                  </Badge>
+                )}
+                {isAuthor && (
+                  <Badge variant="secondary" className="text-xs">
+                    작성자
+                  </Badge>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Clock className="h-3 w-3" />
+                <span>
+                  {formatDistanceToNow(new Date(comment.created_at || ''), {
+                    addSuffix: true,
+                    locale: ko
+                  })}
+                </span>
+                {comment.updated_at && comment.updated_at !== comment.created_at && (
+                  <>
+                    <span>·</span>
+                    <span>(수정됨)</span>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {isAuthor && (
+                <>
+                  <DropdownMenuItem onClick={() => comment.id && onEdit(comment.id, comment.comment || '')}>
                     <Edit2 className="mr-2 h-4 w-4" />
                     수정
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={onDelete}
-                    className="text-red-600 dark:text-red-400"
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    삭제
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-          
-          {/* Comment content or edit form */}
-          {isEditing ? (
-            <div className="mt-2">
-              <Textarea
-                value={editContent}
-                onChange={(e) => setEditContent(e.target.value)}
-                className="min-h-[80px] text-sm"
-                autoFocus
-              />
-              <div className="mt-2 flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditingComment(null)
-                    setEditContent('')
-                  }}
+                </>
+              )}
+              {(isAuthor || canModerate) && (
+                <DropdownMenuItem 
+                  onClick={() => comment.id && onDelete(comment.id)}
+                  className="text-red-600"
                 >
-                  취소
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleEdit}
-                  disabled={commentLoading || !editContent.trim()}
-                  className="kepco-gradient"
-                >
-                  {commentLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  수정 완료
-                </Button>
-              </div>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  삭제
+                </DropdownMenuItem>
+              )}
+              {!isAuthor && (
+                <DropdownMenuItem onClick={() => comment.id && onReport(comment.id)}>
+                  <Flag className="mr-2 h-4 w-4" />
+                  신고
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        {/* Comment Content */}
+        {isEditing ? (
+          <div className="space-y-3">
+            <Textarea
+              value={editContent}
+              onChange={(e) => setEditContent(e.target.value)}
+              className="min-h-[80px] resize-none"
+              placeholder="댓글을 수정하세요..."
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => comment.id && onEditSave(comment.id)}
+                disabled={!editContent.trim()}
+              >
+                수정 완료
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => comment.id && onEditCancel(comment.id)}
+              >
+                취소
+              </Button>
             </div>
-          ) : (
-            <p className={cn(
-              "mt-2 leading-relaxed break-words",
-              depth > 0 && "text-sm"
-            )}>
+          </div>
+        ) : (
+          <div className="prose prose-sm dark:prose-invert max-w-none">
+            <p className="text-sm whitespace-pre-wrap break-words">
               {comment.comment}
             </p>
-          )}
-          
-          {/* Comment actions */}
-          <div className="mt-3 flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-auto p-0 text-xs hover:text-primary"
-                onClick={() => comment.id && onLike(comment.id)}
-                disabled={commentLoading || !isMember}
-                title={!isMember ? "동아리 회원만 좋아요를 누를 수 있습니다" : ""}
-              >
-                <ThumbsUp className={cn(
-                  "mr-1 h-3 w-3 transition-all",
-                  isLiked && "fill-current text-primary"
-                )} />
-                좋아요 ({comment.like_count || 0})
-              </Button>
-              
-              {canReply && (
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="h-auto p-0 text-xs hover:text-primary" 
-                  onClick={onReply}
-                  disabled={!isMember}
-                  title={!isMember ? "동아리 회원만 답글을 작성할 수 있습니다" : ""}
-                >
-                  <Reply className="mr-1 h-3 w-3" />
-                  답글
-                </Button>
-              )}
-              
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="h-auto p-0 text-xs hover:text-primary"
-                onClick={async () => {
-                  if (!isMember) {
-                    toast.error('동아리 회원만 신고할 수 있습니다.')
-                    return
-                  }
-                  
-                  // Open report dialog for comment
-                  window.dispatchEvent(new CustomEvent('openReportDialog', { 
-                    detail: { 
-                      targetType: 'comment',
-                      targetId: comment.id,
-                      postType: 'comment',
-                      parentContentId: contentId
-                    } 
-                  }))
-                }}
-                disabled={!isMember}
-                title={!isMember ? "동아리 회원만 신고할 수 있습니다" : ""}
-              >
-                <Flag className="mr-1 h-3 w-3" />
-                신고
-              </Button>
-            </div>
-            
-            {/* Show reply count */}
-            {hasReplies && (
-              <span className="text-xs text-muted-foreground">
-                {/* Reply count is shown in thread */}
-              </span>
-            )}
           </div>
+        )}
+
+        {/* Comment Actions */}
+        <div className="flex items-center gap-2 mt-3">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => comment.id && onLike(comment.id)}
+            className={cn(
+              "gap-1 h-8 px-2",
+              isLiked && "text-red-600"
+            )}
+          >
+            <Heart className={cn(
+              "h-3.5 w-3.5 transition-all",
+              isLiked && "fill-current"
+            )} />
+            <span className="text-xs font-medium">
+              {comment.like_count || 0}
+            </span>
+          </Button>
+
+          {canReply && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => comment.id && onReply(comment.id)}
+              className="gap-1 h-8 px-2"
+            >
+              <Reply className="h-3.5 w-3.5" />
+              <span className="text-xs">답글</span>
+            </Button>
+          )}
+
+          {comment.replies && comment.replies.length > 0 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+              className="gap-1 h-8 px-2 ml-auto"
+            >
+              {isCollapsed ? (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                  <span className="text-xs">답글 {comment.replies?.length || 0}개</span>
+                </>
+              ) : (
+                <>
+                  <ChevronUp className="h-3.5 w-3.5" />
+                  <span className="text-xs">답글 숨기기</span>
+                </>
+              )}
+            </Button>
+          )}
         </div>
-      </motion.div>
+      </div>
       
       {/* Reply Input */}
-      {replyingTo === comment.id && (
+      {isReplying && (
         <motion.div 
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="ml-12 mt-3"
+          className="mt-3 ml-12"
         >
-          <div className="flex items-start space-x-3">
+          <div className="flex gap-3">
             <Avatar className="h-8 w-8">
+              <AvatarImage src={user?.user_metadata?.avatar_url || profile?.avatar_url} />
               <AvatarFallback>
-                You
+                {(profile?.name || user?.email)?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1">
+            <div className="flex-1 space-y-3">
               <Textarea
                 placeholder={`${comment.author_name || '익명'}님에게 답글 작성...`}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
-                className="min-h-[80px]"
+                className="min-h-[80px] resize-none"
+                autoFocus
               />
-              <div className="mt-2 flex justify-end space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setReplyingTo?.(null)
-                    setReplyContent('')
-                  }}
-                >
-                  취소
-                </Button>
+              <div className="flex gap-2">
                 <Button
                   size="sm"
                   onClick={() => comment.id && handleReply(comment.id)}
-                  disabled={commentLoading || !replyContent.trim()}
-                  className="kepco-gradient"
+                  disabled={!replyContent.trim()}
                 >
-                  {commentLoading ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Send className="mr-2 h-4 w-4" />
-                  )}
                   답글 작성
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => comment.id && cancelReply(comment.id)}
+                >
+                  취소
                 </Button>
               </div>
             </div>
           </div>
         </motion.div>
       )}
-    </>
+      
+      {/* Nested replies */}
+      {comment.replies && comment.replies.length > 0 && !isCollapsed && (
+        <div className="mt-4 space-y-4">
+          {comment.replies.map((reply) => (
+            <CommentItem
+              key={reply.id}
+              comment={reply}
+              depth={1}
+              maxDepth={maxDepth}
+              enableThreading={enableThreading}
+              isLiked={reply.id ? (commentLikes[reply.id] || false) : false}
+              onLike={onLike}
+              onReply={onReply}
+              onEdit={onEdit}
+              onEditCancel={onEditCancel}
+              onEditSave={onEditSave}
+              onDelete={onDelete}
+              onReport={onReport}
+              isAuthor={reply.author_id === user?.id}
+              canModerate={canModerate}
+              isReplying={reply.id ? (replyingToComments[reply.id] || false) : false}
+              isEditing={reply.id ? (editingComments[reply.id] || false) : false}
+              editContent={reply.id ? (editContents[reply.id] || '') : ''}
+              setEditContent={(content) => {
+                if (reply.id) {
+                  setEditContents(prev => ({ ...prev, [reply.id as string]: content }))
+                }
+              }}
+              handleReply={handleReply}
+              replyContent={reply.id ? (replyContents[reply.id] || '') : ''}
+              setReplyContent={(content) => {
+                if (reply.id) {
+                  setReplyContents(prev => ({ ...prev, [reply.id as string]: content }))
+                }
+              }}
+              cancelReply={cancelReply}
+              user={user}
+              profile={profile}
+              commentLikes={commentLikes}
+              replyingToComments={replyingToComments}
+              editingComments={editingComments}
+              editContents={editContents}
+              replyContents={replyContents}
+              setEditContents={setEditContents}
+              setReplyContents={setReplyContents}
+            />
+          ))}
+        </div>
+      )}
+    </motion.div>
   )
 }
+

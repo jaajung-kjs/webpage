@@ -1,0 +1,186 @@
+/* Mobile-friendly touch targets and improvements */
+
+/* Ensure all interactive elements have minimum touch target size */
+.touch-manipulation {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Improve button touch targets on mobile */
+@media (max-width: 640px) {
+  /* Minimum 44x44px touch targets as per Apple HIG */
+  button, 
+  [role="button"],
+  a,
+  [role="link"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better spacing for mobile forms */
+  input,
+  textarea,
+  select {
+    min-height: 48px;
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
+
+  /* Improve dropdown touch targets */
+  [role="menuitem"] {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  /* Better card spacing on mobile */
+  .card {
+    margin-bottom: 1rem;
+  }
+
+  /* Improve tab touch targets */
+  [role="tab"] {
+    min-height: 44px;
+    padding: 12px 16px;
+  }
+
+  /* Better spacing for list items */
+  .list-item {
+    padding: 16px;
+    margin-bottom: 8px;
+  }
+
+  /* Improve dialog/modal spacing */
+  [role="dialog"] {
+    margin: 16px;
+    max-height: calc(100vh - 32px);
+  }
+
+  /* Better scroll performance */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+  }
+
+  .overflow-x-auto > * {
+    scroll-snap-align: start;
+  }
+
+  /* Improve readability on mobile */
+  .prose {
+    font-size: 16px;
+    line-height: 1.75;
+  }
+
+  /* Better spacing for stats cards */
+  .stats-grid {
+    gap: 12px;
+  }
+
+  /* Improve navigation drawer */
+  .sheet-content {
+    width: 85vw;
+    max-width: 320px;
+  }
+
+  /* Better spacing for action buttons */
+  .action-buttons {
+    gap: 8px;
+  }
+
+  /* Improve table scrolling */
+  .table-container {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+  }
+
+  /* Better avatar sizes on mobile */
+  .avatar-mobile {
+    width: 40px;
+    height: 40px;
+  }
+
+  /* Improve card click areas */
+  .card-clickable {
+    position: relative;
+  }
+
+  .card-clickable::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    bottom: -8px;
+    left: -8px;
+  }
+
+  /* Better focus states for mobile */
+  :focus-visible {
+    outline: 3px solid var(--primary);
+    outline-offset: 2px;
+  }
+
+  /* Disable hover effects on touch devices */
+  @media (hover: none) {
+    .hover\:underline:hover {
+      text-decoration: none;
+    }
+    
+    .hover\:bg-accent:hover {
+      background-color: transparent;
+    }
+  }
+
+  /* Improve swipe gestures */
+  .swipeable {
+    touch-action: pan-y;
+  }
+
+  /* Better loading states */
+  .skeleton {
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  /* Improve bottom navigation spacing */
+  .bottom-safe-area {
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+}
+
+/* Landscape mobile improvements */
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Reduce vertical spacing in landscape */
+  .header {
+    padding: 8px 16px;
+  }
+
+  /* Smaller modals in landscape */
+  [role="dialog"] {
+    max-height: 90vh;
+  }
+
+  /* Adjust grid layouts for landscape */
+  .grid-cols-2 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Dark mode adjustments for mobile */
+@media (max-width: 640px) and (prefers-color-scheme: dark) {
+  /* Better contrast for dark mode on mobile */
+  .card {
+    border-color: hsl(var(--border) / 0.5);
+  }
+
+  /* Improve readability in dark mode */
+  .text-muted-foreground {
+    opacity: 0.8;
+  }
+}
+
+/* Accessibility improvements */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

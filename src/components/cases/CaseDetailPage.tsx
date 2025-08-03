@@ -1,54 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { motion } from 'framer-motion'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Textarea } from '@/components/ui/textarea'
-import { Separator } from '@/components/ui/separator'
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { 
-  Calendar, 
-  Eye, 
-  MessageCircle,
-  Heart,
-  Share2,
-  BookOpen,
-  User,
-  ArrowLeft,
-  Send,
-  ThumbsUp,
-  Flag,
-  MoreHorizontal,
-  MoreVertical,
-  Edit,
-  Trash2,
-  Link as LinkIcon,
-  Loader2,
-  Bookmark,
-  BookmarkCheck
+  Lightbulb,
+  Flag
 } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { 
   useContent,
   useIsLiked,
   useToggleLike,
   useDeleteContent
 } from '@/hooks/useSupabase'
-import { Views } from '@/lib/supabase/client'
+import { Views, supabase } from '@/lib/supabase/client'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
+import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
+import DetailLayout from '@/components/shared/DetailLayout'
 
 
 
@@ -62,22 +33,34 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   
   // Use Supabase hooks
   const { data: caseData, loading, error } = useContent(caseId)
-  const isLiked = useIsLiked(user?.id, caseId)
+  const isLikedFromHook = useIsLiked(user?.id, caseId)
   const { toggleLike, loading: likeLoading } = useToggleLike()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
-  
+  const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
+  const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
-  const [isBookmarked, setIsBookmarked] = useState(false)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
 
-  // Update like count when data changes
+  // Increment view count when case is loaded
   useEffect(() => {
-    if (caseData?.like_count) {
-      setLikeCount(caseData.like_count)
+    if (caseData?.id) {
+      ContentAPI.incrementViewCount(caseData.id)
+    }
+  }, [caseData?.id])
+
+  // Update like count and like state when data changes
+  useEffect(() => {
+    if (caseData?.like_count !== undefined) {
+      setLikeCount(caseData.like_count || 0)
     }
   }, [caseData])
+  
+  // Update like state from hook
+  useEffect(() => {
+    setIsLiked(isLikedFromHook)
+  }, [isLikedFromHook])
 
   // Listen for report dialog events
   useEffect(() => {
@@ -107,6 +90,9 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
       return
     }
 
+    // Prevent multiple clicks
+    if (likeLoading) return
+
     try {
       const result = await toggleLike(user.id, caseId)
       
@@ -114,10 +100,30 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
         throw result.error
       }
       
-      // Update local like count
-      setLikeCount(prev => isLiked ? prev - 1 : prev + 1)
+      // Get the updated state by checking the current like status
+      const { data: currentLike } = await supabase
+        .from('interactions')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('content_id', caseId)
+        .eq('type', 'like')
+        .single()
       
-      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
+      const isNowLiked = !!currentLike
+      setIsLiked(isNowLiked)
+      
+      // Get updated like count from content
+      const { data: updatedContent } = await supabase
+        .from('content_with_author')
+        .select('like_count')
+        .eq('id', caseId)
+        .single()
+      
+      if (updatedContent) {
+        setLikeCount(updatedContent.like_count || 0)
+      }
+      
+      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
@@ -164,250 +170,99 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     }
   }
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('ko-KR', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
+  const formatContent = (content: string) => {
+    return content.replace(/\n/g, '<br/>')
   }
 
-  const getRoleLabel = (role: string) => {
-    const roleLabels: { [key: string]: string } = {
-      'leader': '동아리장',
-      'vice_leader': '부동아리장',
-      'executive': '운영진',
-      'member': '일반회원',
-      'admin': '관리자'
-    }
-    return roleLabels[role] || role
-  }
-
-  if (loading) {
+  if (loading || !caseData) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-200 rounded w-32 mb-6"></div>
-            <div className="bg-white rounded-lg shadow p-8">
-              <div className="h-10 bg-gray-200 rounded w-3/4 mb-4"></div>
-              <div className="h-6 bg-gray-200 rounded w-1/2 mb-8"></div>
-              <div className="space-y-4">
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded"></div>
-                <div className="h-4 bg-gray-200 rounded w-5/6"></div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!caseData) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-2xl font-bold mb-4">케이스를 찾을 수 없습니다.</h1>
-          <Button asChild>
-            <Link href="/cases">목록으로 돌아가기</Link>
-          </Button>
-        </div>
-      </div>
+      <DetailLayout
+        title={loading ? "로딩 중..." : "케이스를 찾을 수 없습니다."}
+        content={""}
+        author={{ id: "", name: "", avatar: "" }}
+        createdAt={new Date().toISOString()}
+        viewCount={0}
+        likeCount={0}
+        commentCount={0}
+        isLiked={false}
+        isBookmarked={false}
+        canEdit={false}
+        canDelete={false}
+        onLike={() => {}}
+        onBookmark={() => {}}
+        onShare={() => {}}
+        backLink="/cases"
+        loading={loading}
+      />
     )
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="mb-6"
-        >
-          <Button variant="ghost" asChild className="mb-4">
-            <Link href="/cases">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              목록으로 돌아가기
-            </Link>
+    <>
+      <DetailLayout
+        title={caseData.title || ''}
+        content={formatContent(caseData.content || '')}
+        author={{
+          id: caseData.author_id || '',
+          name: caseData.author_name || '익명',
+          avatar: caseData.author_avatar_url || undefined,
+          department: caseData.author_department || undefined
+        }}
+        createdAt={caseData.created_at || new Date().toISOString()}
+        viewCount={caseData.view_count || 0}
+        category={{
+          label: '성공사례',
+          value: 'case',
+          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+          icon: Lightbulb
+        }}
+        tags={caseData.tags || []}
+        likeCount={likeCount}
+        commentCount={caseData.comment_count || 0}
+        isLiked={isLiked}
+        isBookmarked={isBookmarked}
+        canEdit={!!(user && user.id === caseData.author_id)}
+        canDelete={!!(user && (user.id === caseData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
+        onLike={handleLike}
+        onBookmark={handleBookmark}
+        onShare={handleShare}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        actionButtons={
+          <Button variant="outline" size="sm" onClick={() => {
+            setReportTarget({ type: 'content', id: caseId })
+            setReportDialogOpen(true)
+          }}>
+            <Flag className="mr-2 h-4 w-4" />
+            신고
           </Button>
-        </motion.div>
+        }
+        backLink="/cases"
+        backLinkText="활용사례 목록"
+        loading={loading}
+        likeLoading={likeLoading}
+        deleteLoading={deleteLoading}
+      >
+        <CommentSection contentId={caseId} />
+      </DetailLayout>
 
-        {/* Main Content */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader>
-              <div className="mb-4">
-                <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                  성공사례
-                </Badge>
-              </div>
-
-              <CardTitle className="text-2xl sm:text-3xl leading-tight">
-                {caseData.title}
-              </CardTitle>
-
-              <div className="flex items-center justify-between pt-4">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-12 w-12">
-                    <AvatarImage src={caseData.author_avatar_url || ''} alt={caseData.author_name || ''} />
-                    <AvatarFallback>
-                      {caseData.author_name?.charAt(0) || 'U'}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="font-semibold">{caseData.author_name || '익명'}</span>
-                      <Badge variant="outline" className="text-xs">
-                        {getRoleLabel(caseData.author_role || 'member')}
-                      </Badge>
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {caseData.author_department || '부서 미지정'} • {caseData.created_at ? formatDate(caseData.created_at) : '날짜 없음'}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  {user && (user.id === caseData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        {user.id === caseData.author_id && (
-                          <>
-                            <DropdownMenuItem onClick={handleEdit}>
-                              <Edit className="mr-2 h-4 w-4" />
-                              수정
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                          </>
-                        )}
-                        <DropdownMenuItem 
-                          onClick={handleDelete}
-                          disabled={deleteLoading}
-                          className="text-red-600 focus:text-red-600"
-                        >
-                          <Trash2 className="mr-2 h-4 w-4" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <Eye className="h-4 w-4" />
-                    <span>{caseData.view_count || 0}</span>
-                  </div>
-                  <div className="flex items-center space-x-1 text-sm text-muted-foreground">
-                    <Heart className="h-4 w-4" />
-                    <span>{likeCount}</span>
-                  </div>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent>
-              <div className="prose max-w-none mb-8">
-                <div 
-                  className="whitespace-pre-wrap text-base leading-relaxed"
-                  dangerouslySetInnerHTML={{ 
-                    __html: (caseData.content || '').replace(/\n/g, '<br/>') 
-                  }}
-                />
-              </div>
-
-              <Separator />
-
-              <div className="flex items-center justify-between pt-6">
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant={isLiked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleLike}
-                    disabled={likeLoading || !isMember}
-                    className={isLiked ? "bg-red-500 hover:bg-red-600 text-white" : ""}
-                    title={!isMember ? "동아리 회원만 좋아요를 누를 수 있습니다" : ""}
-                  >
-                    {likeLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Heart className={`mr-2 h-4 w-4 ${isLiked ? 'fill-current' : ''}`} />
-                    )}
-                    좋아요 {likeCount > 0 && `(${likeCount})`}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={handleShare}>
-                    <Share2 className="mr-2 h-4 w-4" />
-                    공유
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => {
-                    setReportTarget({ type: 'content', id: caseId })
-                    setReportDialogOpen(true)
-                  }}>
-                    <Flag className="mr-2 h-4 w-4" />
-                    신고
-                  </Button>
-                </div>
-
-                <div className="flex items-center space-x-2">
-                  <Button 
-                    variant={isBookmarked ? "default" : "outline"} 
-                    size="sm"
-                    onClick={handleBookmark}
-                    className={isBookmarked ? "bg-blue-500 hover:bg-blue-600" : ""}
-                  >
-                    {isBookmarked ? (
-                      <BookmarkCheck className="mr-2 h-4 w-4 fill-current" />
-                    ) : (
-                      <Bookmark className="mr-2 h-4 w-4" />
-                    )}
-                    북마크
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Comments Section */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-8"
-        >
-          <CommentSection contentId={caseId} />
-        </motion.div>
-
-        {/* Report Dialog */}
-        <ReportDialog
-          open={reportDialogOpen}
-          onOpenChange={(open) => {
-            setReportDialogOpen(open)
-            if (!open) {
-              setReportTarget(null)
-              setParentContentId(undefined)
-            }
-          }}
-          postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
-          commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
-          targetType={reportTarget?.type}
-          targetId={reportTarget?.id}
-          parentContentId={parentContentId}
-          postType={reportTarget?.type === 'comment' ? 'comment' : 'case'}
-        />
-      </div>
-    </div>
+      {/* Report Dialog */}
+      <ReportDialog
+        open={reportDialogOpen}
+        onOpenChange={(open) => {
+          setReportDialogOpen(open)
+          if (!open) {
+            setReportTarget(null)
+            setParentContentId(undefined)
+          }
+        }}
+        postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
+        commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
+        targetType={reportTarget?.type}
+        targetId={reportTarget?.id}
+        parentContentId={parentContentId}
+        postType={reportTarget?.type === 'comment' ? 'comment' : 'case'}
+      />
+    </>
   )
 }

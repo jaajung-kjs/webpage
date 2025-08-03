@@ -3,6 +3,7 @@
 import React, { ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
+import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import {
@@ -99,8 +100,7 @@ export default function ContentListLayout({
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeInUp}
         transition={{ duration: 0.5 }}
         className="mb-8"
       >
@@ -114,9 +114,10 @@ export default function ContentListLayout({
             </p>
           </div>
           {showCreateButton && onCreateClick && (
-            <Button className="kepco-gradient" onClick={onCreateClick}>
+            <Button className="kepco-gradient w-full sm:w-auto touch-manipulation" onClick={onCreateClick}>
               <Plus className="mr-2 h-4 w-4" />
-              {createButtonText}
+              <span className="hidden sm:inline">{createButtonText}</span>
+              <span className="sm:hidden">작성</span>
             </Button>
           )}
         </div>
@@ -125,8 +126,7 @@ export default function ContentListLayout({
       {/* Stats Section */}
       {statsSection && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          {...fadeInUp}
           transition={{ duration: 0.5, delay: 0.1 }}
           className="mb-8"
         >
@@ -136,8 +136,7 @@ export default function ContentListLayout({
 
       {/* Search and Filters */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeInUp}
         transition={{ duration: 0.5, delay: 0.2 }}
         className="mb-6 space-y-4"
       >
@@ -157,7 +156,7 @@ export default function ContentListLayout({
             {/* Sort Dropdown */}
             {sortOptions && onSortChange && (
               <Select value={activeSortBy} onValueChange={onSortChange}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -178,7 +177,7 @@ export default function ContentListLayout({
                   size="sm"
                   onClick={() => onViewModeChange('grid')}
                   className={cn(
-                    "rounded-r-none",
+                    "rounded-r-none px-3 sm:px-2 touch-manipulation",
                     viewMode === 'grid' && "bg-muted"
                   )}
                 >
@@ -189,7 +188,7 @@ export default function ContentListLayout({
                   size="sm"
                   onClick={() => onViewModeChange('list')}
                   className={cn(
-                    "rounded-l-none",
+                    "rounded-l-none px-3 sm:px-2 touch-manipulation",
                     viewMode === 'list' && "bg-muted"
                   )}
                 >
@@ -205,10 +204,10 @@ export default function ContentListLayout({
                   <Button
                     variant="outline"
                     size="sm"
-                    className={cn(advancedFiltersCount > 0 && "border-primary")}
+                    className={cn("touch-manipulation", advancedFiltersCount > 0 && "border-primary")}
                   >
                     <Filter className="mr-2 h-4 w-4" />
-                    필터
+                    <span className="hidden sm:inline">필터</span>
                     {advancedFiltersCount > 0 && (
                       <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-xs text-primary-foreground">
                         {advancedFiltersCount}
@@ -236,19 +235,21 @@ export default function ContentListLayout({
 
         {/* Categories Tabs */}
         {categories && activeCategory && onCategoryChange && (
-          <Tabs value={activeCategory} onValueChange={onCategoryChange}>
-            <TabsList className="inline-flex h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
-              {categories.map((category) => (
-                <TabsTrigger
-                  key={category.value}
-                  value={category.value}
-                  className="whitespace-nowrap px-3 py-1.5 text-xs font-medium"
-                >
-                  {category.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+            <Tabs value={activeCategory} onValueChange={onCategoryChange}>
+              <TabsList className="inline-flex h-10 sm:h-9 items-center justify-start rounded-md bg-muted p-1 text-muted-foreground min-w-max">
+                {categories.map((category) => (
+                  <TabsTrigger
+                    key={category.value}
+                    value={category.value}
+                    className="whitespace-nowrap px-4 py-2 sm:px-3 sm:py-1.5 text-sm sm:text-xs font-medium touch-manipulation"
+                  >
+                    {category.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
         )}
 
       </motion.div>
@@ -256,8 +257,7 @@ export default function ContentListLayout({
       {/* Results Count */}
       {resultCount !== undefined && !loading && (
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          {...fadeInUp}
           transition={{ duration: 0.5, delay: 0.3 }}
           className="mb-6"
         >
@@ -269,8 +269,7 @@ export default function ContentListLayout({
 
       {/* Content Area */}
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        {...fadeInUp}
         transition={{ duration: 0.5, delay: 0.4 }}
       >
         {loading ? (
