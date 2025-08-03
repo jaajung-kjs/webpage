@@ -3,7 +3,6 @@
 import React, { useState, useRef, useCallback } from 'react'
 import dynamic from 'next/dynamic'
 import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { 
   Bold, 
   Italic, 
@@ -14,12 +13,8 @@ import {
   Link, 
   Image, 
   Paperclip,
-  Eye,
-  Edit,
-  Upload,
   Loader2
 } from 'lucide-react'
-import MarkdownRenderer from './MarkdownRenderer'
 import { toast } from 'sonner'
 import { supabase } from '@/lib/supabase/client'
 
@@ -47,7 +42,6 @@ export default function MarkdownEditor({
   height = 400,
   onPaste
 }: MarkdownEditorProps) {
-  const [view, setView] = useState<'write' | 'preview' | 'both'>('both')
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const editorRef = useRef<any>(null)
@@ -241,39 +235,6 @@ export default function MarkdownEditor({
             }}
           />
         </div>
-        
-        {/* View toggle */}
-        <div className="flex items-center gap-1">
-          <Button
-            type="button"
-            variant={view === 'write' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setView('write')}
-            className="h-8 px-2"
-          >
-            <Edit className="h-4 w-4 mr-1" />
-            작성
-          </Button>
-          <Button
-            type="button"
-            variant={view === 'both' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setView('both')}
-            className="h-8 px-2"
-          >
-            분할
-          </Button>
-          <Button
-            type="button"
-            variant={view === 'preview' ? 'default' : 'ghost'}
-            size="sm"
-            onClick={() => setView('preview')}
-            className="h-8 px-2"
-          >
-            <Eye className="h-4 w-4 mr-1" />
-            미리보기
-          </Button>
-        </div>
       </div>
       
       {/* Editor Content */}
@@ -284,44 +245,17 @@ export default function MarkdownEditor({
         style={{ height }}
         className="relative"
       >
-        {view === 'write' && (
-          <MDEditor
-            value={value}
-            onChange={(val) => onChange(val || '')}
-            preview="edit"
-            hideToolbar
-            height={height}
-            data-color-mode="light"
-            textareaProps={{
-              placeholder
-            }}
-          />
-        )}
-        
-        {view === 'preview' && (
-          <div className="p-4 overflow-y-auto" style={{ height }}>
-            <MarkdownRenderer content={value} />
-          </div>
-        )}
-        
-        {view === 'both' && (
-          <div className="grid grid-cols-2 divide-x" style={{ height }}>
-            <MDEditor
-              value={value}
-              onChange={(val) => onChange(val || '')}
-              preview="edit"
-              hideToolbar
-              height={height}
-              data-color-mode="light"
-              textareaProps={{
-                placeholder
-              }}
-            />
-            <div className="p-4 overflow-y-auto">
-              <MarkdownRenderer content={value} />
-            </div>
-          </div>
-        )}
+        <MDEditor
+          value={value}
+          onChange={(val) => onChange(val || '')}
+          preview="live"
+          hideToolbar
+          height={height}
+          data-color-mode="light"
+          textareaProps={{
+            placeholder
+          }}
+        />
       </div>
     </div>
   )

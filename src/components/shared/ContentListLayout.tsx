@@ -51,6 +51,9 @@ interface ContentListLayoutProps {
   // Auto-responsive view mode (overrides manual viewMode)
   autoResponsiveViewMode?: boolean
   
+  // Show/hide search and filters section
+  showSearchAndFilters?: boolean
+  
   // Stats section
   statsSection?: ReactNode
   
@@ -89,6 +92,7 @@ export default function ContentListLayout({
   viewMode = 'grid',
   onViewModeChange,
   autoResponsiveViewMode = false,
+  showSearchAndFilters = true,
   statsSection,
   advancedFilters,
   showAdvancedFilters,
@@ -165,11 +169,12 @@ export default function ContentListLayout({
       )}
 
       {/* Search and Filters */}
-      <motion.div
-        {...fadeInUp}
-        transition={{ duration: 0.5, delay: 0.2 }}
-        className="mb-6 space-y-4"
-      >
+      {showSearchAndFilters && (
+        <motion.div
+          {...fadeInUp}
+          transition={{ duration: 0.5, delay: 0.2 }}
+          className="mb-6 space-y-4"
+        >
         {/* Search Bar Row */}
         <div className="flex flex-row gap-2">
           <div className="relative flex-1">
@@ -283,6 +288,7 @@ export default function ContentListLayout({
         )}
 
       </motion.div>
+      )}
 
       {/* Results Count */}
       {resultCount !== undefined && !loading && (

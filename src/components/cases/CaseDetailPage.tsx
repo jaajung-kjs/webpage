@@ -27,6 +27,30 @@ interface CaseDetailPageProps {
   caseId: string
 }
 
+const categoryLabels = {
+  productivity: '생산성 향상',
+  creativity: '창의적 활용',
+  development: '개발',
+  analysis: '분석',
+  other: '기타'
+}
+
+const categoryColors = {
+  productivity: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+  creativity: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+  development: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  analysis: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+}
+
+const categoryIcons = {
+  productivity: Lightbulb,
+  creativity: Lightbulb,
+  development: Lightbulb,
+  analysis: Lightbulb,
+  other: Lightbulb
+}
+
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { user, profile, isMember } = useOptimizedAuth()
   const router = useRouter()
@@ -209,10 +233,10 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
         createdAt={caseData.created_at || new Date().toISOString()}
         viewCount={caseData.view_count || 0}
         category={{
-          label: '성공사례',
-          value: 'case',
-          color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-          icon: Lightbulb
+          label: categoryLabels[caseData.category as keyof typeof categoryLabels] || '기타',
+          value: caseData.category || 'other',
+          color: categoryColors[caseData.category as keyof typeof categoryColors],
+          icon: categoryIcons[caseData.category as keyof typeof categoryIcons] || Lightbulb
         }}
         tags={caseData.tags || []}
         likeCount={likeCount}

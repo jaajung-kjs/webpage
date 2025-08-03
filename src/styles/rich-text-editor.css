@@ -1,0 +1,150 @@
+/* Rich Text Editor Custom Styles */
+
+/* Editor wrapper - dynamic height */
+.rich-text-editor-wrapper {
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Override the fixed height from the library */
+.rich-text-editor-wrapper .richtext-editor-wrapper,
+.rich-text-editor-wrapper .tiptap-editor-container,
+.rich-text-editor-wrapper > div:first-child {
+  min-height: inherit !important;
+  height: auto !important;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Editor content area - grow with content */
+.rich-text-editor-wrapper .ProseMirror {
+  min-height: 200px;
+  height: auto !important;
+  max-height: none !important;
+  flex: 1;
+  padding: 1rem;
+  /* Remove any background that might show lines */
+  background: transparent !important;
+  background-image: none !important;
+}
+
+/* Remove any fixed heights from content wrapper */
+.rich-text-editor-wrapper .editor-content-wrapper,
+.rich-text-editor-wrapper [class*="editor-content"],
+.rich-text-editor-wrapper [class*="tiptap"] {
+  height: auto !important;
+  min-height: inherit !important;
+  flex: 1;
+}
+
+/* Toolbar responsive styles */
+@media (max-width: 768px) {
+  /* Reduce toolbar button sizes on mobile */
+  .rich-text-editor-wrapper button[class*="toolbar-button"],
+  .rich-text-editor-wrapper [role="button"] {
+    padding: 0.25rem !important;
+    min-width: 2rem !important;
+    height: 2rem !important;
+  }
+  
+  .rich-text-editor-wrapper button svg,
+  .rich-text-editor-wrapper [role="button"] svg {
+    width: 1rem !important;
+    height: 1rem !important;
+  }
+  
+  /* Hide less essential toolbar items on mobile - using data attributes when available */
+  .rich-text-editor-wrapper [data-toolbar-item="fontFamily"],
+  .rich-text-editor-wrapper [data-toolbar-item="fontSize"],
+  .rich-text-editor-wrapper [data-toolbar-item="color"],
+  .rich-text-editor-wrapper [data-toolbar-item="highlight"],
+  .rich-text-editor-wrapper [data-toolbar-item="textAlign"],
+  .rich-text-editor-wrapper [data-toolbar-item="indent"],
+  .rich-text-editor-wrapper [data-toolbar-item="tableOfContents"],
+  .rich-text-editor-wrapper [data-toolbar-item="importWord"],
+  .rich-text-editor-wrapper [data-toolbar-item="exportPdf"],
+  /* Additional selectors for the actual toolbar groups */
+  .rich-text-editor-wrapper div:has(button[title*="Font"]),
+  .rich-text-editor-wrapper div:has(button[title*="Color"]),
+  .rich-text-editor-wrapper div:has(button[title*="Align"]),
+  .rich-text-editor-wrapper div:has(button[title*="Import"]),
+  .rich-text-editor-wrapper div:has(button[title*="Export"]) {
+    display: none !important;
+  }
+  
+  /* Toolbar container adjustments */
+  .rich-text-editor-wrapper > div > div:first-child,
+  .rich-text-editor-wrapper .editor-toolbar {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    padding: 0.5rem;
+  }
+  
+  /* Toolbar groups on mobile */
+  .rich-text-editor-wrapper > div > div:first-child > div {
+    gap: 0.125rem !important;
+    padding: 0 !important;
+  }
+  
+  /* Reduce divider spacing */
+  .rich-text-editor-wrapper .toolbar-divider,
+  .rich-text-editor-wrapper hr {
+    margin: 0 0.25rem !important;
+  }
+}
+
+/* Compact toolbar for small screens */
+@media (max-width: 640px) {
+  /* Further hide items on very small screens */
+  .rich-text-editor-wrapper .toolbar-group-subandsuperscript,
+  .rich-text-editor-wrapper .toolbar-group-tasklist,
+  .rich-text-editor-wrapper .toolbar-group-blockquote {
+    display: none !important;  
+  }
+  
+  /* Make toolbar scrollable horizontally if needed */
+  .rich-text-editor-wrapper .editor-toolbar {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+}
+
+/* Editor content mobile optimizations */
+@media (max-width: 768px) {
+  .rich-text-editor-wrapper .ProseMirror {
+    padding: 0.75rem;
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+}
+
+/* Fix for horizontal lines appearance */
+.rich-text-editor-wrapper .ProseMirror p.is-empty::before {
+  color: #aaa;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Ensure proper content wrapping */
+.rich-text-editor-wrapper .ProseMirror {
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+/* Remove any background lines or borders that might appear as divisions */
+.rich-text-editor-wrapper .ProseMirror > * {
+  margin-bottom: 0.5rem;
+}
+
+.rich-text-editor-wrapper .ProseMirror p {
+  margin: 0 0 0.5rem 0;
+}
+
+/* Ensure the editor grows smoothly */
+.rich-text-editor-wrapper {
+  transition: height 0.2s ease;
+}
