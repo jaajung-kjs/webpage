@@ -87,7 +87,6 @@ const roleLabels = {
   leader: '동아리장',
   'vice-leader': '부동아리장',
   admin: '운영진',
-  moderator: '중재자',
   member: '일반회원'
 }
 

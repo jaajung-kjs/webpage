@@ -1,52 +1,30 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
+import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
 import { toast } from 'sonner'
-import { Views, TablesInsert, supabase } from '@/lib/supabase/client'
-import * as z from 'zod'
+import { Views } from '@/lib/supabase/client'
+import { getBoardCategoryData } from '@/lib/categories'
 import { 
   Plus,
-  FileText,
-  BookOpen,
-  Video,
-  Link,
   Download,
-  Eye
+  Eye,
+  BookOpen,
+  TrendingUp,
+  Users,
+  FileText
 } from 'lucide-react'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import ContentCard from '@/components/shared/ContentCard'
-import ContentCreateModalEnhanced from '@/components/shared/ContentCreateModalEnhanced'
 import StatsCard from '@/components/shared/StatsCard'
 import { Button } from '@/components/ui/button'
 
-const categoryLabels = {
-  all: '전체',
-  document: '문서',
-  video: '영상',
-  link: '링크',
-  tool: '도구',
-  template: '템플릿'
-}
-
-const categoryColors = {
-  document: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  video: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  link: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  tool: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  template: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300'
-}
-
-const categoryIcons = {
-  document: FileText,
-  video: Video,
-  link: Link,
-  tool: BookOpen,
-  template: FileText
-}
+// 카테고리 정보 가져오기
+const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('resources')
 
 const sortOptions = [
   { value: 'latest', label: '최신순' },
@@ -55,58 +33,18 @@ const sortOptions = [
   { value: 'downloads', label: '다운로드순' }
 ]
 
-// Form fields for create modal
-const createFields = [
-  {
-    name: 'category',
-    label: '카테고리',
-    type: 'select' as const,
-    placeholder: '카테고리를 선택해주세요',
-    options: Object.entries(categoryLabels).filter(([key]) => key !== 'all').map(([value, label]) => ({ value, label })),
-    validation: z.enum(['document', 'video', 'link', 'tool', 'template'], {
-      message: '카테고리를 선택해주세요',
-    })
-  },
-  {
-    name: 'title',
-    label: '제목',
-    type: 'text' as const,
-    placeholder: '자료 제목을 입력하세요',
-    maxLength: 100,
-    validation: z.string().min(1, '제목을 입력해주세요').max(100, '제목은 100자 이하여야 합니다')
-  },
-  {
-    name: 'content',
-    label: '설명',
-    type: 'markdown' as const,
-    placeholder: '자료에 대한 설명을 입력하세요. 이미지는 복사-붙여넣기로 바로 삽입할 수 있습니다.',
-    maxLength: 5000,
-    validation: z.string().min(1, '설명을 입력해주세요').max(5000, '설명은 5000자 이하여야 합니다')
-  },
-  {
-    name: 'tags',
-    label: '태그',
-    type: 'tags' as const,
-    placeholder: '관련 키워드를 입력하고 Enter를 누르세요',
-    description: '자료와 관련된 키워드를 추가하세요 (선택사항)',
-    validation: z.array(z.string()).optional()
-  }
-]
-
 export default function ResourcesPage() {
+  const router = useRouter()
   const { user, profile } = useOptimizedAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
-  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
-  const [createModalOpen, setCreateModalOpen] = useState(false)
   
   // Use Supabase hooks
   const { data: resources, loading, refetch } = useContentList({
     type: 'resource',
     status: 'published'
   })
-  const { createContent, loading: createLoading } = useCreateContent()
   const { deleteContent } = useDeleteContent()
 
   // Filter and sort resources
@@ -179,63 +117,6 @@ export default function ResourcesPage() {
     }
   }
 
-  // Handle create
-  const handleCreate = async (values: any, attachments: any[]) => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-
-    try {
-      const newResource: TablesInsert<'content'> = {
-        type: 'resource',
-        title: values.title.trim(),
-        content: values.content.trim(),
-        category: values.category,
-        tags: values.tags || [],
-        author_id: user.id,
-        status: 'published',
-        metadata: {
-          downloads: 0
-        }
-      }
-
-      const result = await createContent(newResource)
-      
-      if (result.error) {
-        throw new Error(result.error.message)
-      }
-
-      // Save attachments if any
-      if (result.data && attachments.length > 0) {
-        for (const attachment of attachments) {
-          const { error: attachmentError } = await supabase
-            .from('content_attachments')
-            .insert({
-              content_id: result.data.id,
-              file_url: attachment.file_url,
-              file_name: attachment.file_name,
-              file_size: attachment.file_size,
-              file_type: attachment.file_type,
-              attachment_type: attachment.attachment_type,
-              display_order: attachments.indexOf(attachment)
-            })
-          
-          if (attachmentError) {
-            console.error('Error saving attachment:', attachmentError)
-          }
-        }
-      }
-
-      toast.success('자료가 등록되었습니다.')
-      setCreateModalOpen(false)
-      refetch()
-    } catch (error: any) {
-      console.error('Error creating resource:', error)
-      toast.error(error.message || '자료 등록에 실패했습니다.')
-    }
-  }
-
   // Check permissions
   const canEdit = (item: Views<'content_with_author'>) => {
     return !!(user && profile && item.author_id === user.id)
@@ -294,7 +175,7 @@ export default function ResourcesPage() {
         onSearchChange={setSearchTerm}
         showCreateButton={!!user}
         createButtonText="자료 공유하기"
-        onCreateClick={() => setCreateModalOpen(true)}
+        onCreateClick={() => router.push('/resources/new')}
         categories={categories}
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
@@ -311,7 +192,7 @@ export default function ResourcesPage() {
           user && (
             <Button 
               className="kepco-gradient" 
-              onClick={() => setCreateModalOpen(true)}
+              onClick={() => router.push('/resources/new')}
             >
               <Plus className="mr-2 h-4 w-4" />
               첫 번째 자료를 공유해보세요!
@@ -343,18 +224,6 @@ export default function ResourcesPage() {
           </div>
         )}
       </ContentListLayout>
-
-      {/* Create Modal */}
-      <ContentCreateModalEnhanced
-        isOpen={createModalOpen}
-        onOpenChange={setCreateModalOpen}
-        title="새 자료 공유"
-        description="동아리원들과 유용한 자료를 공유해주세요"
-        fields={createFields}
-        onSubmit={handleCreate}
-        loading={createLoading}
-        contentType="resource"
-      />
     </>
   )
 }

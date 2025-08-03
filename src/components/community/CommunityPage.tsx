@@ -1,59 +1,31 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useContentList, useCreateContent, useDeleteContent } from '@/hooks/useSupabase'
+import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
 import { toast } from 'sonner'
-import { Views, TablesInsert, supabase } from '@/lib/supabase/client'
-import * as z from 'zod'
+import { Views } from '@/lib/supabase/client'
+import { getBoardCategoryData } from '@/lib/categories'
 import { 
   Plus,
-  BookOpen,
-  Coffee,
-  MessageCircle,
-  HelpCircle,
-  TrendingUp,
-  Lightbulb,
   Tag,
   Eye,
-  MessageSquare
+  MessageSquare,
+  MessageCircle,
+  TrendingUp,
+  Users
 } from 'lucide-react'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import ContentCard from '@/components/shared/ContentCard'
-import ContentCreateModalEnhanced from '@/components/shared/ContentCreateModalEnhanced'
 import StatsCard from '@/components/shared/StatsCard'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
-const categoryLabels = {
-  all: '전체',
-  tips: '꿀팁공유',
-  review: '후기',
-  help: '도움요청',
-  discussion: '토론',
-  question: '질문',
-  chat: '잡담'
-}
-
-const categoryColors = {
-  tips: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  review: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  help: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  discussion: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  question: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  chat: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-}
-
-const categoryIcons = {
-  tips: Lightbulb,
-  review: TrendingUp,
-  help: HelpCircle,
-  discussion: MessageCircle,
-  question: HelpCircle,
-  chat: Coffee
-}
+// 카테고리 정보 가져오기
+const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('community')
 
 const sortOptions = [
   { value: 'latest', label: '최신순' },
@@ -62,58 +34,18 @@ const sortOptions = [
   { value: 'comments', label: '댓글순' }
 ]
 
-// Form fields for create modal
-const createFields = [
-  {
-    name: 'category',
-    label: '카테고리',
-    type: 'select' as const,
-    placeholder: '카테고리를 선택해주세요',
-    options: Object.entries(categoryLabels).filter(([key]) => key !== 'all').map(([value, label]) => ({ value, label })),
-    validation: z.enum(['tips', 'review', 'help', 'discussion', 'question', 'chat'], {
-      message: '카테고리를 선택해주세요',
-    })
-  },
-  {
-    name: 'title',
-    label: '제목',
-    type: 'text' as const,
-    placeholder: '제목을 입력하세요',
-    maxLength: 100,
-    validation: z.string().min(1, '제목을 입력해주세요').max(100, '제목은 100자 이하여야 합니다')
-  },
-  {
-    name: 'content',
-    label: '내용',
-    type: 'markdown' as const,
-    placeholder: '내용을 입력하세요. 이미지는 복사-붙여넣기로 바로 삽입할 수 있습니다.',
-    maxLength: 10000,
-    validation: z.string().min(1, '내용을 입력해주세요').max(10000, '내용은 10000자 이하여야 합니다')
-  },
-  {
-    name: 'tags',
-    label: '태그',
-    type: 'tags' as const,
-    placeholder: '태그를 입력하고 Enter를 누르세요',
-    description: '관련 키워드를 태그로 추가하세요 (선택사항)',
-    validation: z.array(z.string()).optional()
-  }
-]
-
 export default function CommunityPage() {
+  const router = useRouter()
   const { user, profile } = useOptimizedAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
-  // viewMode is now handled by ContentListLayout's autoResponsiveViewMode
-  const [createModalOpen, setCreateModalOpen] = useState(false)
   
   // Use Supabase hooks
   const { data: posts, loading, refetch } = useContentList({
     type: 'post',
     status: 'published'
   })
-  const { createContent, loading: createLoading } = useCreateContent()
   const { deleteContent, loading: deleteLoading } = useDeleteContent()
 
   // Filter and sort posts
@@ -191,61 +123,6 @@ export default function CommunityPage() {
     }
   }
 
-  // Handle create
-  const handleCreate = async (values: any, attachments: any[]) => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-
-    try {
-      const newPost: TablesInsert<'content'> = {
-        type: 'post',
-        title: values.title.trim(),
-        content: values.content.trim(),
-        category: values.category,
-        tags: values.tags || [],
-        author_id: user.id,
-        status: 'published',
-        metadata: {}
-      }
-
-      const result = await createContent(newPost)
-      
-      if (result.error) {
-        throw new Error(result.error.message)
-      }
-
-      // Save attachments if any
-      if (result.data && attachments.length > 0) {
-        for (const attachment of attachments) {
-          const { error: attachmentError } = await supabase
-            .from('content_attachments')
-            .insert({
-              content_id: result.data.id,
-              file_url: attachment.file_url,
-              file_name: attachment.file_name,
-              file_size: attachment.file_size,
-              file_type: attachment.file_type,
-              attachment_type: attachment.attachment_type,
-              display_order: attachments.indexOf(attachment)
-            })
-          
-          if (attachmentError) {
-            console.error('Error saving attachment:', attachmentError)
-          }
-        }
-      }
-
-      toast.success('게시글이 작성되었습니다.')
-      setCreateModalOpen(false)
-      refetch()
-    } catch (error: any) {
-      console.error('Error creating post:', error)
-      toast.error(error.message || '게시글 작성에 실패했습니다.')
-    }
-  }
-
   // Check permissions
   const canEdit = (item: Views<'content_with_author'>) => {
     return !!(user && profile && item.author_id === user.id)
@@ -304,7 +181,7 @@ export default function CommunityPage() {
         onSearchChange={setSearchTerm}
         showCreateButton={!!user}
         createButtonText="새 글 작성"
-        onCreateClick={() => setCreateModalOpen(true)}
+        onCreateClick={() => router.push('/community/new')}
         categories={categories}
         activeCategory={activeCategory}
         onCategoryChange={setActiveCategory}
@@ -321,7 +198,7 @@ export default function CommunityPage() {
           user && (
             <Button 
               className="kepco-gradient" 
-              onClick={() => setCreateModalOpen(true)}
+              onClick={() => router.push('/community/new')}
             >
               <Plus className="mr-2 h-4 w-4" />
               첫 번째 게시글을 작성해보세요!
@@ -353,18 +230,6 @@ export default function CommunityPage() {
         </div>
         )}
       </ContentListLayout>
-
-      {/* Create Modal */}
-      <ContentCreateModalEnhanced
-        isOpen={createModalOpen}
-        onOpenChange={setCreateModalOpen}
-        title="새 게시글 작성"
-        description="커뮤니티에 새로운 글을 작성해보세요"
-        fields={createFields}
-        onSubmit={handleCreate}
-        loading={createLoading}
-        contentType="post"
-      />
     </>
   )
 }
