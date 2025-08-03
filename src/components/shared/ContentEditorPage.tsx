@@ -82,15 +82,33 @@ export default function ContentEditorPage({
     }
   })
 
-  // Auto-save draft to localStorage
+  // Auto-save draft to localStorage with debounce
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout
+    
     const subscription = form.watch((value) => {
       if (value.title || value.content) {
         setHasUnsavedChanges(true)
-        localStorage.setItem(`draft-${contentType}`, JSON.stringify(value))
+        
+        // Clear previous timeout
+        clearTimeout(timeoutId)
+        
+        // Save after 1 second of no changes
+        timeoutId = setTimeout(() => {
+          const draftData = {
+            ...value,
+            savedAt: new Date().toISOString()
+          }
+          localStorage.setItem(`draft-${contentType}`, JSON.stringify(draftData))
+          console.log('Draft saved:', draftData)
+        }, 1000)
       }
     })
-    return () => subscription.unsubscribe()
+    
+    return () => {
+      clearTimeout(timeoutId)
+      subscription.unsubscribe()
+    }
   }, [form, contentType])
 
   // Load draft from localStorage
@@ -99,13 +117,26 @@ export default function ContentEditorPage({
     if (draft) {
       try {
         const parsedDraft = JSON.parse(draft)
-        form.reset(parsedDraft)
-        toast.info('임시 저장된 내용을 불러왔습니다.')
+        console.log('Loading draft:', parsedDraft)
+        // Use setValue for each field to trigger proper updates
+        if (parsedDraft.title) form.setValue('title', parsedDraft.title)
+        if (parsedDraft.category) form.setValue('category', parsedDraft.category)
+        if (parsedDraft.content) form.setValue('content', parsedDraft.content)
+        if (parsedDraft.tags) form.setValue('tags', parsedDraft.tags)
+        
+        if (parsedDraft.savedAt) {
+          const savedDate = new Date(parsedDraft.savedAt)
+          const timeAgo = Math.floor((Date.now() - savedDate.getTime()) / 1000 / 60)
+          toast.info(`임시 저장된 내용을 불러왔습니다. (${timeAgo}분 전 저장)`)
+        } else {
+          toast.info('임시 저장된 내용을 불러왔습니다.')
+        }
       } catch (error) {
         console.error('Failed to load draft:', error)
+        localStorage.removeItem(`draft-${contentType}`)
       }
     }
-  }, [contentType, form])
+  }, [contentType])
 
   // Warn about unsaved changes
   useEffect(() => {
@@ -326,6 +357,7 @@ export default function ContentEditorPage({
                         value={field.value}
                         onChange={field.onChange}
                         placeholder={placeholders.content}
+                        height={450}
                       />
                     </FormControl>
                     <FormDescription>

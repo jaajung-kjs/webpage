@@ -1,97 +1,119 @@
 /* Rich Text Editor Custom Styles */
 
-/* Editor wrapper - dynamic height */
+/* Editor wrapper - fixed height */
 .rich-text-editor-wrapper {
-  min-height: 200px;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
-/* Override the fixed height from the library */
-.rich-text-editor-wrapper .richtext-editor-wrapper,
-.rich-text-editor-wrapper .tiptap-editor-container,
+/* Override the library to work with fixed height */
 .rich-text-editor-wrapper > div:first-child {
-  min-height: inherit !important;
-  height: auto !important;
-  flex: 1;
+  height: 100% !important;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-/* Editor content area - grow with content */
-.rich-text-editor-wrapper .ProseMirror {
-  min-height: 200px;
-  height: auto !important;
-  max-height: none !important;
+/* Editor toolbar */
+.rich-text-editor-wrapper .editor-toolbar,
+.rich-text-editor-wrapper > div > div:first-child {
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+/* Editor content wrapper - takes remaining space */
+.rich-text-editor-wrapper .editor-content-wrapper,
+.rich-text-editor-wrapper > div > div:last-child {
   flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Editor content area - scrollable */
+.rich-text-editor-wrapper .ProseMirror {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: 1rem;
   /* Remove any background that might show lines */
   background: transparent !important;
   background-image: none !important;
+  /* Remove any repeating patterns */
+  background-repeat: no-repeat !important;
 }
 
-/* Remove any fixed heights from content wrapper */
-.rich-text-editor-wrapper .editor-content-wrapper,
-.rich-text-editor-wrapper [class*="editor-content"],
-.rich-text-editor-wrapper [class*="tiptap"] {
-  height: auto !important;
-  min-height: inherit !important;
-  flex: 1;
+/* Ensure no horizontal lines or patterns */
+.rich-text-editor-wrapper .ProseMirror:before,
+.rich-text-editor-wrapper .ProseMirror:after {
+  display: none !important;
+}
+
+/* Remove any ruled lines background */
+.rich-text-editor-wrapper,
+.rich-text-editor-wrapper * {
+  background-image: none !important;
 }
 
 /* Toolbar responsive styles */
 @media (max-width: 768px) {
-  /* Reduce toolbar button sizes on mobile */
-  .rich-text-editor-wrapper button[class*="toolbar-button"],
-  .rich-text-editor-wrapper [role="button"] {
+  /* Make toolbar more compact */
+  .rich-text-editor-wrapper > div > div:first-child {
     padding: 0.25rem !important;
-    min-width: 2rem !important;
-    height: 2rem !important;
+    gap: 0.125rem !important;
+    flex-wrap: wrap !important;
+    max-height: 120px !important;
+    overflow-y: auto !important;
   }
   
-  .rich-text-editor-wrapper button svg,
-  .rich-text-editor-wrapper [role="button"] svg {
-    width: 1rem !important;
-    height: 1rem !important;
+  /* Reduce ALL button sizes on mobile */
+  .rich-text-editor-wrapper button {
+    padding: 0.25rem !important;
+    min-width: 28px !important;
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 0.75rem !important;
   }
   
-  /* Hide less essential toolbar items on mobile - using data attributes when available */
-  .rich-text-editor-wrapper [data-toolbar-item="fontFamily"],
-  .rich-text-editor-wrapper [data-toolbar-item="fontSize"],
-  .rich-text-editor-wrapper [data-toolbar-item="color"],
-  .rich-text-editor-wrapper [data-toolbar-item="highlight"],
-  .rich-text-editor-wrapper [data-toolbar-item="textAlign"],
-  .rich-text-editor-wrapper [data-toolbar-item="indent"],
-  .rich-text-editor-wrapper [data-toolbar-item="tableOfContents"],
-  .rich-text-editor-wrapper [data-toolbar-item="importWord"],
-  .rich-text-editor-wrapper [data-toolbar-item="exportPdf"],
-  /* Additional selectors for the actual toolbar groups */
-  .rich-text-editor-wrapper div:has(button[title*="Font"]),
-  .rich-text-editor-wrapper div:has(button[title*="Color"]),
-  .rich-text-editor-wrapper div:has(button[title*="Align"]),
-  .rich-text-editor-wrapper div:has(button[title*="Import"]),
-  .rich-text-editor-wrapper div:has(button[title*="Export"]) {
+  .rich-text-editor-wrapper button svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+  
+  /* Hide complex toolbar groups by index (more reliable) */
+  /* Keep only essential tools: Bold, Italic, Lists, Link, Image */
+  .rich-text-editor-wrapper > div > div:first-child > div:nth-child(n+7) {
     display: none !important;
   }
   
-  /* Toolbar container adjustments */
-  .rich-text-editor-wrapper > div > div:first-child,
-  .rich-text-editor-wrapper .editor-toolbar {
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    padding: 0.5rem;
+  /* Also hide specific button groups we can identify */
+  .rich-text-editor-wrapper button[aria-label*="Font"],
+  .rich-text-editor-wrapper button[aria-label*="Size"],
+  .rich-text-editor-wrapper button[aria-label*="Color"],
+  .rich-text-editor-wrapper button[aria-label*="Highlight"],
+  .rich-text-editor-wrapper button[aria-label*="Align"],
+  .rich-text-editor-wrapper button[aria-label*="Indent"],
+  .rich-text-editor-wrapper button[aria-label*="Import"],
+  .rich-text-editor-wrapper button[aria-label*="Export"],
+  .rich-text-editor-wrapper button[aria-label*="Table"],
+  .rich-text-editor-wrapper button[aria-label*="Subscript"],
+  .rich-text-editor-wrapper button[aria-label*="Superscript"] {
+    display: none !important;
   }
   
-  /* Toolbar groups on mobile */
+  /* Hide dividers on mobile to save space */
+  .rich-text-editor-wrapper hr,
+  .rich-text-editor-wrapper [role="separator"] {
+    display: none !important;
+  }
+  
+  /* Compact toolbar groups */
   .rich-text-editor-wrapper > div > div:first-child > div {
     gap: 0.125rem !important;
     padding: 0 !important;
-  }
-  
-  /* Reduce divider spacing */
-  .rich-text-editor-wrapper .toolbar-divider,
-  .rich-text-editor-wrapper hr {
-    margin: 0 0.25rem !important;
+    margin: 0 !important;
   }
 }
 

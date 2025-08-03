@@ -83,7 +83,7 @@ turndownService.addRule('file-attachment', {
 })
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ value, onChange, placeholder, height, maxHeight, disabled = false }, ref) => {
+  ({ value, onChange, placeholder, height = 400, maxHeight, disabled = false }, ref) => {
     const editorRef = useRef<{ editor: Editor | null }>(null)
     const isMobile = useIsMobile()
 
@@ -120,7 +120,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 
     // Configure extensions based on device
     const extensions = useMemo(() => {
-      const baseExtensions = [
+      const baseExtensions: any[] = [
         BaseKit.configure({
           placeholder: {
             showOnlyCurrent: true,
@@ -216,7 +216,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       <div 
         className="rich-text-editor-wrapper border rounded-lg overflow-hidden"
         style={{ 
-          maxHeight: maxHeight 
+          height: height,
+          maxHeight: maxHeight || height
         }}
       >
         <RichTextEditorBase
@@ -230,6 +231,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           hideToolbar={false}
           disableBubble={false}
           maxWidth="100%"
+          minHeight={height}
+          maxHeight={maxHeight || height}
           contentClass="prose prose-slate max-w-none"
         />
       </div>
