@@ -21,12 +21,13 @@ import {
   useUpdateContent,
   useDeleteContent
 } from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
+import { Views, supabase, Tables } from '@/lib/supabase/client'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { ContentAPI } from '@/lib/api/content'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
+import AttachmentsList from '@/components/shared/AttachmentsList'
 
 interface ResourceDetailPageProps {
   resourceId: string
@@ -81,6 +82,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [downloadCount, setDownloadCount] = useState(0)
+  const [attachments, setAttachments] = useState<Tables<'content_attachments'>[]>([])
 
   // Increment view count when resource is loaded
   useEffect(() => {
@@ -88,6 +90,28 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       ContentAPI.incrementViewCount(resourceData.id)
     }
   }, [resourceData?.id])
+
+  // Fetch attachments when resource is loaded
+  useEffect(() => {
+    if (resourceData?.id) {
+      fetchAttachments(resourceData.id)
+    }
+  }, [resourceData?.id])
+
+  const fetchAttachments = async (contentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('content_attachments')
+        .select('*')
+        .eq('content_id', contentId)
+        .order('display_order', { ascending: true })
+
+      if (error) throw error
+      setAttachments(data || [])
+    } catch (error) {
+      console.error('Error fetching attachments:', error)
+    }
+  }
 
   // Update like count and download count when resource data changes
   useEffect(() => {
@@ -414,6 +438,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       likeLoading={likeLoading}
       deleteLoading={deleteLoading}
     >
+      <AttachmentsList attachments={attachments} className="mb-8" />
       <CommentSection contentId={resourceId} />
     </DetailLayout>
   )

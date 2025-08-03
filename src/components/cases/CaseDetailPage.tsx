@@ -13,13 +13,14 @@ import {
   useToggleLike,
   useDeleteContent
 } from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
+import { Views, supabase, Tables } from '@/lib/supabase/client'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
 import DetailLayout from '@/components/shared/DetailLayout'
+import AttachmentsList from '@/components/shared/AttachmentsList'
 
 
 
@@ -42,6 +43,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
+  const [attachments, setAttachments] = useState<Tables<'content_attachments'>[]>([])
 
   // Increment view count when case is loaded
   useEffect(() => {
@@ -49,6 +51,28 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
       ContentAPI.incrementViewCount(caseData.id)
     }
   }, [caseData?.id])
+
+  // Fetch attachments when case is loaded
+  useEffect(() => {
+    if (caseData?.id) {
+      fetchAttachments(caseData.id)
+    }
+  }, [caseData?.id])
+
+  const fetchAttachments = async (contentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('content_attachments')
+        .select('*')
+        .eq('content_id', contentId)
+        .order('display_order', { ascending: true })
+
+      if (error) throw error
+      setAttachments(data || [])
+    } catch (error) {
+      console.error('Error fetching attachments:', error)
+    }
+  }
 
   // Update like count and like state when data changes
   useEffect(() => {
@@ -248,6 +272,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
         likeLoading={likeLoading}
         deleteLoading={deleteLoading}
       >
+        <AttachmentsList attachments={attachments} className="mb-8" />
         <CommentSection contentId={caseId} />
       </DetailLayout>
 

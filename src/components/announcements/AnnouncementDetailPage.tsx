@@ -12,7 +12,7 @@ import {
   Pin,
   Flag
 } from 'lucide-react'
-import { supabase, Views } from '@/lib/supabase/client'
+import { supabase, Views, Tables } from '@/lib/supabase/client'
 import { 
   useContent,
   useIsLiked,
@@ -26,6 +26,7 @@ import { ReportDialog } from '@/components/ui/report-dialog'
 import PermissionGate from '@/components/shared/PermissionGate'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
+import AttachmentsList from '@/components/shared/AttachmentsList'
 
 interface AnnouncementDetailPageProps {
   announcementId: string
@@ -79,6 +80,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
+  const [attachments, setAttachments] = useState<Tables<'content_attachments'>[]>([])
 
   // Increment view count when announcement is loaded
   useEffect(() => {
@@ -86,6 +88,28 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
       ContentAPI.incrementViewCount(announcementData.id)
     }
   }, [announcementData?.id])
+
+  // Fetch attachments when announcement is loaded
+  useEffect(() => {
+    if (announcementData?.id) {
+      fetchAttachments(announcementData.id)
+    }
+  }, [announcementData?.id])
+
+  const fetchAttachments = async (contentId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('content_attachments')
+        .select('*')
+        .eq('content_id', contentId)
+        .order('display_order', { ascending: true })
+
+      if (error) throw error
+      setAttachments(data || [])
+    } catch (error) {
+      console.error('Error fetching attachments:', error)
+    }
+  }
 
   // Update like count when data changes
   useEffect(() => {
@@ -377,6 +401,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
         likeLoading={likeLoading}
         deleteLoading={deleteLoading}
       >
+        <AttachmentsList attachments={attachments} className="mb-8" />
         <CommentSection contentId={announcementId} />
       </DetailLayout>
 
