@@ -155,23 +155,23 @@ export default function MembershipStatusPage() {
               <h3 className="font-semibold mb-2">신청 내용</h3>
               <div className="space-y-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">동기:</span> {application.motivation}
+                  <span className="text-muted-foreground">신청 사유:</span> {application.application_reason}
                 </div>
                 <div>
-                  <span className="text-muted-foreground">기대사항:</span> {application.expectations}
+                  <span className="text-muted-foreground">경험 수준:</span> {application.experience_level}
                 </div>
-                {application.experience && (
+                {application.interests && application.interests.length > 0 && (
                   <div>
-                    <span className="text-muted-foreground">경험:</span> {application.experience}
+                    <span className="text-muted-foreground">관심 분야:</span> {application.interests.join(', ')}
                   </div>
                 )}
               </div>
             </div>
 
-            {application.status === 'rejected' && application.rejection_reason && (
+            {application.status === 'rejected' && application.review_notes && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  <strong>거절 사유:</strong> {application.rejection_reason}
+                  <strong>거절 사유:</strong> {application.review_notes}
                 </AlertDescription>
               </Alert>
             )}
