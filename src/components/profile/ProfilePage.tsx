@@ -38,6 +38,8 @@ import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { getRoleConfig, getRoleLabels } from '@/lib/roles'
+import { getSkillLevelConfig, getSkillLevelLabels } from '@/lib/skills'
 
 interface UserData {
   id: string
@@ -82,19 +84,8 @@ interface UserData {
   }[]
 }
 
-const skillLevels = {
-  beginner: '초급',
-  intermediate: '중급',
-  advanced: '고급',
-  expert: '전문가'
-}
-
-const roleLabels = {
-  leader: '동아리장',
-  'vice-leader': '부동아리장',
-  admin: '운영진',
-  member: '일반회원'
-}
+const skillLevels = getSkillLevelLabels()
+const roleLabels = getRoleLabels()
 
 const getActivityTitle = (activityType: string, targetType?: string) => {
   switch (activityType) {
@@ -597,9 +588,23 @@ export default function ProfilePage() {
                 <CardTitle className="text-xl">{userData.name}</CardTitle>
                 <CardDescription className="space-y-1">
                   <div>{userData.department} {userData.job_position}</div>
-                  <Badge variant="secondary" className="mt-2">
-                    {roleLabels[userData.role as keyof typeof roleLabels]}
-                  </Badge>
+                  {(() => {
+                    const roleConfig = getRoleConfig(userData.role)
+                    if (roleConfig) {
+                      const RoleIcon = roleConfig.icon
+                      return (
+                        <Badge variant="secondary" className={`mt-2 ${roleConfig.color}`}>
+                          <RoleIcon className="h-3 w-3 mr-1" />
+                          {roleConfig.label}
+                        </Badge>
+                      )
+                    }
+                    return (
+                      <Badge variant="secondary" className="mt-2">
+                        {userData.role}
+                      </Badge>
+                    )
+                  })()}
                 </CardDescription>
               </CardHeader>
               
@@ -622,12 +627,29 @@ export default function ProfilePage() {
                       </Badge>
                     ))}
                   </div>
-                  <Badge 
-                    variant="secondary" 
-                    className="mt-2 bg-kepco-blue-400/10 text-kepco-blue-700 dark:bg-kepco-blue-400/20 dark:text-kepco-blue-300"
-                  >
-                    {skillLevels[userData.skillLevel as keyof typeof skillLevels]}
-                  </Badge>
+                  {(() => {
+                    const skillConfig = getSkillLevelConfig(userData.skillLevel)
+                    if (skillConfig) {
+                      const SkillIcon = skillConfig.icon
+                      return (
+                        <Badge 
+                          variant="secondary" 
+                          className={`mt-2 ${skillConfig.color}`}
+                        >
+                          <SkillIcon className="h-3 w-3 mr-1" />
+                          {skillConfig.label}
+                        </Badge>
+                      )
+                    }
+                    return (
+                      <Badge 
+                        variant="secondary" 
+                        className="mt-2 bg-kepco-blue-400/10 text-kepco-blue-700 dark:bg-kepco-blue-400/20 dark:text-kepco-blue-300"
+                      >
+                        {userData.skillLevel}
+                      </Badge>
+                    )
+                  })()}
                 </div>
 
                 {/* Activity Level */}
