@@ -212,9 +212,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 
     return (
       <div 
-        className="rich-text-editor-wrapper border rounded-lg overflow-hidden touch-manipulation"
+        className="rich-text-editor-wrapper border rounded-lg touch-manipulation"
         style={{ 
-          minHeight: '600px',
           WebkitUserSelect: 'text',
           userSelect: 'text'
         }}
@@ -230,8 +229,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           hideToolbar={false}
           disableBubble={isMobile}
           maxWidth="100%"
-          minHeight="600px"
-          maxHeight="none"
+          minHeight={undefined}
+          maxHeight={undefined}
           contentClass="prose prose-slate max-w-none touch-manipulation"
         />
       </div>

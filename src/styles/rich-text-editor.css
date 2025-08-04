@@ -2,20 +2,31 @@
 
 /* Editor wrapper - flexible height */
 .rich-text-editor-wrapper {
-  display: flex;
-  flex-direction: column;
+  display: block;
   position: relative;
-  min-height: 600px;
+  min-height: 400px;
   height: auto;
+}
+
+/* Override library's forced height constraints */
+.rich-text-editor-wrapper ._wrap_5y04w_1 {
+  height: auto !important;
+  overflow: visible !important;
+  min-height: 400px !important;
+}
+
+.rich-text-editor-wrapper ._innerWrap_5y04w_15 {
+  height: auto !important;
+  overflow: visible !important;
+  min-height: 350px !important;
 }
 
 /* Override the library to work with flexible height */
 .rich-text-editor-wrapper > div:first-child {
   height: auto !important;
-  min-height: 600px;
-  display: flex;
-  flex-direction: column;
-  overflow: visible;
+  min-height: 400px;
+  display: block;
+  overflow: visible !important;
 }
 
 /* Editor toolbar */
@@ -28,19 +39,19 @@
 /* Editor content wrapper - natural height */
 .rich-text-editor-wrapper .editor-content-wrapper,
 .rich-text-editor-wrapper > div > div:last-child {
-  flex: 1;
-  overflow: visible;
-  display: flex;
-  flex-direction: column;
-  min-height: 500px;
+  display: block;
+  overflow: visible !important;
+  min-height: 300px;
+  height: auto !important;
 }
 
 /* Editor content area - no scroll */
 .rich-text-editor-wrapper .ProseMirror {
-  flex: 1;
-  overflow: visible;
+  display: block;
+  overflow: visible !important;
   padding: 1rem;
-  min-height: 500px;
+  min-height: 300px;
+  height: auto !important;
   /* Remove any background that might show lines */
   background: transparent !important;
   background-image: none !important;
@@ -139,7 +150,30 @@
 
 /* Editor content mobile optimizations */
 @media (max-width: 768px) {
+  /* Reduce min-heights for mobile */
+  .rich-text-editor-wrapper {
+    min-height: 300px;
+  }
+  
+  .rich-text-editor-wrapper ._wrap_5y04w_1 {
+    min-height: 300px !important;
+  }
+  
+  .rich-text-editor-wrapper ._innerWrap_5y04w_15 {
+    min-height: 250px !important;
+  }
+  
+  .rich-text-editor-wrapper > div:first-child {
+    min-height: 300px;
+  }
+  
+  .rich-text-editor-wrapper .editor-content-wrapper,
+  .rich-text-editor-wrapper > div > div:last-child {
+    min-height: 200px;
+  }
+  
   .rich-text-editor-wrapper .ProseMirror {
+    min-height: 200px;
     padding: 0.75rem;
     font-size: 16px !important; /* Prevent zoom on iOS */
     -webkit-tap-highlight-color: transparent;
@@ -199,4 +233,23 @@
 /* Ensure the editor grows smoothly */
 .rich-text-editor-wrapper {
   transition: height 0.2s ease;
+}
+
+/* Additional overrides for any overflow settings */
+.rich-text-editor-wrapper * {
+  overflow-y: visible !important;
+  overflow-x: visible !important;
+}
+
+/* Specific override for richtext classes */
+.richtext-overflow-hidden {
+  overflow: visible !important;
+}
+
+.richtext-overflow-y-auto {
+  overflow-y: visible !important;
+}
+
+.richtext-h-full {
+  height: auto !important;
 }
