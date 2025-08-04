@@ -121,9 +121,9 @@ export function MessageModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-4xl w-full h-full sm:h-auto sm:max-h-[80vh] p-0 m-0 sm:m-4 rounded-none sm:rounded-lg">
+        <DialogContent className="sm:max-w-4xl sm:h-auto sm:max-h-[80vh] p-0" showCloseButton={viewState.type === 'inbox'}>
           <DialogHeader className="relative px-4 sm:px-6 py-3 sm:py-4 border-b">
-            <div className="flex items-center justify-between pr-8 sm:pr-0">
+            <div className="flex items-center justify-between pr-10 sm:pr-0">
               <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 {viewState.type === 'inbox' ? '메시지함' : '대화'}
@@ -143,7 +143,7 @@ export function MessageModal({
             </div>
           </DialogHeader>
 
-          <div className="relative overflow-hidden h-[calc(100vh-8rem)] sm:h-auto">
+          <div className="relative overflow-hidden h-[calc(100vh-10rem)] sm:h-auto">
             <AnimatePresence mode="wait">
               {viewState.type === 'inbox' ? (
                 <motion.div
@@ -172,7 +172,7 @@ export function MessageModal({
                     recipientName={viewState.recipientName}
                     recipientAvatar={viewState.recipientAvatar}
                     onBack={handleBackToInbox}
-                    className="border-0 shadow-none h-[calc(100vh-8rem)] sm:h-[500px]"
+                    className="border-0 shadow-none h-[calc(100vh-10rem)] sm:h-[500px]"
                   />
                 </motion.div>
               )}

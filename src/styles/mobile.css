@@ -38,6 +38,13 @@
     min-height: 44px;
     min-width: 44px;
   }
+  
+  /* Ensure icon buttons maintain consistent size */
+  button[data-slot="button"][class*="h-8"],
+  button[data-slot="button"][class*="h-9"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
 
   /* Better spacing for mobile forms */
   input,

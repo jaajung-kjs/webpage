@@ -347,10 +347,10 @@ function MemberSearchItem({ member, onClick }: MemberSearchItemProps) {
           </Badge>
         </div>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span className="truncate">{member.email}</span>
+          <span className="truncate hidden sm:inline">{member.email}</span>
           {member.department && (
             <>
-              <span>•</span>
+              <span className="hidden sm:inline">•</span>
               <span className="truncate">{member.department}</span>
             </>
           )}
