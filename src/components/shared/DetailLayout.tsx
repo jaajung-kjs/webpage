@@ -131,7 +131,7 @@ export default function DetailLayout({
         className="mb-6"
       >
         <Link href={backLink}>
-          <Button variant="ghost" className="gap-2">
+          <Button variant="ghost" className="gap-2 touch-highlight">
             <ArrowLeft className="h-4 w-4" />
             {backLinkText}
           </Button>

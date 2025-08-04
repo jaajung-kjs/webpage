@@ -144,12 +144,12 @@ function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
   return (
     <motion.div
       className={cn(
-        "flex items-start gap-3 p-4 border-b cursor-pointer transition-colors hover:bg-muted/50",
+        "flex items-start gap-3 p-4 border-b cursor-pointer transition-colors hover:bg-muted/50 message-item-touch",
         isUnread && "bg-primary/5 border-l-4 border-l-primary"
       )}
       onClick={onClick}
       whileHover={{ scale: 1.01 }}
-      whileTap={{ scale: 0.99 }}
+      whileTap={{ scale: 0.95 }}
     >
       {/* 발신자 아바타 */}
       <div className="relative">

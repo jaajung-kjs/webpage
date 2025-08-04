@@ -190,7 +190,7 @@ export default function Header() {
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:hidden"
+                  className="mr-2 px-0 text-base hover:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 md:hidden touch-highlight"
                 >
                   <Menu className="h-5 w-5" />
                   <span className="sr-only">메뉴 토글</span>
@@ -264,7 +264,7 @@ function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMes
           <Link
             key={item.name}
             href={item.href}
-            className="block py-3 px-3 -mx-3 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-lg touch-manipulation"
+            className="block py-3 px-3 -mx-3 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-lg touch-manipulation sheet-nav-item"
           >
             {item.name}
           </Link>

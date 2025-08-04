@@ -186,6 +186,107 @@
     outline-offset: 2px;
   }
 
+  /* Global touch feedback styles */
+  .touch-feedback {
+    transition: transform 100ms ease-out, opacity 100ms ease-out;
+  }
+  
+  .touch-feedback:active {
+    transform: scale(0.95);
+    opacity: 0.8;
+  }
+  
+  /* Touch highlight for ghost/transparent buttons */
+  .touch-highlight {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .touch-highlight::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 100ms ease-out;
+    pointer-events: none;
+  }
+  
+  .touch-highlight:active::after {
+    opacity: 0.1;
+  }
+  
+  /* Enhanced button touch feedback */
+  button:not(:disabled):active,
+  [role="button"]:not(:disabled):active {
+    transform: scale(0.95);
+  }
+  
+  /* Icon button specific touch feedback */
+  button[class*="h-8"]:not(:disabled):active,
+  button[class*="h-9"]:not(:disabled):active,
+  button[class*="h-10"]:not(:disabled):active {
+    transform: scale(0.9);
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  
+  .dark button[class*="h-8"]:not(:disabled):active,
+  .dark button[class*="h-9"]:not(:disabled):active,
+  .dark button[class*="h-10"]:not(:disabled):active {
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+  
+  /* List item touch feedback */
+  .list-item-touch {
+    transition: background-color 100ms ease-out, transform 100ms ease-out;
+  }
+  
+  .list-item-touch:active {
+    background-color: rgba(0, 0, 0, 0.05);
+    transform: scale(0.98);
+  }
+  
+  .dark .list-item-touch:active {
+    background-color: rgba(255, 255, 255, 0.05);
+  }
+  
+  /* Navigation link touch feedback */
+  a:not(.no-touch-feedback):active,
+  [role="link"]:not(.no-touch-feedback):active {
+    opacity: 0.7;
+    transform: scale(0.98);
+  }
+  
+  /* Sheet navigation items */
+  .sheet-nav-item {
+    transition: background-color 100ms ease-out, transform 100ms ease-out;
+  }
+  
+  .sheet-nav-item:active {
+    background-color: var(--accent);
+    transform: scale(0.97);
+  }
+  
+  /* Message list item enhanced feedback */
+  .message-item-touch {
+    transition: all 100ms ease-out;
+  }
+  
+  .message-item-touch:active {
+    transform: scale(0.95);
+    background-color: var(--accent);
+  }
+  
+  /* Close button enhanced feedback */
+  [data-slot="dialog-close"]:active,
+  [aria-label="Close"]:active {
+    transform: scale(0.85) !important;
+    opacity: 1 !important;
+  }
+
   /* Improve swipe gestures */
   .swipeable {
     touch-action: pan-y;

@@ -285,7 +285,7 @@ export function ConversationThread({
             onClick={onBack}
             variant="ghost"
             size="sm"
-            className="p-2 h-8 w-8"
+            className="p-2 h-8 w-8 touch-highlight"
           >
             <ArrowLeft className="h-4 w-4" />
           </Button>

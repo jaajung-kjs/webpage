@@ -129,14 +129,14 @@ export default function RecentPostsSection() {
     <section className="border-t bg-muted/30 py-16 sm:py-24">
       <div className="container mx-auto px-4">
         <div className="mx-auto max-w-6xl">
-          <div className="mb-12 flex items-center justify-between">
+          <div className="mb-12 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <motion.h2
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
                 viewport={{ once: true }}
-                className="mb-4 text-3xl font-bold sm:text-4xl"
+                className="mb-2 sm:mb-4 text-3xl font-bold sm:text-4xl"
               >
                 최근 활용사례
               </motion.h2>
@@ -145,12 +145,12 @@ export default function RecentPostsSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: 0.1 }}
                 viewport={{ once: true }}
-                className="text-lg text-muted-foreground"
+                className="text-base sm:text-lg text-muted-foreground"
               >
                 동료들이 공유한 최신 AI 활용 경험을 확인해보세요
               </motion.p>
             </div>
-            <Button variant="outline" asChild>
+            <Button variant="outline" asChild className="w-full sm:w-auto">
               <Link href="/cases">
                 모든 사례 보기
                 <ArrowRight className="ml-2 h-4 w-4" />
