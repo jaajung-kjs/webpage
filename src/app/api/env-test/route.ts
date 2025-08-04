@@ -31,12 +31,12 @@ export async function GET() {
         dbConnectionStatus = '✅ Connected'
         
         // 테이블 목록 가져오기 (추가 테스트)
-        const { data: tables } = await supabase
-          .from('posts')
+        const { data: content } = await supabase
+          .from('content')
           .select('id')
           .limit(1)
         
-        if (tables !== null) {
+        if (content !== null) {
           tableCount++
         }
       }
