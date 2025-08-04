@@ -4,7 +4,6 @@
 .rich-text-editor-wrapper {
   display: block;
   position: relative;
-  min-height: 400px;
   height: auto;
 }
 
@@ -12,19 +11,19 @@
 .rich-text-editor-wrapper ._wrap_5y04w_1 {
   height: auto !important;
   overflow: visible !important;
-  min-height: 400px !important;
+  min-height: unset !important;
 }
 
 .rich-text-editor-wrapper ._innerWrap_5y04w_15 {
   height: auto !important;
   overflow: visible !important;
-  min-height: 350px !important;
+  min-height: unset !important;
 }
 
 /* Override the library to work with flexible height */
 .rich-text-editor-wrapper > div:first-child {
   height: auto !important;
-  min-height: 400px;
+  min-height: unset !important;
   display: block;
   overflow: visible !important;
 }
@@ -41,7 +40,7 @@
 .rich-text-editor-wrapper > div > div:last-child {
   display: block;
   overflow: visible !important;
-  min-height: 300px;
+  min-height: unset !important;
   height: auto !important;
 }
 
@@ -50,7 +49,7 @@
   display: block;
   overflow: visible !important;
   padding: 1rem;
-  min-height: 300px;
+  min-height: 150px; /* Reasonable minimum for desktop */
   height: auto !important;
   /* Remove any background that might show lines */
   background: transparent !important;
@@ -73,13 +72,15 @@
 
 /* Toolbar responsive styles */
 @media (max-width: 768px) {
-  /* Make toolbar more compact */
+  /* Make toolbar more compact and single row */
   .rich-text-editor-wrapper > div > div:first-child {
     padding: 0.25rem !important;
     gap: 0.125rem !important;
-    flex-wrap: wrap !important;
-    max-height: 120px !important;
-    overflow-y: auto !important;
+    flex-wrap: nowrap !important; /* Force single row */
+    overflow-x: auto !important; /* Allow horizontal scroll */
+    overflow-y: hidden !important;
+    max-height: none !important; /* Remove height restriction */
+    -webkit-overflow-scrolling: touch;
   }
   
   /* Reduce ALL button sizes on mobile */
@@ -150,30 +151,9 @@
 
 /* Editor content mobile optimizations */
 @media (max-width: 768px) {
-  /* Reduce min-heights for mobile */
-  .rich-text-editor-wrapper {
-    min-height: 300px;
-  }
-  
-  .rich-text-editor-wrapper ._wrap_5y04w_1 {
-    min-height: 300px !important;
-  }
-  
-  .rich-text-editor-wrapper ._innerWrap_5y04w_15 {
-    min-height: 250px !important;
-  }
-  
-  .rich-text-editor-wrapper > div:first-child {
-    min-height: 300px;
-  }
-  
-  .rich-text-editor-wrapper .editor-content-wrapper,
-  .rich-text-editor-wrapper > div > div:last-child {
-    min-height: 200px;
-  }
-  
+  /* Mobile specific adjustments */
   .rich-text-editor-wrapper .ProseMirror {
-    min-height: 200px;
+    min-height: 100px; /* Much smaller minimum for mobile */
     padding: 0.75rem;
     font-size: 16px !important; /* Prevent zoom on iOS */
     -webkit-tap-highlight-color: transparent;
@@ -235,10 +215,27 @@
   transition: height 0.2s ease;
 }
 
+/* Remove all min-height constraints from library */
+.rich-text-editor-wrapper,
+.rich-text-editor-wrapper * {
+  min-height: unset !important;
+  max-height: unset !important;
+}
+
+/* Only apply min-height to the actual content area */
+.rich-text-editor-wrapper .ProseMirror {
+  min-height: 150px !important; /* Override the unset above */
+}
+
+@media (max-width: 768px) {
+  .rich-text-editor-wrapper .ProseMirror {
+    min-height: 100px !important; /* Override for mobile */
+  }
+}
+
 /* Additional overrides for any overflow settings */
 .rich-text-editor-wrapper * {
   overflow-y: visible !important;
-  overflow-x: visible !important;
 }
 
 /* Specific override for richtext classes */
