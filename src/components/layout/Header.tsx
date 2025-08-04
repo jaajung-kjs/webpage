@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { Menu, User, LogOut, Settings, Shield, Zap, MessageCircle } from 'lucide-react'
+import { Menu, User, LogOut, Settings, Shield, MessageCircle } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { sessionManager } from '@/lib/utils/session-manager'
 import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
@@ -51,11 +52,15 @@ export default function Header() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg kepco-gradient">
-              <Zap className="h-5 w-5 text-white" />
-            </div>
+            <Image 
+              src="/images/kepco.svg" 
+              alt="KEPCO Logo" 
+              width={24} 
+              height={24} 
+              className="h-6 w-auto"
+              priority
+            />
             <div className="hidden font-bold sm:inline-block">
-              <span className="kepco-text-gradient">KEPCO</span>
               <span className="ml-1 text-sm text-muted-foreground">AI 학습동아리</span>
             </div>
           </Link>
@@ -230,13 +235,14 @@ function MobileNav() {
   return (
     <div className="my-4 h-[calc(100vh-8rem)] pb-10 px-6">
       <div className="flex items-center space-x-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg kepco-gradient">
-          <Zap className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <span className="kepco-text-gradient font-bold">KEPCO</span>
-          <div className="text-xs text-muted-foreground">AI 학습동아리</div>
-        </div>
+        <Image 
+          src="/images/kepco.svg" 
+          alt="KEPCO Logo" 
+          width={24} 
+          height={24} 
+          className="h-6 w-auto"
+        />
+        <div className="text-xs text-muted-foreground">AI 학습동아리</div>
       </div>
       <div className="my-4 h-px bg-border" />
       <div className="flex flex-col space-y-3">

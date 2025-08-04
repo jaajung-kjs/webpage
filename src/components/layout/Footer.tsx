@@ -1,5 +1,6 @@
 import Link from 'next/link'
-import { Zap, Mail, Phone, MapPin } from 'lucide-react'
+import Image from 'next/image'
+import { Mail, Phone, MapPin } from 'lucide-react'
 
 export default function Footer() {
   return (
@@ -9,11 +10,15 @@ export default function Footer() {
           {/* Brand */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg kepco-gradient">
-                <Zap className="h-5 w-5 text-white" />
-              </div>
+              <Image 
+                src="/images/kepco.svg" 
+                alt="KEPCO Logo" 
+                width={24} 
+                height={24} 
+                className="h-6 w-auto"
+              />
               <div>
-                <div className="font-bold kepco-text-gradient">KEPCO</div>
+                <div className="font-bold">KEPCO</div>
                 <div className="text-xs text-muted-foreground">AI 학습동아리</div>
               </div>
             </div>
