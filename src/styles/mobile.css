@@ -71,6 +71,18 @@
     padding: 12px 16px;
   }
 
+  /* Optimize tab animations for mobile */
+  [data-slot="tabs-trigger"] {
+    transition-duration: 100ms !important;
+  }
+  
+  /* Remove hover effects on touch devices */
+  @media (hover: none) {
+    [data-slot="tabs-trigger"]:not([data-state="active"]):hover {
+      background-color: transparent !important;
+    }
+  }
+
   /* Better spacing for list items */
   .list-item {
     padding: 16px;

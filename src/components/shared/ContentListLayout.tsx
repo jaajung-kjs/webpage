@@ -22,7 +22,7 @@ import { Search, Plus, Grid3X3, List, Filter } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface ContentListLayoutProps {
-  title: string
+  title: string | React.ReactNode
   description: string | React.ReactNode
   searchPlaceholder?: string
   searchValue: string

@@ -116,12 +116,14 @@ export default function CasesListPage() {
   return (
     <>
       <ContentListLayout
-        title="AI 활용사례"
-        description={
+        title={
           <span className="flex items-center gap-2">
-            <Lightbulb className="h-4 w-4" />
-            <span className="font-semibold">동료들이 공유한 다양한 AI 활용 경험을 확인해보세요</span>
+            <Lightbulb className="h-5 w-5" />
+            AI 활용사례
           </span>
+        }
+        description={
+          <span className="font-semibold">동료들이 공유한 다양한 AI 활용 경험을 확인해보세요</span>
         }
         searchPlaceholder="사례 제목, 내용, 태그로 검색..."
         searchValue={searchTerm}

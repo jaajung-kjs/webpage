@@ -28,18 +28,27 @@ export default function AdminDashboard() {
         </div>
         
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="applications" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              가입 승인
+          <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
+            <TabsTrigger
+              value="applications"
+              className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center gap-1"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>가입 승인</span>
             </TabsTrigger>
-            <TabsTrigger value="members" className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
-              전체 회원
+            <TabsTrigger
+              value="members"
+              className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center gap-1"
+            >
+              <Users className="h-3.5 w-3.5" />
+              <span>전체 회원</span>
             </TabsTrigger>
-            <TabsTrigger value="reports" className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4" />
-              신고 관리
+            <TabsTrigger
+              value="reports"
+              className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center gap-1"
+            >
+              <AlertCircle className="h-3.5 w-3.5" />
+              <span>신고 관리</span>
             </TabsTrigger>
           </TabsList>
           

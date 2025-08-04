@@ -698,11 +698,31 @@ export default function ProfilePage() {
             transition={{ duration: 0.5, delay: 0.1 }}
           >
             <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-              <TabsList className="grid w-full grid-cols-4">
-                <TabsTrigger value="activity">활동 내역</TabsTrigger>
-                <TabsTrigger value="stats">통계</TabsTrigger>
-                <TabsTrigger value="settings">설정</TabsTrigger>
-                <TabsTrigger value="edit">프로필 편집</TabsTrigger>
+              <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
+                <TabsTrigger
+                  value="activity"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  활동 내역
+                </TabsTrigger>
+                <TabsTrigger
+                  value="stats"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  통계
+                </TabsTrigger>
+                <TabsTrigger
+                  value="settings"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  설정
+                </TabsTrigger>
+                <TabsTrigger
+                  value="edit"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  프로필 편집
+                </TabsTrigger>
               </TabsList>
 
               {/* Activity Tab */}

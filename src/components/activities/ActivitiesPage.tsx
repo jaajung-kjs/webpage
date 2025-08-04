@@ -524,12 +524,14 @@ function ActivitiesPage() {
   return (
     <>
       <ContentListLayout
-        title="학습 활동"
-        description={
+        title={
           <span className="flex items-center gap-2">
-            <Activity className="h-4 w-4" />
-            <span className="font-semibold">AI 학습동아리의 다양한 활동과 세미나에 참여해보세요</span>
+            <Calendar className="h-5 w-5" />
+            활동일정
           </span>
+        }
+        description={
+          <span className="font-semibold">AI 학습동아리의 다양한 활동과 세미나에 참여해보세요</span>
         }
         searchPlaceholder="활동명, 설명, 장소, 태그로 검색..."
         searchValue={searchTerm}

@@ -466,12 +466,14 @@ function MembersPage() {
   return (
     <>
       <ContentListLayout
-        title="회원목록"
-        description={
+        title={
           <span className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="font-semibold">AI 학습동아리 회원들을 만나보세요</span>
+            <Users className="h-5 w-5" />
+            회원목록
           </span>
+        }
+        description={
+          <span className="font-semibold">AI 학습동아리 회원들을 만나보세요</span>
         }
         searchPlaceholder="이름, 부서, 직급, AI 도구로 검색..."
         searchValue={searchTerm}

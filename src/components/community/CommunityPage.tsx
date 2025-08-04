@@ -174,12 +174,14 @@ export default function CommunityPage() {
   return (
     <>
       <ContentListLayout
-        title="커뮤니티"
-        description={
+        title={
           <span className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
-            <span className="font-semibold">동아리원들과 자유롭게 소통하세요</span>
+            <MessageCircle className="h-5 w-5" />
+            자유게시판
           </span>
+        }
+        description={
+          <span className="font-semibold">동아리원들과 자유롭게 소통하고 정보를 공유하세요</span>
         }
         searchPlaceholder="제목, 내용, 작성자로 검색"
         searchValue={searchTerm}
