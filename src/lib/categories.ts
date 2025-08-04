@@ -19,7 +19,11 @@ import {
   BookMarked,
   Presentation,
   Video,
-  Link
+  Link,
+  Calendar,
+  GraduationCap,
+  Users,
+  Utensils
 } from 'lucide-react'
 
 /**
@@ -62,12 +66,12 @@ export const BOARD_CATEGORIES = {
   // AI 활용사례 카테고리
   cases: {
     productivity: {
-      label: '생산성 향상',
+      label: '업무효율',
       color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Zap
     },
     creativity: {
-      label: '창의적 활용',
+      label: '일상',
       color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
       icon: Lightbulb
     },
@@ -95,11 +99,6 @@ export const BOARD_CATEGORIES = {
       color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
       icon: Lightbulb
     },
-    review: {
-      label: '후기',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
-      icon: Star
-    },
     help: {
       label: '도움요청',
       color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
@@ -124,30 +123,49 @@ export const BOARD_CATEGORIES = {
 
   // 자료실 카테고리
   resources: {
-    tutorial: {
-      label: '튜토리얼',
+    presentation: {
+      label: '발표자료',
       color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
-      icon: BookOpen
-    },
-    workshop: {
-      label: '워크샵',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Presentation
     },
-    template: {
-      label: '템플릿',
-      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
-      icon: FileText
-    },
-    reference: {
-      label: '참고자료',
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
-      icon: BookMarked
-    },
-    guideline: {
-      label: '가이드라인',
-      color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+    installation: {
+      label: '설치방법',
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Download
+    },
+    tutorial: {
+      label: '튜토리얼',
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
+      icon: BookOpen
+    },
+    other: {
+      label: '기타',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+      icon: FileText
+    }
+  },
+
+  // 활동일정 카테고리
+  activities: {
+    regular: {
+      label: '정기모임',
+      color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
+      icon: Calendar
+    },
+    study: {
+      label: '스터디',
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+      icon: GraduationCap
+    },
+    dinner: {
+      label: '회식',
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
+      icon: Utensils
+    },
+    lecture: {
+      label: '강연',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+      icon: Presentation
     }
   }
 } as const

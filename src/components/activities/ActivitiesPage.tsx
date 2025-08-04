@@ -50,19 +50,14 @@ import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { useActivities, useSupabaseMutation } from '@/hooks/useSupabase'
 import { supabase, Views, TablesInsert, TablesUpdate } from '@/lib/supabase/client'
+import { getBoardCategoryData } from '@/lib/categories'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import StatsCard from '@/components/shared/StatsCard'
 
-const categoryLabels = {
-  all: '전체',
-  workshop: '워크샵',
-  seminar: '세미나',
-  study: '스터디',
-  discussion: '토론회',
-  meeting: '모임'
-}
+// Get category data from centralized configuration
+const { categoryLabels, categoryColors } = getBoardCategoryData('activities')
 
 const statusLabels = {
   all: '전체',
@@ -70,14 +65,6 @@ const statusLabels = {
   ongoing: '진행중',
   completed: '완료',
   cancelled: '취소'
-}
-
-const categoryColors = {
-  workshop: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
-  seminar: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
-  study: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
-  discussion: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
-  meeting: 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300'
 }
 
 const statusColors = {
@@ -118,7 +105,7 @@ function ActivitiesPage() {
     duration: 60,
     location: '',
     max_participants: 20,
-    category: 'workshop' as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting',
+    category: 'regular' as 'regular' | 'study' | 'dinner' | 'lecture',
     status: 'upcoming' as 'upcoming' | 'ongoing' | 'completed' | 'cancelled',
     tags: [] as string[]
   })
@@ -239,7 +226,7 @@ function ActivitiesPage() {
       duration: 60,
       location: '',
       max_participants: 20,
-      category: 'workshop' as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting',
+      category: 'regular' as 'regular' | 'study' | 'dinner' | 'lecture',
       status: 'upcoming' as 'upcoming' | 'ongoing' | 'completed' | 'cancelled',
       tags: []
     })
@@ -396,7 +383,7 @@ function ActivitiesPage() {
       duration: activity.duration_minutes || 60,
       location: activity.location || '',
       max_participants: activity.max_participants || 20,
-      category: activity.category as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' || 'workshop',
+      category: activity.category as 'regular' | 'study' | 'dinner' | 'lecture' || 'regular',
       status: activity.status as 'upcoming' | 'ongoing' | 'completed' | 'cancelled' || 'upcoming',
       tags: activity.tags || []
     })
@@ -791,16 +778,15 @@ function ActivitiesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'regular' | 'study' | 'dinner' | 'lecture' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="workshop">워크샵</SelectItem>
-                    <SelectItem value="seminar">세미나</SelectItem>
+                    <SelectItem value="regular">정기모임</SelectItem>
                     <SelectItem value="study">스터디</SelectItem>
-                    <SelectItem value="discussion">토론회</SelectItem>
-                    <SelectItem value="meeting">모임</SelectItem>
+                    <SelectItem value="dinner">회식</SelectItem>
+                    <SelectItem value="lecture">강연</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -924,16 +910,15 @@ function ActivitiesPage() {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">카테고리</label>
-                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'workshop' | 'seminar' | 'study' | 'discussion' | 'meeting' })}>
+                <Select value={formData.category} onValueChange={(value) => setFormData({ ...formData, category: value as 'regular' | 'study' | 'dinner' | 'lecture' })}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="workshop">워크샵</SelectItem>
-                    <SelectItem value="seminar">세미나</SelectItem>
+                    <SelectItem value="regular">정기모임</SelectItem>
                     <SelectItem value="study">스터디</SelectItem>
-                    <SelectItem value="discussion">토론회</SelectItem>
-                    <SelectItem value="meeting">모임</SelectItem>
+                    <SelectItem value="dinner">회식</SelectItem>
+                    <SelectItem value="lecture">강연</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
