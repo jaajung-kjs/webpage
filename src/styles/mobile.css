@@ -72,7 +72,7 @@
 
   /* Improve dialog/modal spacing */
   [role="dialog"] {
-    margin: 16px;
+    /* Remove margin as it conflicts with fixed positioning */
     max-height: calc(100vh - 32px);
   }
   
@@ -88,9 +88,8 @@
   
   /* Dialog mobile optimization */
   [data-slot="dialog-content"] {
-    margin: 1rem;
-    width: calc(100% - 2rem);
-    max-width: calc(100% - 2rem);
+    /* Remove margin and width overrides that conflict with transform centering */
+    /* The base component already handles width and centering properly */
   }
   
   /* Dialog close button mobile fix */
