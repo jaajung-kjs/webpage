@@ -93,9 +93,10 @@ export default function Header() {
                     variant="ghost"
                     size="sm"
                     onClick={() => openModal()}
-                    className="relative hidden sm:flex"
+                    className="relative flex h-9 w-9 sm:h-8 sm:w-auto sm:px-3"
                   >
                     <MessageCircle className="h-4 w-4" />
+                    <span className="hidden sm:inline-block sm:ml-2">메시지</span>
                     <MessageNotificationBadge className="-top-1 -right-1" />
                   </Button>
                 )}
@@ -194,10 +195,10 @@ export default function Header() {
                   <span className="sr-only">메뉴 토글</span>
                 </Button>
               </SheetTrigger>
-              <SheetContent side="left" className="pr-0">
-                <SheetHeader>
-                  <SheetTitle className="sr-only">메뉴</SheetTitle>
-                  <SheetDescription className="sr-only">
+              <SheetContent side="left" className="p-0 w-[85vw] max-w-sm">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>메뉴</SheetTitle>
+                  <SheetDescription>
                     사이트 내비게이션 메뉴
                   </SheetDescription>
                 </SheetHeader>
@@ -233,34 +234,42 @@ function MobileNav() {
   }
 
   return (
-    <div className="my-4 h-[calc(100vh-8rem)] pb-10 px-6">
-      <div className="flex items-center space-x-2">
-        <Image 
-          src="/images/kepco.svg" 
-          alt="KEPCO Logo" 
-          width={24} 
-          height={24} 
-          className="h-6 w-auto"
-        />
-        <div className="text-xs text-muted-foreground">AI 학습동아리</div>
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 border-b">
+        <div className="flex items-center space-x-2">
+          <Image 
+            src="/images/kepco.svg" 
+            alt="KEPCO Logo" 
+            width={24} 
+            height={24} 
+            className="h-6 w-auto"
+          />
+          <div className="text-xs text-muted-foreground">AI 학습동아리</div>
+        </div>
       </div>
-      <div className="my-4 h-px bg-border" />
-      <div className="flex flex-col space-y-3">
+      
+      {/* Scrollable Content */}
+      <div className="flex-1 overflow-y-auto px-6 py-4 -webkit-overflow-scrolling-touch">
+        {/* Navigation Links */}
+        <nav className="space-y-1">
         {navigation.map((item) => (
           <Link
             key={item.name}
             href={item.href}
-            className="text-sm font-medium transition-colors hover:text-primary"
+            className="block py-3 px-3 -mx-3 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-lg touch-manipulation"
           >
             {item.name}
           </Link>
         ))}
-      </div>
-      <div className="mt-6 flex flex-col space-y-4 pr-2">
+        </nav>
+        
+        {/* User Section */}
+        <div className="mt-6 pt-6 border-t space-y-3">
         {user ? (
           <>
-            <div className="flex items-center space-x-2 p-2">
-              <Avatar className="h-8 w-8">
+            <div className="flex items-center space-x-3 p-3 -mx-3 rounded-lg bg-accent/50">
+              <Avatar className="h-10 w-10">
                 <AvatarImage src={profile?.avatar_url || undefined} alt="사용자" />
                 <AvatarFallback>
                   {profile?.name?.charAt(0) || user?.email?.charAt(0).toUpperCase() || 'U'}
@@ -271,56 +280,70 @@ function MobileNav() {
                 <div className="text-xs text-muted-foreground">{profile?.department}</div>
               </div>
             </div>
-            <Button variant="outline" size="sm" asChild>
-              <Link href="/profile">프로필</Link>
+            <Button variant="outline" size="default" asChild className="w-full justify-start h-11">
+              <Link href="/profile">
+                <User className="h-4 w-4 mr-2" />
+                프로필
+              </Link>
             </Button>
             {isMember && (
-              <Button variant="outline" size="sm" onClick={() => openModal()}>
+              <Button 
+                variant="outline" 
+                size="default" 
+                onClick={() => openModal()} 
+                className="w-full justify-start h-11 relative"
+              >
                 <MessageCircle className="h-4 w-4 mr-2" />
                 메시지
+                <MessageNotificationBadge className="absolute top-2 left-8" />
               </Button>
             )}
             {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
               <Button 
                 variant="outline" 
-                size="sm" 
-                className="text-primary"
+                size="default" 
+                className="w-full justify-start h-11 text-primary"
                 onClick={() => router.push('/admin')}
               >
+                <Shield className="h-4 w-4 mr-2" />
                 관리자 대시보드
               </Button>
             )}
             {profile?.role === 'guest' && (
-              <Button variant="outline" size="sm" asChild className="text-primary">
-                <Link href="/membership/apply">동아리 가입 신청</Link>
+              <Button variant="outline" size="default" asChild className="w-full justify-start h-11 text-primary">
+                <Link href="/membership/apply">
+                  <User className="h-4 w-4 mr-2" />
+                  동아리 가입 신청
+                </Link>
               </Button>
             )}
             <Button 
               variant="outline" 
-              size="sm" 
+              size="default" 
               onClick={handleSignOut}
-              className="text-red-600"
+              className="w-full justify-start h-11 text-red-600 hover:text-red-600"
             >
+              <LogOut className="h-4 w-4 mr-2" />
               로그아웃
             </Button>
           </>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 mt-4">
+            <div className="space-y-3">
               <Button 
                 variant="outline" 
-                size="sm" 
+                size="default" 
                 onClick={() => {
                   setLoginDialogTab('login')
                   setLoginDialogOpen(true)
                 }}
-                className="w-full"
+                className="w-full h-11"
               >
                 로그인
               </Button>
               <Button 
-                size="sm" 
-                className="kepco-gradient w-full" 
+                size="default" 
+                className="kepco-gradient w-full h-11" 
                 onClick={() => {
                   setLoginDialogTab('signup')
                   setLoginDialogOpen(true)
@@ -336,7 +359,11 @@ function MobileNav() {
             />
           </>
         )}
+        </div>
       </div>
+      
+      {/* Bottom Safe Area */}
+      <div className="h-safe pb-safe" />
     </div>
   )
 }

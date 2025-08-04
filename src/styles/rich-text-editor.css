@@ -138,7 +138,34 @@
 @media (max-width: 768px) {
   .rich-text-editor-wrapper .ProseMirror {
     padding: 0.75rem;
-    font-size: 16px; /* Prevent zoom on iOS */
+    font-size: 16px !important; /* Prevent zoom on iOS */
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: text;
+    -webkit-user-select: text;
+    user-select: text;
+    touch-action: manipulation;
+  }
+  
+  /* Ensure touch targets are large enough */
+  .rich-text-editor-wrapper .ProseMirror p,
+  .rich-text-editor-wrapper .ProseMirror li,
+  .rich-text-editor-wrapper .ProseMirror h1,
+  .rich-text-editor-wrapper .ProseMirror h2,
+  .rich-text-editor-wrapper .ProseMirror h3 {
+    min-height: 28px;
+    line-height: 1.6;
+  }
+  
+  /* Better focus handling on mobile */
+  .rich-text-editor-wrapper .ProseMirror:focus {
+    outline: none;
+    box-shadow: none;
+  }
+  
+  /* Fix for mobile input issues */
+  .rich-text-editor-wrapper input,
+  .rich-text-editor-wrapper textarea {
+    font-size: 16px !important;
   }
 }
 

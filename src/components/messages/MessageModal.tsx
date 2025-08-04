@@ -121,11 +121,11 @@ export function MessageModal({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="sm:max-w-4xl max-h-[80vh] p-0">
-          <DialogHeader className="px-6 py-4 border-b">
+        <DialogContent className="sm:max-w-4xl w-full h-full sm:h-auto sm:max-h-[80vh] p-0 m-0 sm:m-4 rounded-none sm:rounded-lg">
+          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b">
             <div className="flex items-center justify-between">
-              <DialogTitle className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" />
+              <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 {viewState.type === 'inbox' ? '메시지함' : '대화'}
               </DialogTitle>
               
@@ -133,16 +133,17 @@ export function MessageModal({
                 <Button
                   onClick={handleNewConversation}
                   size="sm"
-                  className="gap-2 mr-8"
+                  className="gap-1 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm mr-6 sm:mr-8"
                 >
-                  <Plus className="h-4 w-4" />
-                  새 메시지
+                  <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
+                  <span className="hidden sm:inline">새 메시지</span>
+                  <span className="sm:hidden">새글</span>
                 </Button>
               )}
             </div>
           </DialogHeader>
 
-          <div className="relative overflow-hidden">
+          <div className="relative overflow-hidden h-[calc(100vh-8rem)] sm:h-auto">
             <AnimatePresence mode="wait">
               {viewState.type === 'inbox' ? (
                 <motion.div
@@ -171,7 +172,7 @@ export function MessageModal({
                     recipientName={viewState.recipientName}
                     recipientAvatar={viewState.recipientAvatar}
                     onBack={handleBackToInbox}
-                    className="border-0 shadow-none h-[500px]"
+                    className="border-0 shadow-none h-[calc(100vh-8rem)] sm:h-[500px]"
                   />
                 </motion.div>
               )}

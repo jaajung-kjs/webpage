@@ -4,6 +4,28 @@
 .touch-manipulation {
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection */
+.touch-manipulation.selectable,
+.touch-manipulation p,
+.touch-manipulation span,
+.touch-manipulation div[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* Safe area support for notch devices */
+.h-safe {
+  height: env(safe-area-inset-bottom);
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 /* Improve button touch targets on mobile */
@@ -52,6 +74,16 @@
   [role="dialog"] {
     margin: 16px;
     max-height: calc(100vh - 32px);
+  }
+  
+  /* Full screen modals on mobile */
+  .dialog-content[data-state="open"] {
+    animation: none;
+  }
+  
+  /* Better sheet animation performance */
+  [data-radix-collection-item] {
+    will-change: transform;
   }
 
   /* Better scroll performance */

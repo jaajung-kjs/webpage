@@ -214,10 +214,12 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
 
     return (
       <div 
-        className="rich-text-editor-wrapper border rounded-lg overflow-hidden"
+        className="rich-text-editor-wrapper border rounded-lg overflow-hidden touch-manipulation"
         style={{ 
           height: height,
-          maxHeight: maxHeight || height
+          maxHeight: maxHeight || height,
+          WebkitUserSelect: 'text',
+          userSelect: 'text'
         }}
       >
         <RichTextEditorBase
@@ -229,11 +231,11 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           dark={false}
           disabled={disabled}
           hideToolbar={false}
-          disableBubble={false}
+          disableBubble={isMobile}
           maxWidth="100%"
           minHeight={height}
           maxHeight={maxHeight || height}
-          contentClass="prose prose-slate max-w-none"
+          contentClass="prose prose-slate max-w-none touch-manipulation"
         />
       </div>
     )
