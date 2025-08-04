@@ -203,7 +203,7 @@ export default function Header() {
                     사이트 내비게이션 메뉴
                   </SheetDescription>
                 </SheetHeader>
-                <MobileNav onClose={() => setMobileMenuOpen(false)} />
+                <MobileNav onClose={() => setMobileMenuOpen(false)} onOpenMessage={openModal} />
               </SheetContent>
             </Sheet>
           </div>
@@ -222,9 +222,8 @@ export default function Header() {
   )
 }
 
-function MobileNav({ onClose }: { onClose?: () => void }) {
+function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMessage?: () => void }) {
   const { user, profile, isMember } = useOptimizedAuth()
-  const { openModal } = useMessageModal()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const router = useRouter()
@@ -237,7 +236,7 @@ function MobileNav({ onClose }: { onClose?: () => void }) {
   const handleMessageClick = () => {
     onClose?.() // Close the sheet first
     setTimeout(() => {
-      openModal()
+      onOpenMessage?.()
     }, 300) // Delay to allow sheet closing animation
   }
 
