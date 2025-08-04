@@ -1,0 +1,49 @@
+/* Tiptap Editor Custom Styles */
+
+/* Remove default focus styles on mobile */
+.ProseMirror:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.ProseMirror:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Remove any blue borders/outlines */
+.ProseMirror {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+/* Prevent blue highlight on mobile */
+.ProseMirror::before,
+.ProseMirror::after {
+  display: none !important;
+}
+
+/* Remove focus styles from editor container */
+[data-tiptap-editor]:focus,
+[data-tiptap-editor]:focus-visible,
+[data-tiptap-editor]:focus-within {
+  outline: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Additional mobile-specific styles */
+@media (max-width: 768px) {
+  .ProseMirror {
+    -webkit-user-select: text;
+    user-select: text;
+    -webkit-touch-callout: none;
+  }
+  
+  .ProseMirror:focus,
+  .ProseMirror:focus-visible {
+    outline: none !important;
+    border: none !important;
+  }
+}

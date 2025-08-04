@@ -36,10 +36,19 @@ import { toast } from 'sonner'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useCreateContent } from '@/hooks/useSupabase'
 import { TablesInsert, supabase } from '@/lib/supabase/client'
-import { Textarea } from '@/components/ui/textarea'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import dynamic from 'next/dynamic'
+
+// Dynamic import for the editor to avoid SSR issues
+const TiptapEditor = dynamic(
+  () => import('./TiptapEditor'),
+  { 
+    ssr: false,
+    loading: () => <div className="animate-pulse h-96 bg-muted rounded-md" />
+  }
+)
 
 interface ContentEditorPageProps {
   contentType: 'post' | 'case' | 'announcement' | 'resource'
@@ -355,15 +364,15 @@ export default function ContentEditorPage({
                   <FormItem>
                     <FormLabel>내용</FormLabel>
                     <FormControl>
-                      <Textarea
-                        {...field}
+                      <TiptapEditor
+                        value={field.value}
+                        onChange={field.onChange}
                         placeholder={placeholders.content}
-                        className="min-h-[200px] resize-y"
-                        rows={10}
+                        height={400}
                       />
                     </FormControl>
                     <FormDescription>
-                      Markdown 형식을 지원합니다.
+                      이미지는 복사-붙여넣기, 드래그앤드롭, 또는 파일 선택으로 업로드할 수 있습니다.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
