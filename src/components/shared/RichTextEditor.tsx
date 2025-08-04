@@ -49,8 +49,6 @@ interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
-  height?: number | string
-  maxHeight?: number | string
   disabled?: boolean
 }
 
@@ -83,7 +81,7 @@ turndownService.addRule('file-attachment', {
 })
 
 const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
-  ({ value, onChange, placeholder, height = 400, maxHeight, disabled = false }, ref) => {
+  ({ value, onChange, placeholder, disabled = false }, ref) => {
     const editorRef = useRef<{ editor: Editor | null }>(null)
     const isMobile = useIsMobile()
 
@@ -216,8 +214,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
       <div 
         className="rich-text-editor-wrapper border rounded-lg overflow-hidden touch-manipulation"
         style={{ 
-          height: height,
-          maxHeight: maxHeight || height,
+          minHeight: '600px',
           WebkitUserSelect: 'text',
           userSelect: 'text'
         }}
@@ -233,8 +230,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(
           hideToolbar={false}
           disableBubble={isMobile}
           maxWidth="100%"
-          minHeight={height}
-          maxHeight={maxHeight || height}
+          minHeight="600px"
+          maxHeight="none"
           contentClass="prose prose-slate max-w-none touch-manipulation"
         />
       </div>

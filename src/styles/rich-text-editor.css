@@ -1,18 +1,21 @@
 /* Rich Text Editor Custom Styles */
 
-/* Editor wrapper - fixed height */
+/* Editor wrapper - flexible height */
 .rich-text-editor-wrapper {
   display: flex;
   flex-direction: column;
   position: relative;
+  min-height: 600px;
+  height: auto;
 }
 
-/* Override the library to work with fixed height */
+/* Override the library to work with flexible height */
 .rich-text-editor-wrapper > div:first-child {
-  height: 100% !important;
+  height: auto !important;
+  min-height: 600px;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
 }
 
 /* Editor toolbar */
@@ -22,22 +25,22 @@
   z-index: 10;
 }
 
-/* Editor content wrapper - takes remaining space */
+/* Editor content wrapper - natural height */
 .rich-text-editor-wrapper .editor-content-wrapper,
 .rich-text-editor-wrapper > div > div:last-child {
   flex: 1;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 500px;
 }
 
-/* Editor content area - scrollable */
+/* Editor content area - no scroll */
 .rich-text-editor-wrapper .ProseMirror {
   flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
+  overflow: visible;
   padding: 1rem;
+  min-height: 500px;
   /* Remove any background that might show lines */
   background: transparent !important;
   background-image: none !important;

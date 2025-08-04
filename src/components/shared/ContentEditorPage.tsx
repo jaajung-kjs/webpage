@@ -359,8 +359,6 @@ export default function ContentEditorPage({
                         value={field.value}
                         onChange={field.onChange}
                         placeholder={placeholders.content}
-                        height={isMobile ? 'calc(100vh - 400px)' : 450}
-                        maxHeight={isMobile ? 'calc(100vh - 400px)' : 600}
                       />
                     </FormControl>
                     <FormDescription>
