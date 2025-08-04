@@ -76,11 +76,36 @@
   .rich-text-editor-wrapper > div > div:first-child {
     padding: 0.25rem !important;
     gap: 0.125rem !important;
+    display: flex !important;
     flex-wrap: nowrap !important; /* Force single row */
     overflow-x: auto !important; /* Allow horizontal scroll */
     overflow-y: hidden !important;
     max-height: none !important; /* Remove height restriction */
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+  }
+  
+  /* Thin scrollbar for mobile */
+  .rich-text-editor-wrapper > div > div:first-child::-webkit-scrollbar {
+    height: 4px;
+  }
+  
+  .rich-text-editor-wrapper > div > div:first-child::-webkit-scrollbar-thumb {
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+  }
+  
+  /* Force all toolbar groups to be inline */
+  .rich-text-editor-wrapper > div > div:first-child > div {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+  }
+  
+  /* Force toolbar inner groups to be horizontal */
+  .rich-text-editor-wrapper > div > div:first-child > div > div {
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
   }
   
   /* Reduce ALL button sizes on mobile */
