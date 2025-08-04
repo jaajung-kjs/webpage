@@ -42,7 +42,8 @@ import {
   Shield,
   UserCheck,
   User,
-  Activity
+  Activity,
+  Zap
 } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
@@ -50,6 +51,8 @@ import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 import { MessageButton } from '@/components/messages'
+import { getRoleConfig, getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
+import { getSkillLevelConfig, getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons, calculateSkillLevel } from '@/lib/skills'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
@@ -82,35 +85,13 @@ interface MemberWithStats {
   metadata?: any
 }
 
-const roleLabels = {
-  all: '전체',
-  leader: '동아리장',
-  'vice-leader': '부동아리장',
-  admin: '운영진',
-  member: '일반회원'
-}
-
-const skillLevels = {
-  all: '전체',
-  beginner: '초급',
-  intermediate: '중급',
-  advanced: '고급',
-  expert: '전문가'
-}
-
-const roleColors = {
-  leader: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
-  'vice-leader': 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
-  admin: 'bg-kepco-blue-500/10 text-kepco-blue-700 dark:bg-kepco-blue-500/20 dark:text-kepco-blue-300',
-  member: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300'
-}
-
-const skillColors = {
-  beginner: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300',
-  intermediate: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
-  advanced: 'bg-kepco-blue-300 text-kepco-blue-900 dark:bg-kepco-blue-700/20 dark:text-kepco-blue-200',
-  expert: 'bg-kepco-blue-600/10 text-kepco-blue-800 dark:bg-kepco-blue-600/20 dark:text-kepco-blue-200'
-}
+// Get labels and configs from the new modules
+const roleLabels = getRoleLabels()
+const roleColors = getRoleColors()
+const roleIcons = getRoleIcons()
+const skillLevels = getSkillLevelLabels()
+const skillColors = getSkillLevelColors()
+const skillIcons = getSkillLevelIcons()
 
 function MembersPage() {
   const { user, isMember } = useOptimizedAuth()
@@ -355,15 +336,6 @@ function MembersPage() {
     }
   }
 
-  const getRoleIcon = (role: string) => {
-    switch (role) {
-      case 'leader': return Crown
-      case 'vice-leader': return Shield  
-      case 'admin': return UserCog
-      case 'moderator': return Shield
-      default: return UserCheck
-    }
-  }
 
   const formatJoinDate = (dateString: string) => {
     const date = new Date(dateString)
@@ -554,7 +526,15 @@ function MembersPage() {
                         variant="secondary" 
                         className={`${roleColors[member.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'} whitespace-nowrap`}
                       >
-                        {roleLabels[member.role as keyof typeof roleLabels] || member.role}
+                        {(() => {
+                          const RoleIcon = roleIcons[member.role as keyof typeof roleIcons] || User
+                          return (
+                            <>
+                              <RoleIcon className="h-3 w-3 mr-1" />
+                              {roleLabels[member.role as keyof typeof roleLabels] || member.role}
+                            </>
+                          )
+                        })()}
                       </Badge>
                       
                     </div>
@@ -575,7 +555,15 @@ function MembersPage() {
                         variant="outline" 
                         className={skillColors[member.skill_level as keyof typeof skillColors] || 'bg-gray-100 text-gray-800'}
                       >
-                        {skillLevels[member.skill_level as keyof typeof skillLevels] || member.skill_level || '미정'}
+                        {(() => {
+                          const SkillIcon = skillIcons[member.skill_level as keyof typeof skillIcons] || Zap
+                          return (
+                            <>
+                              <SkillIcon className="h-3 w-3 mr-1" />
+                              {skillLevels[member.skill_level as keyof typeof skillLevels] || member.skill_level || '미정'}
+                            </>
+                          )
+                        })()}
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1">
