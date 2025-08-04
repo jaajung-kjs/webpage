@@ -39,6 +39,7 @@ import { TablesInsert, supabase } from '@/lib/supabase/client'
 import RichTextEditor from './RichTextEditor'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 interface ContentEditorPageProps {
   contentType: 'post' | 'case' | 'announcement' | 'resource'
@@ -71,6 +72,7 @@ export default function ContentEditorPage({
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const isMobile = useIsMobile()
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -357,7 +359,8 @@ export default function ContentEditorPage({
                         value={field.value}
                         onChange={field.onChange}
                         placeholder={placeholders.content}
-                        height={450}
+                        height={isMobile ? 'calc(100vh - 400px)' : 450}
+                        maxHeight={isMobile ? 'calc(100vh - 400px)' : 600}
                       />
                     </FormControl>
                     <FormDescription>

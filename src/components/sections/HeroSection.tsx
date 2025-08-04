@@ -4,8 +4,31 @@ import { Button } from '@/components/ui/button'
 import { ArrowRight, Zap, Users, BookOpen, Lightbulb } from 'lucide-react'
 import { motion } from 'framer-motion'
 import QuickSearchBar from '@/components/ui/quick-search-bar'
+import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useRouter } from 'next/navigation'
 
 export default function HeroSection() {
+  const { user, profile } = useOptimizedAuth()
+  const router = useRouter()
+  
+  const handleJoinClick = () => {
+    if (user) {
+      // 로그인된 경우 역할에 따라 라우팅
+      if (profile?.role === 'guest') {
+        router.push('/membership/apply')
+      } else if (profile?.role === 'pending') {
+        // 이미 신청한 경우
+        router.push('/membership/status')
+      } else {
+        // 이미 회원인 경우
+        router.push('/community')
+      }
+    } else {
+      // 로그인되지 않은 경우 회원가입 모달 표시
+      const event = new CustomEvent('openLoginDialog', { detail: { tab: 'signup' } })
+      window.dispatchEvent(event)
+    }
+  }
   return (
     <section className="relative overflow-hidden bg-gradient-to-br from-background via-background to-primary/5">
       {/* Background decoration */}
@@ -80,12 +103,13 @@ export default function HeroSection() {
             <Button 
               size="lg" 
               variant="outline"
-              onClick={() => {
-                const event = new CustomEvent('openLoginDialog', { detail: { tab: 'signup' } })
-                window.dispatchEvent(event)
-              }}
+              onClick={handleJoinClick}
             >
-              동아리 가입하기
+              {user 
+                ? (profile?.role === 'guest' ? '동아리 가입 신청' : 
+                   profile?.role === 'pending' ? '가입 신청 확인' : 
+                   '커뮤니티 둘러보기')
+                : '동아리 가입하기'}
             </Button>
           </motion.div>
 

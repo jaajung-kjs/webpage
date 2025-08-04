@@ -100,6 +100,11 @@ export class SessionManager {
     const cacheKey = getCacheKey('auth', 'profile', userId)
     
     try {
+      // 강제 새로고침 시 캐시 무효화
+      if (forceRefresh) {
+        CacheManager.invalidate(cacheKey)
+      }
+      
       const profile = await CacheManager.get<UserProfile>(
         cacheKey,
         async () => {
@@ -144,7 +149,8 @@ export class SessionManager {
       table: 'users',
       filter: `id=eq.${userId}`,
       event: '*',
-      callback: async () => {
+      callback: async (payload) => {
+        console.log('Profile updated via realtime:', payload)
         // 프로필 변경 시 캐시 무효화 및 재로드
         const cacheKey = getCacheKey('auth', 'profile', userId)
         CacheManager.invalidate(cacheKey)

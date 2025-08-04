@@ -26,6 +26,7 @@ const navigation = [
 export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, profile, loading, isMember } = useOptimizedAuth()
   const { openModal, modalProps } = useMessageModal()
   const router = useRouter()
@@ -185,7 +186,7 @@ export default function Header() {
             )}
 
             {/* Mobile menu */}
-            <Sheet>
+            <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
@@ -202,7 +203,7 @@ export default function Header() {
                     사이트 내비게이션 메뉴
                   </SheetDescription>
                 </SheetHeader>
-                <MobileNav />
+                <MobileNav onClose={() => setMobileMenuOpen(false)} />
               </SheetContent>
             </Sheet>
           </div>
@@ -221,7 +222,7 @@ export default function Header() {
   )
 }
 
-function MobileNav() {
+function MobileNav({ onClose }: { onClose?: () => void }) {
   const { user, profile, isMember } = useOptimizedAuth()
   const { openModal } = useMessageModal()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
@@ -231,6 +232,13 @@ function MobileNav() {
   const handleSignOut = async () => {
     await sessionManager.signOut()
     router.push('/')
+  }
+  
+  const handleMessageClick = () => {
+    onClose?.() // Close the sheet first
+    setTimeout(() => {
+      openModal()
+    }, 300) // Delay to allow sheet closing animation
   }
 
   return (
@@ -290,7 +298,7 @@ function MobileNav() {
               <Button 
                 variant="outline" 
                 size="default" 
-                onClick={() => openModal()} 
+                onClick={handleMessageClick} 
                 className="w-full justify-start h-11 relative"
               >
                 <MessageCircle className="h-4 w-4 mr-2" />

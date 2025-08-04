@@ -85,6 +85,30 @@
   [data-radix-collection-item] {
     will-change: transform;
   }
+  
+  /* Dialog mobile optimization */
+  [data-slot="dialog-content"] {
+    margin: 1rem;
+    width: calc(100% - 2rem);
+    max-width: calc(100% - 2rem);
+  }
+  
+  /* Dialog close button mobile fix */
+  [data-slot="dialog-close"] {
+    position: fixed !important;
+    z-index: 100 !important;
+  }
+  
+  /* Dialog header mobile spacing */
+  [data-slot="dialog-header"] {
+    padding-right: 2rem;
+  }
+  
+  /* Select dropdown mobile optimization */
+  [data-radix-popper-content-wrapper] {
+    max-width: calc(100vw - 2rem) !important;
+    margin: 0 1rem !important;
+  }
 
   /* Better scroll performance */
   .overflow-x-auto {

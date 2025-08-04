@@ -122,8 +122,8 @@ export function MessageModal({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="sm:max-w-4xl w-full h-full sm:h-auto sm:max-h-[80vh] p-0 m-0 sm:m-4 rounded-none sm:rounded-lg">
-          <DialogHeader className="px-4 sm:px-6 py-3 sm:py-4 border-b">
-            <div className="flex items-center justify-between">
+          <DialogHeader className="relative px-4 sm:px-6 py-3 sm:py-4 border-b">
+            <div className="flex items-center justify-between pr-8 sm:pr-0">
               <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 {viewState.type === 'inbox' ? '메시지함' : '대화'}
@@ -133,7 +133,7 @@ export function MessageModal({
                 <Button
                   onClick={handleNewConversation}
                   size="sm"
-                  className="gap-1 sm:gap-2 h-8 sm:h-9 px-3 sm:px-4 text-xs sm:text-sm mr-6 sm:mr-8"
+                  className="gap-1 sm:gap-2 h-8 sm:h-9 px-2 sm:px-4 text-xs sm:text-sm"
                 >
                   <Plus className="h-3 w-3 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">새 메시지</span>
