@@ -36,7 +36,7 @@ import { toast } from 'sonner'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { useCreateContent } from '@/hooks/useSupabase'
 import { TablesInsert, supabase } from '@/lib/supabase/client'
-import RichTextEditor from './RichTextEditor'
+import { Textarea } from '@/components/ui/textarea'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -355,14 +355,15 @@ export default function ContentEditorPage({
                   <FormItem>
                     <FormLabel>내용</FormLabel>
                     <FormControl>
-                      <RichTextEditor
-                        value={field.value}
-                        onChange={field.onChange}
+                      <Textarea
+                        {...field}
                         placeholder={placeholders.content}
+                        className="min-h-[200px] resize-y"
+                        rows={10}
                       />
                     </FormControl>
                     <FormDescription>
-                      이미지와 파일을 드래그 앤 드롭하거나 복사-붙여넣기로 바로 삽입할 수 있습니다.
+                      Markdown 형식을 지원합니다.
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
