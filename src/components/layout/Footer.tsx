@@ -88,15 +88,15 @@ export default function Footer() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-center space-x-2">
                 <MapPin className="h-4 w-4" />
-                <span>강원도 춘천시</span>
+                <span>강원도 춘천시 후석로 304</span>
               </li>
               <li className="flex items-center space-x-2">
                 <Phone className="h-4 w-4" />
-                <span>033-XXX-XXXX</span>
+                <span>033-359-2548</span>
               </li>
               <li className="flex items-center space-x-2">
                 <Mail className="h-4 w-4" />
-                <span>ai-club@kepco.co.kr</span>
+                <span>jaajung@kepco.co.kr</span>
               </li>
             </ul>
           </div>
@@ -105,7 +105,7 @@ export default function Footer() {
         <div className="mt-8 border-t pt-8">
           <div className="flex flex-col items-center justify-between space-y-4 md:flex-row md:space-y-0">
             <div className="text-sm text-muted-foreground">
-              © 2024 한국전력공사 강원본부 AI 학습동아리. All rights reserved.
+              © 2025 KEPCO. All Rights Reserved.
             </div>
             <div className="flex space-x-6 text-sm text-muted-foreground">
               <Link href="/privacy" className="hover:text-primary transition-colors">

@@ -73,18 +73,18 @@ const statusLabels = {
 }
 
 const categoryColors = {
-  workshop: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  seminar: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  study: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  discussion: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  meeting: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-300'
+  workshop: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+  seminar: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
+  study: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
+  discussion: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+  meeting: 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300'
 }
 
 const statusColors = {
-  upcoming: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  ongoing: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  completed: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+  upcoming: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
+  ongoing: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
+  completed: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300',
+  cancelled: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300'
 }
 
 function ActivitiesPage() {
@@ -538,7 +538,12 @@ function ActivitiesPage() {
     <>
       <ContentListLayout
         title="학습 활동"
-        description="AI 학습동아리의 다양한 활동과 세미나에 참여해보세요"
+        description={
+          <span className="flex items-center gap-2">
+            <Activity className="h-4 w-4" />
+            <span className="font-semibold">AI 학습동아리의 다양한 활동과 세미나에 참여해보세요</span>
+          </span>
+        }
         searchPlaceholder="활동명, 설명, 장소, 태그로 검색..."
         searchValue={searchTerm}
         onSearchChange={handleSearch}

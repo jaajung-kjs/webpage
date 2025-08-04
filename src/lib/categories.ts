@@ -39,22 +39,22 @@ export const BOARD_CATEGORIES = {
   announcements: {
     general: {
       label: '일반',
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
       icon: Info
     },
     important: {
       label: '중요',
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
       icon: AlertCircle
     },
     urgent: {
       label: '긴급',
-      color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+      color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
       icon: Megaphone
     },
     event: {
       label: '이벤트',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      color: 'bg-kepco-blue-200 text-kepco-blue-900 dark:bg-kepco-blue-800/20 dark:text-kepco-blue-200',
       icon: CheckCircle
     }
   },
@@ -63,27 +63,27 @@ export const BOARD_CATEGORIES = {
   cases: {
     productivity: {
       label: '생산성 향상',
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Zap
     },
     creativity: {
       label: '창의적 활용',
-      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
       icon: Lightbulb
     },
     development: {
       label: '개발',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      color: 'bg-kepco-blue-200 text-kepco-blue-900 dark:bg-kepco-blue-800/20 dark:text-kepco-blue-200',
       icon: Cpu
     },
     analysis: {
       label: '분석',
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
       icon: ChartBar
     },
     other: {
       label: '기타',
-      color: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+      color: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300',
       icon: BookOpen
     }
   },
@@ -92,32 +92,32 @@ export const BOARD_CATEGORIES = {
   community: {
     tips: {
       label: '꿀팁공유',
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
       icon: Lightbulb
     },
     review: {
       label: '후기',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Star
     },
     help: {
       label: '도움요청',
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
       icon: HelpCircle
     },
     discussion: {
       label: '토론',
-      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
       icon: MessageCircle
     },
     question: {
       label: '질문',
-      color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
+      color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
       icon: MessageSquare
     },
     chat: {
       label: '잡담',
-      color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
+      color: 'bg-pink-100 text-pink-800 dark:bg-pink-900/20 dark:text-pink-300',
       icon: Coffee
     }
   },
@@ -126,27 +126,27 @@ export const BOARD_CATEGORIES = {
   resources: {
     tutorial: {
       label: '튜토리얼',
-      color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+      color: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
       icon: BookOpen
     },
     workshop: {
       label: '워크샵',
-      color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
+      color: 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300',
       icon: Presentation
     },
     template: {
       label: '템플릿',
-      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
+      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-300',
       icon: FileText
     },
     reference: {
       label: '참고자료',
-      color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
+      color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
       icon: BookMarked
     },
     guideline: {
       label: '가이드라인',
-      color: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
+      color: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
       icon: Download
     }
   }

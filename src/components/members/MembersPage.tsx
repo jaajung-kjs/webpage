@@ -99,17 +99,17 @@ const skillLevels = {
 }
 
 const roleColors = {
-  leader: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'vice-leader': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  member: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
+  leader: 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-300',
+  'vice-leader': 'bg-orange-100 text-orange-800 dark:bg-orange-900/20 dark:text-orange-300',
+  admin: 'bg-kepco-blue-500/10 text-kepco-blue-700 dark:bg-kepco-blue-500/20 dark:text-kepco-blue-300',
+  member: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300'
 }
 
 const skillColors = {
-  beginner: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-  intermediate: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  advanced: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  expert: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
+  beginner: 'bg-kepco-gray-100 text-kepco-gray-700 dark:bg-kepco-gray-900 dark:text-kepco-gray-300',
+  intermediate: 'bg-kepco-blue-100 text-kepco-blue-800 dark:bg-kepco-blue-900/20 dark:text-kepco-blue-300',
+  advanced: 'bg-kepco-blue-300 text-kepco-blue-900 dark:bg-kepco-blue-700/20 dark:text-kepco-blue-200',
+  expert: 'bg-kepco-blue-600/10 text-kepco-blue-800 dark:bg-kepco-blue-600/20 dark:text-kepco-blue-200'
 }
 
 function MembersPage() {
@@ -467,7 +467,12 @@ function MembersPage() {
     <>
       <ContentListLayout
         title="회원목록"
-        description="AI 학습동아리 회원들을 만나보세요"
+        description={
+          <span className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="font-semibold">AI 학습동아리 회원들을 만나보세요</span>
+          </span>
+        }
         searchPlaceholder="이름, 부서, 직급, AI 도구로 검색..."
         searchValue={searchTerm}
         onSearchChange={handleSearch}

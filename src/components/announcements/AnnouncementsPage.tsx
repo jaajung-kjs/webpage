@@ -207,7 +207,12 @@ export default function AnnouncementsPage() {
     <>
       <ContentListLayout
         title="공지사항"
-        description="동아리 운영진의 중요한 소식을 확인하세요"
+        description={
+          <span className="flex items-center gap-2">
+            <Megaphone className="h-4 w-4" />
+            <span className="font-semibold">동아리 운영진의 중요한 소식을 확인하세요</span>
+          </span>
+        }
         searchPlaceholder="제목, 내용, 작성자로 검색"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}

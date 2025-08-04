@@ -7,7 +7,7 @@ import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
 import { toast } from 'sonner'
 import { Views, type Enums } from '@/lib/supabase/client'
 import { getBoardCategoryData } from '@/lib/categories'
-import { Plus } from 'lucide-react'
+import { Plus, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 // Shared components
@@ -117,7 +117,12 @@ export default function CasesListPage() {
     <>
       <ContentListLayout
         title="AI 활용사례"
-        description="동료들이 공유한 다양한 AI 활용 경험을 확인해보세요"
+        description={
+          <span className="flex items-center gap-2">
+            <Lightbulb className="h-4 w-4" />
+            <span className="font-semibold">동료들이 공유한 다양한 AI 활용 경험을 확인해보세요</span>
+          </span>
+        }
         searchPlaceholder="사례 제목, 내용, 태그로 검색..."
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}

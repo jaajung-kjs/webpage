@@ -175,7 +175,12 @@ export default function CommunityPage() {
     <>
       <ContentListLayout
         title="커뮤니티"
-        description="동아리원들과 자유롭게 소통하세요"
+        description={
+          <span className="flex items-center gap-2">
+            <Users className="h-4 w-4" />
+            <span className="font-semibold">동아리원들과 자유롭게 소통하세요</span>
+          </span>
+        }
         searchPlaceholder="제목, 내용, 작성자로 검색"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}

@@ -23,7 +23,7 @@ import { cn } from '@/lib/utils'
 
 interface ContentListLayoutProps {
   title: string
-  description: string
+  description: string | React.ReactNode
   searchPlaceholder?: string
   searchValue: string
   onSearchChange: (value: string) => void

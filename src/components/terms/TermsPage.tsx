@@ -19,7 +19,7 @@ import {
 } from 'lucide-react'
 
 export default function TermsPage() {
-  const lastUpdated = '2024년 1월 15일'
+  const lastUpdated = '2025년 8월 1일'
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -439,8 +439,8 @@ export default function TermsPage() {
                 </p>
                 <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded-lg">
                   <ul className="space-y-1 text-muted-foreground">
-                    <li><strong>이메일:</strong> admin@kepco-ai.kr</li>
-                    <li><strong>담당부서:</strong> AI학습동아리 운영진</li>
+                    <li><strong>이메일:</strong> jaajung@kepco.co.kr</li>
+                    <li><strong>담당부서:</strong> 강원본부 전력관리처 전자제어부</li>
                     <li><strong>운영시간:</strong> 평일 09:00 ~ 18:00</li>
                   </ul>
                 </div>

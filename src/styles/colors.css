@@ -2,13 +2,25 @@
 
 @layer base {
   :root {
-    /* KEPCO Brand Colors */
-    --kepco-primary: 240 100% 60%; /* HSL values for better control */
-    --kepco-primary-dark: 240 100% 50%;
-    --kepco-primary-light: 240 100% 70%;
-    --kepco-secondary: 260 85% 65%;
-    --kepco-secondary-dark: 260 85% 55%;
-    --kepco-secondary-light: 260 85% 75%;
+    /* KEPCO Brand Colors - Blue Theme */
+    --kepco-primary: 217 91% 48%; /* Deep blue */
+    --kepco-primary-dark: 224 76% 38%;
+    --kepco-primary-light: 213 94% 58%;
+    --kepco-secondary: 214 85% 55%; /* Rich medium blue */
+    --kepco-secondary-dark: 213 88% 45%;
+    --kepco-secondary-light: 214 90% 65%;
+    
+    /* Blue color palette */
+    --kepco-blue-50: 214 100% 97%;
+    --kepco-blue-100: 214 95% 93%;
+    --kepco-blue-200: 213 97% 87%;
+    --kepco-blue-300: 212 96% 78%;
+    --kepco-blue-400: 213 94% 63%;
+    --kepco-blue-500: 217 91% 48%;
+    --kepco-blue-600: 221 83% 43%;
+    --kepco-blue-700: 224 76% 38%;
+    --kepco-blue-800: 226 71% 32%;
+    --kepco-blue-900: 224 64% 26%;
     
     /* Gradient definitions using CSS variables */
     --kepco-gradient-start: hsl(var(--kepco-primary));
@@ -22,10 +34,33 @@
     --kepco-gradient-intense-end: hsl(var(--kepco-secondary-dark));
     
     /* Semantic colors based on KEPCO brand */
-    --kepco-success: 120 60% 50%;
-    --kepco-warning: 45 90% 50%;
-    --kepco-error: 0 70% 50%;
-    --kepco-info: var(--kepco-primary);
+    --kepco-success: 152 69% 53%; /* Teal-blue */
+    --kepco-warning: 38 92% 50%; /* Orange (complementary) */
+    --kepco-error: 0 84% 60%; /* Red */
+    --kepco-info: var(--kepco-primary); /* Blue */
+    
+    /* Category colors - Blue variations */
+    --kepco-category-1: var(--kepco-blue-500); /* Primary blue */
+    --kepco-category-2: var(--kepco-blue-300); /* Light blue */
+    --kepco-category-3: var(--kepco-blue-700); /* Dark blue */
+    --kepco-category-4: 195 100% 50%; /* Sky blue */
+    --kepco-category-5: 271 76% 53%; /* Purple-blue */
+    
+    /* Tailwind colors for badges and tags */
+    --tw-red-100: 254 226 226;
+    --tw-red-800: 153 27 27;
+    --tw-orange-100: 255 237 213;
+    --tw-orange-800: 154 52 18;
+    --tw-yellow-100: 254 249 195;
+    --tw-yellow-800: 133 77 14;
+    --tw-green-100: 220 252 231;
+    --tw-green-800: 22 101 52;
+    --tw-blue-100: 219 234 254;
+    --tw-blue-800: 30 64 175;
+    --tw-purple-100: 243 232 255;
+    --tw-purple-800: 107 33 168;
+    --tw-pink-100: 252 231 243;
+    --tw-pink-800: 157 23 77;
     
     /* Neutral colors */
     --kepco-gray-50: 0 0% 98%;
@@ -42,13 +77,13 @@
   }
 
   .dark {
-    /* Adjusted KEPCO colors for dark mode */
-    --kepco-primary: 240 80% 70%;
-    --kepco-primary-dark: 240 80% 60%;
-    --kepco-primary-light: 240 80% 80%;
-    --kepco-secondary: 260 70% 75%;
-    --kepco-secondary-dark: 260 70% 65%;
-    --kepco-secondary-light: 260 70% 85%;
+    /* Adjusted KEPCO colors for dark mode - Blue theme */
+    --kepco-primary: 217 85% 70%;
+    --kepco-primary-dark: 224 70% 55%;
+    --kepco-primary-light: 213 88% 75%;
+    --kepco-secondary: 214 90% 88%;
+    --kepco-secondary-dark: 213 92% 80%;
+    --kepco-secondary-light: 214 95% 92%;
     
     /* Dark mode semantic adjustments */
     --kepco-success: 120 50% 60%;
@@ -122,7 +157,29 @@
   background-clip: text;
 }
 
-/* Hover states */
+/* KEPCO Gradient Button */
+.kepco-gradient {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-start) 0%,
+    var(--kepco-gradient-end) 100%
+  );
+  color: white;
+  transition: background 0.3s ease, transform 0.2s ease, box-shadow 0.3s ease;
+}
+
+.kepco-gradient:hover {
+  background: linear-gradient(
+    var(--kepco-gradient-angle),
+    var(--kepco-gradient-intense-start) 0%,
+    var(--kepco-gradient-intense-end) 100%
+  );
+  color: white;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px -2px hsla(var(--kepco-primary), 0.4);
+}
+
+/* Legacy hover class - kept for compatibility */
 .kepco-gradient-hover {
   position: relative;
   background: hsl(var(--kepco-primary));

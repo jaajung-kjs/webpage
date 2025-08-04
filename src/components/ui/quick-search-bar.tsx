@@ -101,7 +101,7 @@ export default function QuickSearchBar() {
         />
         <Button 
           onClick={() => handleSearch()}
-          className="absolute right-2 top-1/2 -translate-y-1/2 kepco-gradient z-10"
+          className="absolute right-2 top-1/2 -translate-y-1/2 kepco-gradient"
           size="sm"
           type="button"
           disabled={isSearching}

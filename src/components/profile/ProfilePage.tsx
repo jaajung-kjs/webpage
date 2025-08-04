@@ -511,13 +511,13 @@ export default function ProfilePage() {
   }
 
   const getActivityLevel = (score: number) => {
-    if (score >= 800) return { level: '매우 활발', color: 'text-green-600', bgColor: 'bg-green-100' }
-    if (score >= 600) return { level: '활발', color: 'text-blue-600', bgColor: 'bg-blue-100' }
-    if (score >= 400) return { level: '보통', color: 'text-yellow-600', bgColor: 'bg-yellow-100' }
-    return { level: '조용', color: 'text-gray-600', bgColor: 'bg-gray-100' }
+    if (score >= 800) return { level: '매우 활발', color: 'text-kepco-success', bgColor: 'bg-kepco-success/10' }
+    if (score >= 600) return { level: '활발', color: 'text-kepco-blue-600', bgColor: 'bg-kepco-blue-100' }
+    if (score >= 400) return { level: '보통', color: 'text-kepco-warning', bgColor: 'bg-kepco-warning/10' }
+    return { level: '조용', color: 'text-kepco-gray-600', bgColor: 'bg-kepco-gray-100' }
   }
 
-  const activityLevel = userData ? getActivityLevel(userData.activityScore) : { level: '조용', color: 'text-gray-600', bgColor: 'bg-gray-100' }
+  const activityLevel = userData ? getActivityLevel(userData.activityScore) : { level: '조용', color: 'text-kepco-gray-600', bgColor: 'bg-kepco-gray-100' }
 
   if (loading) {
     return (
@@ -624,7 +624,7 @@ export default function ProfilePage() {
                   </div>
                   <Badge 
                     variant="secondary" 
-                    className="mt-2 bg-purple-100 text-purple-800"
+                    className="mt-2 bg-kepco-blue-400/10 text-kepco-blue-700 dark:bg-kepco-blue-400/20 dark:text-kepco-blue-300"
                   >
                     {skillLevels[userData.skillLevel as keyof typeof skillLevels]}
                   </Badge>

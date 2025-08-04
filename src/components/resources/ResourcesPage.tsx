@@ -169,7 +169,12 @@ export default function ResourcesPage() {
     <>
       <ContentListLayout
         title="자료실"
-        description="동아리원들이 공유한 유용한 자료들을 확인해보세요"
+        description={
+          <span className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4" />
+            <span className="font-semibold">동아리원들이 공유한 유용한 자료들을 확인해보세요</span>
+          </span>
+        }
         searchPlaceholder="제목, 내용, 태그로 검색"
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}

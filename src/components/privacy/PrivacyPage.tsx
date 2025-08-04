@@ -18,7 +18,7 @@ import {
 } from 'lucide-react'
 
 export default function PrivacyPage() {
-  const lastUpdated = '2024년 1월 15일'
+  const lastUpdated = '2025년 8월 1일'
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -369,17 +369,17 @@ export default function PrivacyPage() {
                 <div className="p-4 border rounded-lg">
                   <h4 className="font-semibold mb-3">개인정보보호책임자</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">성명:</span> AI학습동아리 운영진</div>
-                    <div><span className="font-medium">직책:</span> 동아리장</div>
-                    <div><span className="font-medium">이메일:</span> privacy@kepco-ai.kr</div>
+                    <div><span className="font-medium">성명:</span> 김준성</div>
+                    <div><span className="font-medium">직책:</span> 강원본부 전력관리처 전자제어부 주임</div>
+                    <div><span className="font-medium">이메일:</span> jaajung@kepco.co.kr</div>
                   </div>
                 </div>
                 <div className="p-4 border rounded-lg">
                   <h4 className="font-semibold mb-3">개인정보보호담당자</h4>
                   <div className="space-y-2 text-sm">
-                    <div><span className="font-medium">성명:</span> AI학습동아리 운영진</div>
-                    <div><span className="font-medium">직책:</span> 부동아리장</div>
-                    <div><span className="font-medium">이메일:</span> support@kepco-ai.kr</div>
+                    <div><span className="font-medium">성명:</span> 김준성</div>
+                    <div><span className="font-medium">직책:</span> 강원본부 전력관리처 전자제어부 주임</div>
+                    <div><span className="font-medium">이메일:</span> jaajung@kepco.co.kr</div>
                   </div>
                 </div>
               </div>
