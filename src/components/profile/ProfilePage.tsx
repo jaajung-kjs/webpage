@@ -226,7 +226,7 @@ export default function ProfilePage() {
         let activityStats: any = null
         try {
           const { data: activityData, error: activityError } = await supabase
-            .rpc('get_user_comprehensive_stats', { user_id_param: user.id })
+            .rpc('get_user_content_stats', { user_id_param: user.id })
           
           if (!activityError && activityData) {
             const typedData = activityData as unknown as any
@@ -236,12 +236,13 @@ export default function ProfilePage() {
               activityStats = typedData.stats
               
               // Update main stats with comprehensive data
+              // We'll fetch additional stats separately since get_user_content_stats doesn't include all of them
               stats = {
                 totalPosts: typedData.stats.posts || 0,
                 totalComments: typedData.stats.comments || 0,
-                totalLikes: typedData.stats.likes_received || 0,
-                totalViews: typedData.stats.total_views || 0,
-                activitiesJoined: typedData.stats.activities_joined || 0,
+                totalLikes: 0, // Will be fetched from get_user_comprehensive_stats
+                totalViews: 0, // Will be fetched from get_user_comprehensive_stats
+                activitiesJoined: 0, // Not available yet
                 resourcesShared: typedData.stats.resources || 0
               }
             }
@@ -264,6 +265,22 @@ export default function ProfilePage() {
           } else {
             console.warn('Failed to fetch user activity from RPC:', activityError)
             
+            // Try to get basic stats from get_user_comprehensive_stats
+            try {
+              const { data: comprehensiveStats, error: comprehensiveError } = await supabase
+                .rpc('get_user_comprehensive_stats', { p_user_id: user.id })
+              
+              if (!comprehensiveError && comprehensiveStats && comprehensiveStats.length > 0) {
+                const statsData = comprehensiveStats[0]
+                stats.totalPosts = statsData.total_posts || 0
+                stats.totalComments = statsData.total_comments || 0
+                stats.totalLikes = statsData.total_likes_received || 0
+                stats.totalViews = statsData.total_views || 0
+              }
+            } catch (statsError) {
+              console.error('Error fetching comprehensive stats:', statsError)
+            }
+            
             // Fallback to basic activity processing
             if (activityResult.status === 'fulfilled' && !activityResult.value.error && activityResult.value.data) {
               recentActivity = activityResult.value.data.map((log: any) => ({
@@ -277,6 +294,16 @@ export default function ProfilePage() {
                 }
               }))
             }
+          }
+          // Fetch additional stats from get_user_comprehensive_stats
+          const { data: comprehensiveStats, error: comprehensiveError } = await supabase
+            .rpc('get_user_comprehensive_stats', { p_user_id: user.id })
+          
+          if (!comprehensiveError && comprehensiveStats && comprehensiveStats.length > 0) {
+            // Update stats with comprehensive data
+            const statsData = comprehensiveStats[0]
+            stats.totalLikes = statsData.total_likes_received || 0
+            stats.totalViews = statsData.total_views || 0
           }
         } catch (error) {
           console.error('Error fetching user activity from RPC:', error)

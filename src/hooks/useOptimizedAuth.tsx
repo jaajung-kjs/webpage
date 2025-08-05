@@ -85,7 +85,8 @@ export function useOptimizedAuth(): AuthStateWithMethods {
         data: {
           name,
           department: department || '미지정'
-        }
+        },
+        emailRedirectTo: `${window.location.origin}/auth/callback`
       }
     })
     return { error }

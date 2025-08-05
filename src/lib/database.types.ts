@@ -1486,8 +1486,18 @@ export type Database = {
         Returns: Json
       }
       get_user_comprehensive_stats: {
-        Args: { user_id_param: string }
-        Returns: Json
+        Args: { p_user_id: string }
+        Returns: {
+          total_posts: number
+          total_comments: number
+          total_likes_given: number
+          total_likes_received: number
+          total_views: number
+          most_active_category: string
+          join_date: string
+          last_active: string
+          activity_score: number
+        }[]
       }
       get_user_content_stats: {
         Args: { user_id_param: string }
@@ -1585,7 +1595,7 @@ export type Database = {
         Returns: undefined
       }
       update_last_seen_at: {
-        Args: { user_id_param?: string }
+        Args: { p_user_id: string }
         Returns: undefined
       }
       update_my_last_seen_at: {

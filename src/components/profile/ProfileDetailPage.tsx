@@ -214,7 +214,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
       // Fetch recent activities and detailed stats using comprehensive RPC
       try {
         const { data: activityData, error: activityError } = await supabase
-          .rpc('get_user_comprehensive_stats', { user_id_param: userId })
+          .rpc('get_user_comprehensive_stats', { p_user_id: userId })
         
         if (!activityError && activityData) {
           // Type assertion for the returned data
