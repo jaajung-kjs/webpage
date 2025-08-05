@@ -792,3 +792,8 @@ export class RealtimeManager {
 
 // 싱글톤 인스턴스 export
 export const realtimeManager = RealtimeManager.getInstance()
+
+// 전역 접근을 위해 window 객체에 등록
+if (typeof window !== 'undefined') {
+  (window as any).realtimeManager = realtimeManager
+}

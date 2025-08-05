@@ -46,6 +46,7 @@ export class SessionManager {
   
   private constructor() {
     this.initialize()
+    this.setupVisibilityHandler()
   }
   
   /**
@@ -182,7 +183,7 @@ export class SessionManager {
   /**
    * 세션 갱신 스케줄링 (최적화)
    */
-  private scheduleRefresh(session: Session) {
+  private scheduleRefresh(session: Session, retryCount: number = 0) {
     // 기존 타이머 정리
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
@@ -199,10 +200,40 @@ export class SessionManager {
         
         if (!error && newSession) {
           this.updateState({ session: newSession, lastRefresh: Date.now() })
-          this.scheduleRefresh(newSession)
+          this.scheduleRefresh(newSession, 0) // 성공 시 재시도 횟수 초기화
+          AuthMonitorLite.log('session:refreshed')
+        } else {
+          // 세션 갱신 실패 시 재시도
+          const nextRetryCount = retryCount + 1
+          const maxRetries = 3
+          
+          if (nextRetryCount <= maxRetries) {
+            const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 30000) // 지수 백오프: 5s, 10s, 20s, max 30s
+            console.warn(`Session refresh failed, retrying in ${retryDelay}ms (attempt ${nextRetryCount}/${maxRetries})`)
+            
+            setTimeout(() => {
+              this.scheduleRefresh(session, nextRetryCount)
+            }, retryDelay)
+          } else {
+            console.error('Session refresh failed after max retries')
+            AuthMonitorLite.log('session:refresh_failed')
+            // 사용자에게 재로그인 필요 알림
+            this.updateState({ session: null, loading: false })
+          }
         }
       } catch (error) {
         console.error('Session refresh failed:', error instanceof Error ? error.message : JSON.stringify(error))
+        
+        // 네트워크 오류 등의 경우 재시도
+        const nextRetryCount = retryCount + 1
+        const maxRetries = 3
+        
+        if (nextRetryCount <= maxRetries) {
+          const retryDelay = Math.min(5000 * Math.pow(2, retryCount), 30000)
+          setTimeout(() => {
+            this.scheduleRefresh(session, nextRetryCount)
+          }, retryDelay)
+        }
       }
     }, refreshIn)
   }
@@ -233,6 +264,84 @@ export class SessionManager {
     this.listeners.forEach(listener => listener(this.state))
   }
   
+  
+  /**
+   * Page Visibility API handler setup
+   */
+  private setupVisibilityHandler() {
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.state.session) {
+          // 백그라운드에서 복귀 시 세션 상태 확인
+          this.handleVisibilityChange()
+        }
+      })
+      
+      // Window focus 이벤트도 추가
+      window.addEventListener('focus', () => {
+        if (this.state.session) {
+          this.handleVisibilityChange()
+        }
+      })
+    }
+  }
+  
+  /**
+   * Handle visibility change (background recovery)
+   */
+  private async handleVisibilityChange() {
+    try {
+      // 세션 유효성 확인
+      const { data: { session }, error } = await supabase.auth.getSession()
+      
+      if (error || !session) {
+        console.warn('Session invalid after background recovery')
+        this.updateState({ session: null, loading: false })
+        return
+      }
+      
+      // 토큰 만료 시간 확인
+      const expiresAt = session.expires_at ? new Date(session.expires_at * 1000) : null
+      if (expiresAt) {
+        const now = new Date()
+        const timeUntilExpiry = expiresAt.getTime() - now.getTime()
+        
+        // 만료된 토큰이거나 5분 이내 만료 예정이면 갱신
+        if (timeUntilExpiry <= 5 * 60 * 1000) {
+          console.log('Token expired or expiring soon, refreshing...')
+          const refreshResult = await this.refreshSession()
+          if (!refreshResult) {
+            console.warn('Failed to refresh session after background recovery')
+            return
+          }
+        }
+      }
+      
+      // 프로필 재로드 (권한 변경 등을 반영)
+      if (session.user.id !== this.state.session?.user.id || !this.state.profile) {
+        await this.loadProfile(session.user.id, true)
+      }
+      
+      // 상태 업데이트
+      this.updateState({ session, loading: false })
+      
+      // 활동 업데이트
+      this.updateLastSeenAt()
+      
+      // RealtimeManager와 연동하여 연결 상태 확인 및 재연결
+      if (typeof window !== 'undefined' && (window as any).realtimeManager) {
+        const realtimeManager = (window as any).realtimeManager
+        if (!realtimeManager.isConnected()) {
+          console.log('RealtimeManager disconnected, attempting reconnect')
+          realtimeManager.forceReconnect()
+        }
+      }
+      
+      AuthMonitorLite.log('session:background_recovery')
+    } catch (error) {
+      console.error('Error during background recovery:', error)
+    }
+  }
   
   /**
    * Update last_seen_at timestamp

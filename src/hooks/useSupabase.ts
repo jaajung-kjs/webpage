@@ -45,8 +45,8 @@ export function useSupabaseQuery<T>(
   // Generate cache key
   const cacheKey = cacheOptions.key || createCacheKey('supabase', table, ...deps)
 
-  const fetchData = useCallback(async () => {
-    setLoading(true)
+  const fetchData = useCallback(async (retryCount: number = 0) => {
+    setLoading(retryCount === 0) // Only show loading on first attempt
     setError(null)
     
     try {
@@ -57,21 +57,37 @@ export function useSupabaseQuery<T>(
           setData(cachedData)
           setLoading(false)
           
-          // Still fetch fresh data in background
-          const baseQuery = supabase.from(table as any)
-          const finalQuery = query(baseQuery)
-          const { data: freshData, error } = await finalQuery
-          
-          if (!error && freshData) {
-            setData(freshData)
-            HybridCache.set(cacheKey, freshData, cacheOptions.ttl)
+          // Still fetch fresh data in background with retry logic
+          const fetchFresh = async (attemptCount: number = 0): Promise<void> => {
+            try {
+              const baseQuery = supabase.from(table as any)
+              const finalQuery = query(baseQuery)
+              const { data: freshData, error } = await finalQuery
+              
+              if (!error && freshData) {
+                setData(freshData)
+                HybridCache.set(cacheKey, freshData, cacheOptions.ttl)
+              } else if (error && attemptCount < 2) {
+                // Retry background fetch
+                const delay = Math.min(1000 * Math.pow(2, attemptCount), 5000)
+                setTimeout(() => fetchFresh(attemptCount + 1), delay)
+              }
+            } catch (bgError) {
+              // Background fetch failed, but we have cached data so it's OK
+              console.debug(`Background fetch failed (attempt ${attemptCount + 1}):`, bgError)
+              if (attemptCount < 2) {
+                const delay = Math.min(1000 * Math.pow(2, attemptCount), 5000)
+                setTimeout(() => fetchFresh(attemptCount + 1), delay)
+              }
+            }
           }
           
+          fetchFresh()
           return
         }
       }
 
-      // Fetch from Supabase
+      // Fetch from Supabase with retry logic
       const baseQuery = supabase.from(table as any)
       const finalQuery = query(baseQuery)
       const { data, error } = await finalQuery
@@ -85,10 +101,45 @@ export function useSupabaseQuery<T>(
         HybridCache.set(cacheKey, data, cacheOptions.ttl)
       }
     } catch (err: any) {
-      setError(err)
+      // Check if this is a network error that should be retried
+      const isNetworkError = err.message?.includes('fetch') || 
+                            err.message?.includes('network') ||
+                            err.message?.includes('timeout') ||
+                            err.code === 'NETWORK_ERROR'
+      
+      const maxRetries = 3
+      
+      if (isNetworkError && retryCount < maxRetries) {
+        // Exponential backoff: 1s, 2s, 4s
+        const delay = Math.min(1000 * Math.pow(2, retryCount), 5000)
+        console.warn(`Network error, retrying in ${delay}ms (attempt ${retryCount + 1}/${maxRetries})`)
+        
+        setTimeout(() => {
+          fetchData(retryCount + 1)
+        }, delay)
+        return
+      }
+      
+      // If all retries failed, try to return stale cache as fallback
+      if (cacheOptions.enabled && retryCount >= maxRetries) {
+        // Look for any cached data, even if expired
+        const staleData = HybridCache.getStale<T>(cacheKey)
+        if (staleData !== null) {
+          console.warn('Using stale cache data due to persistent network errors')
+          setData(staleData)
+          setError(err) // Still set error to indicate issues
+        } else {
+          setError(err)
+        }
+      } else {
+        setError(err)
+      }
+      
       console.error(`Error fetching from ${table}:`, err)
     } finally {
-      setLoading(false)
+      if (retryCount === 0 || retryCount >= 3) {
+        setLoading(false)
+      }
     }
   }, [table, cacheKey, cacheOptions.enabled, cacheOptions.ttl, ...deps])
 

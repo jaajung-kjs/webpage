@@ -10,7 +10,7 @@ interface CacheItem<T> {
 }
 
 export class PersistentCache {
-  private static PREFIX = 'kepco-cache-'
+  public static PREFIX = 'kepco-cache-'
   
   /**
    * 캐시에 데이터 저장
@@ -225,6 +225,25 @@ export class HybridCache {
     }
     
     return data
+  }
+  
+  static getStale<T>(key: string): T | null {
+    // 1. 메모리 캐시에서 만료된 데이터도 포함하여 확인
+    const memoryItem = this.memoryCache.get(key)
+    if (memoryItem) {
+      return memoryItem.data
+    }
+    
+    // 2. 영구 캐시에서 만료된 데이터도 확인
+    try {
+      const item = localStorage.getItem(PersistentCache.PREFIX + key)
+      if (!item) return null
+      
+      const parsed = JSON.parse(item) as CacheItem<T>
+      return parsed.data
+    } catch {
+      return null
+    }
   }
   
   static invalidate(pattern?: string): void {
