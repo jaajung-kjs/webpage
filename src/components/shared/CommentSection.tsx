@@ -462,12 +462,12 @@ export default function CommentSection({
                   </AvatarFallback>
                 </Avatar>
                 
-                <div className="flex-1 space-y-3">
+                <div className="flex-1 space-y-3 min-w-0">
                   <Textarea
                     placeholder="댓글을 작성하세요..."
                     value={newComment}
                     onChange={(e) => setNewComment(e.target.value)}
-                    className="min-h-[100px] resize-none"
+                    className="min-h-[100px] resize-none w-full"
                   />
                   
                   <div className="flex justify-end">
@@ -655,7 +655,7 @@ function CommentItem({
     <motion.div
       {...fadeInUp}
       className={cn(
-        "group relative",
+        "group relative min-w-0 overflow-hidden",
         visualDepth > 0 && "ml-4 sm:ml-8 mt-4"
       )}
     >
@@ -665,7 +665,7 @@ function CommentItem({
       )}
       
       <div className={cn(
-        "rounded-lg transition-all",
+        "rounded-lg transition-all min-w-0 overflow-hidden",
         visualDepth === 0 ? "bg-card border p-4" : "bg-muted/50 p-3",
         "hover:shadow-sm"
       )}>
@@ -758,11 +758,11 @@ function CommentItem({
 
         {/* Comment Content */}
         {isEditing ? (
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <Textarea
               value={editContent}
               onChange={(e) => setEditContent(e.target.value)}
-              className="min-h-[80px] resize-none"
+              className="min-h-[80px] resize-none w-full"
               placeholder="댓글을 수정하세요..."
             />
             <div className="flex gap-2">
@@ -783,8 +783,8 @@ function CommentItem({
             </div>
           </div>
         ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none">
-            <p className="text-sm whitespace-pre-wrap break-words">
+          <div className="prose prose-sm dark:prose-invert max-w-none min-w-0">
+            <p className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere word-break-break-word min-w-0">
               {comment.comment}
             </p>
           </div>
@@ -859,12 +859,12 @@ function CommentItem({
                 {(profile?.name || user?.email)?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
-            <div className="flex-1 space-y-3">
+            <div className="flex-1 space-y-3 min-w-0">
               <Textarea
                 placeholder={`${comment.author_name || '익명'}님에게 답글 작성...`}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
-                className="min-h-[80px] resize-none"
+                className="min-h-[80px] resize-none w-full"
                 autoFocus
               />
               <div className="flex gap-2">

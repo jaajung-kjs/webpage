@@ -180,8 +180,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }
 
   const handleEdit = () => {
-    // 수정 페이지로 이동 (아직 구현되지 않음)
-    toast.info('수정 기능은 준비 중입니다.')
+    router.push(`/community/${postId}/edit`)
   }
 
   const handleDelete = async () => {
