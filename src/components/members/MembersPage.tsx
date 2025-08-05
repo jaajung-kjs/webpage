@@ -591,7 +591,7 @@ function MembersPage() {
                   <div className="mb-4 space-y-2">
                     <div className="flex items-center justify-between text-sm">
                       <span>활동 점수</span>
-                      <div className="flex items-center space-x-1">
+                      <div className="flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-primary" />
                         <span className="font-medium">{member.activity_score || 0}</span>
                         <Badge variant="outline" className={`text-xs ${activityLevel.color} px-1 py-0`}>

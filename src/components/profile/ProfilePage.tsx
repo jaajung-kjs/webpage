@@ -884,18 +884,17 @@ export default function ProfilePage() {
                           <span className="text-sm text-muted-foreground">공유 자료</span>
                           <span className="font-semibold">{userData.activityStats?.resources || userData.stats.resourcesShared}</span>
                         </div>
-                        <div className="flex justify-between">
+                        <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">활동 점수</span>
-                          <span className="font-semibold">{userData.activityScore}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-sm text-muted-foreground">레벨</span>
-                          {activityLevel && (
-                            <Badge variant="secondary" className={activityLevel.color}>
-                              <activityLevel.icon className="h-3 w-3 mr-1" />
-                              {activityLevel.level}
-                            </Badge>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{userData.activityScore}</span>
+                            {activityLevel && (
+                              <Badge variant="secondary" className={activityLevel.color}>
+                                <activityLevel.icon className="h-3 w-3 mr-1" />
+                                {activityLevel.level}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </CardContent>
