@@ -552,10 +552,25 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
           className="md:col-span-2 space-y-6"
         >
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="overview">개요</TabsTrigger>
-              <TabsTrigger value="stats">활동 통계</TabsTrigger>
-              <TabsTrigger value="activities">최근 활동</TabsTrigger>
+            <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
+              <TabsTrigger
+                value="overview"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+              >
+                개요
+              </TabsTrigger>
+              <TabsTrigger
+                value="stats"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+              >
+                활동 통계
+              </TabsTrigger>
+              <TabsTrigger
+                value="activities"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+              >
+                최근 활동
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="overview" className="space-y-6">

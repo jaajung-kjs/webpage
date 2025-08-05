@@ -236,9 +236,19 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
         </DialogHeader>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="login">로그인</TabsTrigger>
-            <TabsTrigger value="signup">회원가입</TabsTrigger>
+          <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
+            <TabsTrigger
+              value="login"
+              className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+            >
+              로그인
+            </TabsTrigger>
+            <TabsTrigger
+              value="signup"
+              className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+            >
+              회원가입
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="login" className="space-y-4">

@@ -250,12 +250,37 @@ export default function ReportManagement() {
 
           {/* Tabs */}
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="all">전체</TabsTrigger>
-              <TabsTrigger value="pending">대기중</TabsTrigger>
-              <TabsTrigger value="reviewing">검토중</TabsTrigger>
-              <TabsTrigger value="resolved">처리완료</TabsTrigger>
-              <TabsTrigger value="dismissed">기각</TabsTrigger>
+            <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground mb-4 overflow-x-auto">
+              <TabsTrigger
+                value="all"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
+                전체
+              </TabsTrigger>
+              <TabsTrigger
+                value="pending"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
+                대기중
+              </TabsTrigger>
+              <TabsTrigger
+                value="reviewing"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
+                검토중
+              </TabsTrigger>
+              <TabsTrigger
+                value="resolved"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
+                처리완료
+              </TabsTrigger>
+              <TabsTrigger
+                value="dismissed"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
+                기각
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value={activeTab}>

@@ -510,20 +510,35 @@ export default function SearchPage() {
 
           {/* Content Type Tabs */}
           <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as any)} className="mb-6">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="all">
+            <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground overflow-x-auto">
+              <TabsTrigger
+                value="all"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
                 전체 ({searchResults.total})
               </TabsTrigger>
-              <TabsTrigger value="community">
+              <TabsTrigger
+                value="community"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
                 커뮤니티 ({searchResults.community.length})
               </TabsTrigger>
-              <TabsTrigger value="case">
+              <TabsTrigger
+                value="case"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
                 활용사례 ({searchResults.cases.length})
               </TabsTrigger>
-              <TabsTrigger value="resource">
+              <TabsTrigger
+                value="resource"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
                 학습자료 ({searchResults.resources.length})
               </TabsTrigger>
-              <TabsTrigger value="announcement">
+              <TabsTrigger
+                value="announcement"
+                className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
+              >
                 공지사항 ({searchResults.announcements.length})
               </TabsTrigger>
             </TabsList>
