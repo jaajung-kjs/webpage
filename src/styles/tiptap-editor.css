@@ -47,3 +47,133 @@
     border: none !important;
   }
 }
+
+/* Default paragraph styling */
+.ProseMirror > * {
+  margin: 0;
+}
+
+.ProseMirror > * + * {
+  margin-top: 0.75rem;
+}
+
+/* First element margin */
+.ProseMirror > *:first-child {
+  margin-top: 0 !important;
+}
+
+/* Last element margin */
+.ProseMirror > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Typography styles for editor content */
+.ProseMirror h1 {
+  font-size: 2.25rem !important;
+  line-height: 2.5rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 1rem !important;
+  margin-top: 1.5rem !important;
+}
+
+.ProseMirror h2 {
+  font-size: 1.875rem !important;
+  line-height: 2.25rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.75rem !important;
+  margin-top: 1.25rem !important;
+}
+
+.ProseMirror h3 {
+  font-size: 1.5rem !important;
+  line-height: 2rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 0.75rem !important;
+  margin-top: 1rem !important;
+}
+
+.ProseMirror p {
+  margin-bottom: 1rem !important;
+  font-size: 1rem !important;
+  line-height: 1.75rem !important;
+}
+
+.ProseMirror strong,
+.ProseMirror b {
+  font-weight: 700 !important;
+}
+
+.ProseMirror em,
+.ProseMirror i {
+  font-style: italic !important;
+}
+
+.ProseMirror code {
+  background-color: hsl(var(--muted)) !important;
+  padding: 0.125rem 0.375rem !important;
+  border-radius: 0.25rem !important;
+  font-size: 0.875rem !important;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", Menlo, monospace !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.ProseMirror pre {
+  @apply bg-muted rounded-md p-4 mb-4 overflow-x-auto;
+}
+
+.ProseMirror pre code {
+  @apply bg-transparent p-0;
+}
+
+.ProseMirror ul {
+  @apply list-disc list-inside mb-4 ml-4;
+}
+
+.ProseMirror ol {
+  @apply list-decimal list-inside mb-4 ml-4;
+}
+
+.ProseMirror li {
+  @apply mb-2;
+}
+
+.ProseMirror blockquote {
+  @apply border-l-4 border-primary pl-4 py-2 mb-4 italic bg-muted/50;
+}
+
+.ProseMirror a {
+  @apply text-primary underline hover:no-underline;
+}
+
+.ProseMirror img {
+  @apply rounded-lg max-w-full h-auto my-4;
+}
+
+/* Placeholder text */
+.ProseMirror.is-empty::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  position: absolute;
+  pointer-events: none;
+}
+
+/* Toolbar button styles */
+.tiptap-toolbar button {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Prevent double-tap zoom on toolbar */
+.tiptap-toolbar {
+  touch-action: manipulation;
+}
+
+/* Ensure immediate response on mobile */
+@media (pointer: coarse) {
+  .tiptap-toolbar button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}

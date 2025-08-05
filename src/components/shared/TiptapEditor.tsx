@@ -89,6 +89,7 @@ export default function TiptapEditor({
           'min-h-[200px] px-4 py-3',
           className
         ),
+        'data-placeholder': placeholder,
       },
       handlePaste: (view, event) => {
         const items = event.clipboardData?.items
@@ -247,28 +248,40 @@ export default function TiptapEditor({
     disabled?: boolean
     children: React.ReactNode
     title?: string
-  }) => (
-    <Button
-      type="button"
-      variant={isActive ? "default" : "ghost"}
-      size="sm"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className={cn(
-        "h-8 w-8 p-0",
-        isActive && "bg-primary/10 text-primary hover:bg-primary/20"
-      )}
-    >
-      {children}
-    </Button>
-  )
+  }) => {
+    const handleClick = (e: React.MouseEvent | React.TouchEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onClick()
+    }
+    
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        title={title}
+        onMouseDown={handleClick}
+        onTouchStart={handleClick}
+        className={cn(
+          "h-8 w-8 p-0 inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors",
+          "touch-manipulation outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+          "disabled:pointer-events-none disabled:opacity-50",
+          isActive 
+            ? "bg-primary text-primary-foreground shadow-sm" 
+            : "hover:bg-accent hover:text-accent-foreground",
+          "active:bg-accent/80"
+        )}
+      >
+        {children}
+      </button>
+    )
+  }
 
   return (
     <div className="border rounded-lg overflow-hidden">
       {/* Desktop Toolbar */}
       {!isMobile && (
-        <div className="border-b bg-muted/50 p-2 flex items-center gap-1 flex-wrap">
+        <div className="tiptap-toolbar border-b bg-muted/50 p-2 flex items-center gap-1 flex-wrap">
           {/* Text formatting */}
           <div className="flex items-center gap-1">
             <ToolbarButton
@@ -426,7 +439,7 @@ export default function TiptapEditor({
 
       {/* Mobile Bottom Toolbar */}
       {isMobile && (
-        <div className="border-t bg-muted/50 p-2 flex items-center justify-around">
+        <div className="tiptap-toolbar border-t bg-muted/50 p-2 flex items-center justify-around">
           <ToolbarButton
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}

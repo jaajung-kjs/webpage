@@ -151,6 +151,16 @@ export class SessionManager {
       event: '*',
       callback: async (payload) => {
         console.log('Profile updated via realtime:', payload)
+        
+        // 권한(role) 변경 감지
+        const oldRole = this.state.profile?.role
+        const newRole = payload.new?.role
+        
+        if (oldRole !== newRole) {
+          console.log(`Role changed from ${oldRole} to ${newRole}`)
+          AuthMonitorLite.log('role:changed', { oldRole, newRole })
+        }
+        
         // 프로필 변경 시 캐시 무효화 및 재로드
         const cacheKey = getCacheKey('auth', 'profile', userId)
         CacheManager.invalidate(cacheKey)
@@ -192,6 +202,17 @@ export class SessionManager {
    */
   private updateState(updates: Partial<SessionState>) {
     this.state = { ...this.state, ...updates }
+    
+    // 프로필이 업데이트되면 권한 플래그도 재계산
+    if (updates.profile !== undefined || updates.session !== undefined) {
+      // 권한 재계산은 listener에서 처리하도록 함
+      AuthMonitorLite.log('session:update', {
+        hasProfile: !!this.state.profile,
+        hasSession: !!this.state.session,
+        role: this.state.profile?.role
+      })
+    }
+    
     this.notifyListeners()
   }
   

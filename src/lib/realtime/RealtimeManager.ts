@@ -89,6 +89,22 @@ export class RealtimeManager {
       }
     })
     
+    // Page Visibility API로 백그라운드 복귀 감지
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          log('🔌 RealtimeManager: Page became visible, checking connection')
+          this.handleVisibilityChange()
+        }
+      })
+      
+      // 포커스 이벤트도 추가 (일부 브라우저 호환성)
+      window.addEventListener('focus', () => {
+        log('🔌 RealtimeManager: Window focused, checking connection')
+        this.handleVisibilityChange()
+      })
+    }
+    
     // 초기 세션 체크 및 초기화
     this.checkSessionAndInitialize()
   }
@@ -734,6 +750,42 @@ export class RealtimeManager {
           logError('Error in connection state listener:', error)
         }
       })
+    }
+  }
+  
+  /**
+   * 페이지가 다시 보이거나 포커스될 때 처리
+   */
+  private async handleVisibilityChange() {
+    // 로그인 상태 확인
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      log('🔌 RealtimeManager: No session on visibility change')
+      return
+    }
+    
+    // 연결 상태 확인
+    if (!this.state.isConnected) {
+      log('🔌 RealtimeManager: Connection lost during background, reconnecting...')
+      this.state.connectionAttempts = 0 // 재연결 시도 횟수 초기화
+      await this.initialize()
+    } else {
+      // 연결은 되어 있지만 실제로 동작하는지 확인
+      log('🔌 RealtimeManager: Connection seems alive, sending heartbeat to verify')
+      
+      // 즉시 heartbeat 전송하여 연결 확인
+      try {
+        await this.sendHeartbeat()
+      } catch (error) {
+        log('🔌 RealtimeManager: Heartbeat failed, connection is dead, reconnecting...')
+        this.state.connectionAttempts = 0
+        await this.initialize()
+      }
+    }
+    
+    // 캐시 재검증 트리거 (CacheManager에 신호 전송)
+    if (typeof window !== 'undefined' && (window as any).cacheRevalidationCallback) {
+      (window as any).cacheRevalidationCallback()
     }
   }
 }

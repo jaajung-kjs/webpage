@@ -51,6 +51,17 @@ export class CacheManager {
   private static activeSubscriptions = new Map<string, any>()
   private static revalidationQueue = new Map<string, NodeJS.Timeout>()
   
+  // 백그라운드 복귀 시 캐시 재검증을 위한 콜백 등록
+  static {
+    if (typeof window !== 'undefined') {
+      (window as any).cacheRevalidationCallback = () => {
+        console.log('CacheManager: Background recovery detected, revalidating caches')
+        // 만료된 캐시들 재검증
+        this.revalidateExpiredCaches()
+      }
+    }
+  }
+  
   /**
    * 캐시에서 데이터 가져오기 (stale-while-revalidate 지원)
    */
@@ -289,6 +300,30 @@ export class CacheManager {
       activeSubscriptions: this.activeSubscriptions.size,
       pendingRevalidations: this.revalidationQueue.size,
       cacheSize: 0 // HybridCache doesn't expose size information
+    }
+  }
+  
+  /**
+   * 만료된 캐시 재검증 (백그라운드 복귀 시 호출)
+   */
+  private static async revalidateExpiredCaches(): Promise<void> {
+    // 현재 활성 구독들에 대해 캐시 재검증
+    for (const [key, subscription] of this.activeSubscriptions) {
+      const [domain, type] = key.split(':')
+      const config = CACHE_CONFIGS[`${domain}:${type}`]
+      
+      if (config && config.staleWhileRevalidate) {
+        // stale-while-revalidate가 활성화된 캐시들 재검증
+        const cached = HybridCache.get<any>(key)
+        if (cached) {
+          const age = Date.now() - (cached.timestamp || 0)
+          if (age > config.ttl) {
+            console.log(`CacheManager: Revalidating expired cache: ${key}`)
+            // 캐시 무효화하여 다음 요청 시 새로 가져오도록
+            this.invalidate(key)
+          }
+        }
+      }
     }
   }
 }
