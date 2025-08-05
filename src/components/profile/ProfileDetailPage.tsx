@@ -211,16 +211,33 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
         })
       }
       
-      // Fetch recent activities and detailed stats using comprehensive RPC
+      // Fetch comprehensive stats
       try {
-        const { data: activityData, error: activityError } = await supabase
+        const { data: comprehensiveData, error: comprehensiveError } = await supabase
           .rpc('get_user_comprehensive_stats', { p_user_id: userId })
         
-        if (!activityError && activityData) {
-          // Type assertion for the returned data
-          const typedData = activityData as unknown as any
+        if (!comprehensiveError && comprehensiveData && comprehensiveData.length > 0) {
+          const statsData = comprehensiveData[0]
           
-          // Set activity stats separately for better organization
+          // Update main stats with comprehensive data
+          setStats({
+            totalPosts: statsData.total_posts || 0,
+            totalComments: statsData.total_comments || 0,
+            totalLikes: statsData.total_likes_received || 0,
+            totalViews: statsData.total_views || 0,
+            activitiesJoined: 0, // Not available yet
+            resourcesShared: 0 // Will get from get_user_content_stats
+          })
+        }
+        
+        // Fetch content stats and recent activities
+        const { data: contentData, error: contentError } = await supabase
+          .rpc('get_user_content_stats', { user_id_param: userId })
+        
+        if (!contentError && contentData) {
+          const typedData = contentData as unknown as any
+          
+          // Set activity stats
           if (typedData.stats) {
             setActivityStats({
               posts: typedData.stats.posts || 0,
@@ -230,15 +247,11 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
               comments: typedData.stats.comments || 0
             })
             
-            // Update main stats with comprehensive data
-            setStats({
-              totalPosts: typedData.stats.posts || 0,
-              totalComments: typedData.stats.comments || 0,
-              totalLikes: typedData.stats.likes_received || 0,
-              totalViews: typedData.stats.total_views || 0,
-              activitiesJoined: typedData.stats.activities_joined || 0,
+            // Update resource count
+            setStats(prev => prev ? {
+              ...prev,
               resourcesShared: typedData.stats.resources || 0
-            })
+            } : null)
           }
           
           // Set recent activities
@@ -248,7 +261,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
             setRecentActivities([])
           }
         } else {
-          console.warn('Failed to fetch user activity:', activityError)
+          console.warn('Failed to fetch user content stats:', contentError)
           setRecentActivities([])
         }
       } catch (error) {
