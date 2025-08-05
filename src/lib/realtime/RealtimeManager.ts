@@ -332,6 +332,17 @@ export class RealtimeManager {
           await statsQuery
           break
           
+        case 'users':
+          let usersQuery = supabase.from('users').select('id, role').limit(1)
+          if (filter) {
+            const [column, , value] = filter.split(/[=.]/)
+            if (column === 'id' && value) {
+              usersQuery = usersQuery.eq('id', value)
+            }
+          }
+          await usersQuery
+          break
+          
         default:
           logWarn(`⚠️ RealtimeManager: Unknown table ${table}, skipping activation`)
           return
@@ -523,12 +534,17 @@ export class RealtimeManager {
     // 기존 구독 정보 백업 (activeSubscriptions에서 가져오기)
     const subscriptionsBackup = new Map(this.activeSubscriptions)
     
-    // 모든 채널 정리
+    // 모든 채널 정리 (깨끗하게 정리)
     this.cleanup()
+    
+    // 잠시 대기 (채널 정리가 완료되도록)
+    await new Promise(resolve => setTimeout(resolve, 100))
     
     // 백업된 구독을 대기열에 추가
     subscriptionsBackup.forEach((config, key) => {
-      this.pendingSubscriptions.set(key, config)
+      // 캐시 관련 구독은 원래 이름 그대로 사용
+      const originalKey = config.name.startsWith('cache_') ? config.name : key
+      this.pendingSubscriptions.set(originalKey, config)
     })
     
     // 다시 초기화
@@ -539,7 +555,10 @@ export class RealtimeManager {
    * 채널 구독
    */
   subscribe(config: ChannelConfig): () => void {
-    const channelKey = `${config.name}-${config.table || 'custom'}`
+    // 캐시 관련 채널은 특별히 처리 (이미 고유한 이름을 가지고 있음)
+    const channelKey = config.name.startsWith('cache_') 
+      ? config.name 
+      : `${config.name}-${config.table || 'custom'}`
     
     // 연결 상태 확인
     if (!this.state.isConnected) {
@@ -615,14 +634,60 @@ export class RealtimeManager {
         }
       } else if (status === 'CHANNEL_ERROR') {
         logError(`❌ RealtimeManager: Error subscribing to ${channelKey}`)
-        // 채널 에러 시 재연결 시도
-        if (this.state.connectionAttempts < this.MAX_RECONNECT_ATTEMPTS) {
-          log(`🔄 RealtimeManager: Channel error, scheduling reconnect for ${channelKey}`)
-          setTimeout(() => {
-            if (!this.state.isConnected) {
-              this.scheduleReconnect()
+        
+        // 캐시 관련 채널인 경우 특별 처리
+        if (config.name.startsWith('cache_')) {
+          log(`🔄 RealtimeManager: Cache channel error, attempting recovery for ${channelKey}`)
+          
+          // 채널 제거
+          this.state.activeChannels.delete(channelKey)
+          this.activeSubscriptions.delete(channelKey)
+          
+          // 재시도 (최대 3번)
+          let retryCount = 0
+          const retrySubscription = async () => {
+            if (retryCount >= 3) {
+              logError(`❌ RealtimeManager: Failed to recover cache channel ${channelKey} after 3 attempts`)
+              return
             }
-          }, 1000)
+            
+            retryCount++
+            log(`🔄 RealtimeManager: Retry ${retryCount}/3 for cache channel ${channelKey}`)
+            
+            // 잠시 대기 후 재시도
+            await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+            
+            // 연결 상태 확인
+            if (this.state.isConnected) {
+              // 기존 채널 정리
+              const oldChannel = this.state.activeChannels.get(channelKey)
+              if (oldChannel) {
+                supabase.removeChannel(oldChannel)
+                this.state.activeChannels.delete(channelKey)
+              }
+              
+              // 다시 구독 시도
+              this.subscribe(config)
+            } else {
+              // 연결이 끊어진 경우 전체 재연결
+              this.forceReconnect()
+            }
+          }
+          
+          // 비동기로 재시도 시작
+          retrySubscription().catch(error => {
+            logError(`❌ RealtimeManager: Cache channel recovery failed:`, error)
+          })
+        } else {
+          // 일반 채널 에러 시 재연결 시도
+          if (this.state.connectionAttempts < this.MAX_RECONNECT_ATTEMPTS) {
+            log(`🔄 RealtimeManager: Channel error, scheduling reconnect for ${channelKey}`)
+            setTimeout(() => {
+              if (!this.state.isConnected) {
+                this.scheduleReconnect()
+              }
+            }, 1000)
+          }
         }
       }
     })
@@ -714,6 +779,46 @@ export class RealtimeManager {
   }
   
   /**
+   * 모든 구독 강제 새로고침
+   */
+  async forceRefreshSubscriptions() {
+    log('🔄 RealtimeManager: Force refresh all subscriptions')
+    
+    if (!this.state.isConnected) {
+      log('🔄 RealtimeManager: Not connected, attempting to connect first')
+      await this.initialize()
+      return
+    }
+    
+    // 현재 활성 구독 백업
+    const currentSubscriptions = new Map(this.activeSubscriptions)
+    
+    // 모든 채널 구독 해제
+    this.state.activeChannels.forEach((channel, key) => {
+      log(`🔄 RealtimeManager: Unsubscribing from ${key} for refresh`)
+      supabase.removeChannel(channel)
+    })
+    this.state.activeChannels.clear()
+    
+    // 잠시 대기
+    await new Promise(resolve => setTimeout(resolve, 100))
+    
+    // 모든 구독 재생성
+    for (const [key, config] of currentSubscriptions) {
+      log(`🔄 RealtimeManager: Resubscribing to ${key}`)
+      try {
+        // activeSubscriptions에서 제거하여 subscribe가 새로 생성하도록
+        this.activeSubscriptions.delete(key)
+        this.subscribe(config)
+      } catch (error) {
+        logError(`🔄 RealtimeManager: Failed to resubscribe to ${key}:`, error)
+      }
+    }
+    
+    log('✅ RealtimeManager: All subscriptions refreshed')
+  }
+  
+  /**
    * 현재 연결 상태 반환
    */
   getConnectionState(): ConnectionState {
@@ -776,6 +881,13 @@ export class RealtimeManager {
       // 즉시 heartbeat 전송하여 연결 확인
       try {
         await this.sendHeartbeat()
+        
+        // 캐시 관련 채널에 문제가 있을 수 있으므로 구독 새로고침
+        const hasCacheChannels = Array.from(this.activeSubscriptions.keys()).some(key => key.startsWith('cache_'))
+        if (hasCacheChannels) {
+          log('🔌 RealtimeManager: Refreshing cache subscriptions after visibility change')
+          await this.forceRefreshSubscriptions()
+        }
       } catch (error) {
         log('🔌 RealtimeManager: Heartbeat failed, connection is dead, reconnecting...')
         this.state.connectionAttempts = 0
