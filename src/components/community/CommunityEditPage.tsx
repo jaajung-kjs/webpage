@@ -103,11 +103,8 @@ export default function CommunityEditPage({ postId }: CommunityEditPageProps) {
     }
   }, [postData, form])
 
-  // Check if user is authorized to edit
-  const canEdit = user && postData && (
-    user.id === postData.author_id || 
-    ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')
-  )
+  // Check if user is authorized to edit - only author can edit
+  const canEdit = user && postData && user.id === postData.author_id
 
   // Auto-save draft to localStorage with debounce
   useEffect(() => {
