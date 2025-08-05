@@ -172,7 +172,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   }
 
   const handleEdit = () => {
-    toast.info('수정 기능은 준비 중입니다.')
+    router.push(`/cases/${caseId}/edit`)
   }
 
   const handleDelete = async () => {

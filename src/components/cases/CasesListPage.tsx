@@ -167,7 +167,7 @@ export default function CasesListPage() {
                 categoryLabels={categoryLabels}
                 categoryColors={categoryColors}
                 categoryIcons={categoryIcons}
-                onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+                onEdit={() => router.push(`/cases/${caseItem.id}/edit`)}
                 onDelete={handleDelete}
                 canEdit={canEdit(caseItem)}
                 canDelete={canDelete(caseItem)}

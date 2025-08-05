@@ -34,8 +34,8 @@ import {
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useCreateContent } from '@/hooks/useSupabase'
-import { TablesInsert, supabase } from '@/lib/supabase/client'
+import { useCreateContent, useContent, useUpdateContent } from '@/hooks/useSupabase'
+import { TablesInsert, TablesUpdate, supabase } from '@/lib/supabase/client'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -56,6 +56,7 @@ interface ContentEditorPageProps {
   description: string
   categories: { value: string; label: string }[]
   backLink: string
+  editId?: string  // If provided, we're in edit mode
 }
 
 // Form validation schema
@@ -73,15 +74,19 @@ export default function ContentEditorPage({
   title,
   description,
   categories,
-  backLink
+  backLink,
+  editId
 }: ContentEditorPageProps) {
   const router = useRouter()
   const { user, profile } = useOptimizedAuth()
   const { createContent, loading: createLoading } = useCreateContent()
+  const { updateContent, loading: updateLoading } = useUpdateContent()
+  const { data: existingContent, loading: loadingContent } = useContent(editId || '')
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const isMobile = useIsMobile()
+  const isEditMode = !!editId
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -92,6 +97,16 @@ export default function ContentEditorPage({
       tags: []
     }
   })
+
+  // Load existing content when in edit mode
+  useEffect(() => {
+    if (isEditMode && existingContent) {
+      form.setValue('title', existingContent.title || '')
+      form.setValue('category', existingContent.category || '')
+      form.setValue('content', existingContent.content || '')
+      form.setValue('tags', existingContent.tags || [])
+    }
+  }, [isEditMode, existingContent, form])
 
   // Auto-save draft to localStorage with debounce
   useEffect(() => {
@@ -110,7 +125,8 @@ export default function ContentEditorPage({
             ...value,
             savedAt: new Date().toISOString()
           }
-          localStorage.setItem(`draft-${contentType}`, JSON.stringify(draftData))
+          const draftKey = isEditMode ? `draft-edit-${contentType}-${editId}` : `draft-${contentType}`
+          localStorage.setItem(draftKey, JSON.stringify(draftData))
           console.log('Draft saved:', draftData)
         }, 1000)
       }
@@ -120,12 +136,13 @@ export default function ContentEditorPage({
       clearTimeout(timeoutId)
       subscription.unsubscribe()
     }
-  }, [form, contentType])
+  }, [form, contentType, isEditMode, editId])
 
   // Load draft from localStorage
   useEffect(() => {
-    const draft = localStorage.getItem(`draft-${contentType}`)
-    if (draft) {
+    const draftKey = isEditMode ? `draft-edit-${contentType}-${editId}` : `draft-${contentType}`
+    const draft = localStorage.getItem(draftKey)
+    if (draft && !isEditMode) {
       try {
         const parsedDraft = JSON.parse(draft)
         console.log('Loading draft:', parsedDraft)
@@ -144,10 +161,10 @@ export default function ContentEditorPage({
         }
       } catch (error) {
         console.error('Failed to load draft:', error)
-        localStorage.removeItem(`draft-${contentType}`)
+        localStorage.removeItem(draftKey)
       }
     }
-  }, [contentType])
+  }, [contentType, isEditMode, editId])
 
   // Warn about unsaved changes
   useEffect(() => {
@@ -183,27 +200,55 @@ export default function ContentEditorPage({
       return
     }
 
+    // Check permission for edit mode
+    if (isEditMode && existingContent && user.id !== existingContent.author_id) {
+      // Special permission for announcements: admin/leader/vice-leader can edit
+      if (contentType === 'announcement' && ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) {
+        // Allow edit
+      } else {
+        toast.error('이 게시글을 수정할 권한이 없습니다.')
+        return
+      }
+    }
+
     setIsSubmitting(true)
 
     try {
-      const newContent: TablesInsert<'content'> = {
-        type: contentType,
-        title: values.title.trim(),
-        content: values.content.trim(),
-        category: values.category,
-        tags: values.tags || [],
-        author_id: user.id,
-        status: 'published'
-      }
+      let result
+      
+      if (isEditMode) {
+        // Update existing content
+        const updates: TablesUpdate<'content'> = {
+          title: values.title.trim(),
+          content: values.content.trim(),
+          category: values.category,
+          tags: values.tags || [],
+          updated_at: new Date().toISOString()
+        }
 
-      const result = await createContent(newContent)
+        result = await updateContent(editId!, updates)
+      } else {
+        // Create new content
+        const newContent: TablesInsert<'content'> = {
+          type: contentType,
+          title: values.title.trim(),
+          content: values.content.trim(),
+          category: values.category,
+          tags: values.tags || [],
+          author_id: user.id,
+          status: 'published'
+        }
+
+        result = await createContent(newContent)
+      }
       
       if (result.error) {
         throw new Error(result.error.message)
       }
 
       // Clear draft on successful submission
-      localStorage.removeItem(`draft-${contentType}`)
+      const draftKey = isEditMode ? `draft-edit-${contentType}-${editId}` : `draft-${contentType}`
+      localStorage.removeItem(draftKey)
       setHasUnsavedChanges(false)
       
       // Route mapping for correct URLs
@@ -214,11 +259,11 @@ export default function ContentEditorPage({
         resource: 'resources'
       } as const
       
-      toast.success('게시글이 작성되었습니다.')
-      router.push(`/${routeMap[contentType]}/${result.data?.id}`)
+      toast.success(isEditMode ? '게시글이 수정되었습니다.' : '게시글이 작성되었습니다.')
+      router.push(`/${routeMap[contentType]}/${isEditMode ? editId : result.data?.id}`)
     } catch (error: any) {
-      console.error('Error creating content:', error)
-      toast.error(error.message || '게시글 작성에 실패했습니다.')
+      console.error(isEditMode ? 'Error updating content:' : 'Error creating content:', error)
+      toast.error(error.message || (isEditMode ? '게시글 수정에 실패했습니다.' : '게시글 작성에 실패했습니다.'))
     } finally {
       setIsSubmitting(false)
     }
@@ -234,6 +279,31 @@ export default function ContentEditorPage({
     }
   }
 
+  if (isEditMode && loadingContent) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-muted rounded w-1/4" />
+          <div className="h-4 bg-muted rounded w-1/2" />
+          <div className="h-96 bg-muted rounded" />
+        </div>
+      </div>
+    )
+  }
+
+  if (isEditMode && !existingContent) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            게시글을 찾을 수 없습니다.
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
   if (!user) {
     return (
       <div className="container mx-auto px-4 py-8">
@@ -245,6 +315,23 @@ export default function ContentEditorPage({
         </Alert>
       </div>
     )
+  }
+
+  // Check edit permission early
+  if (isEditMode && existingContent && user.id !== existingContent.author_id) {
+    // Special permission for announcements: admin/leader/vice-leader can edit
+    if (!(contentType === 'announcement' && ['admin', 'leader', 'vice-leader'].includes(profile?.role || ''))) {
+      return (
+        <div className="container mx-auto px-4 py-8">
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              이 게시글을 수정할 권한이 없습니다.
+            </AlertDescription>
+          </Alert>
+        </div>
+      )
+    }
   }
 
   const getPlaceholders = () => {
@@ -447,14 +534,14 @@ export default function ContentEditorPage({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createLoading || isSubmitting}
+                  disabled={createLoading || updateLoading || isSubmitting}
                   className="kepco-gradient"
                 >
-                  {(createLoading || isSubmitting) && (
+                  {(createLoading || updateLoading || isSubmitting) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   <Save className="mr-2 h-4 w-4" />
-                  게시하기
+                  {isEditMode ? '수정 완료' : '게시하기'}
                 </Button>
               </div>
             </form>

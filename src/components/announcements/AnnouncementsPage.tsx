@@ -258,7 +258,7 @@ export default function AnnouncementsPage() {
                 categoryLabels={categoryLabels}
                 categoryColors={categoryColors}
                 categoryIcons={categoryIcons}
-                onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+                onEdit={() => router.push(`/announcements/${announcement.id}/edit`)}
                 onDelete={handleDelete}
                 onPin={handlePin}
                 canEdit={canEdit(announcement)}

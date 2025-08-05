@@ -290,7 +290,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   }
 
   const handleEdit = () => {
-    toast.info('수정 기능은 준비 중입니다.')
+    router.push(`/resources/${resourceId}/edit`)
   }
 
   const handleDelete = async () => {

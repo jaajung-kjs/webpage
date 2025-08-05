@@ -226,7 +226,7 @@ export default function CommunityPage() {
               categoryLabels={categoryLabels}
               categoryColors={categoryColors}
               categoryIcons={categoryIcons}
-              onEdit={() => toast.info('수정 기능은 준비 중입니다.')}
+              onEdit={() => router.push(`/community/${post.id}/edit`)}
               onDelete={handleDelete}
               canEdit={canEdit(post)}
               canDelete={canDelete(post)}
