@@ -41,14 +41,14 @@ export const SKILL_LEVEL_CONFIGS: Record<string, SkillLevelConfig> = {
     color: 'bg-kepco-blue-300 text-kepco-blue-900 dark:bg-kepco-blue-700/20 dark:text-kepco-blue-200',
     icon: Trophy,
     description: '다양한 AI 도구를 능숙하게 활용하는 단계',
-    minScore: 300
+    minScore: 200
   },
   expert: {
     label: '전문가',
     color: 'bg-gradient-to-r from-kepco-blue-500 to-kepco-blue-600 text-white',
     icon: Star,
     description: 'AI 활용의 전문가 단계',
-    minScore: 500
+    minScore: 300
   }
 } as const
 
@@ -109,8 +109,8 @@ export function getSkillLevelConfig(level: string): SkillLevelConfig | undefined
  * 활동 점수에 따른 스킬 레벨 계산
  */
 export function calculateSkillLevel(activityScore: number): SkillLevelType {
-  if (activityScore >= 500) return 'expert'
-  if (activityScore >= 300) return 'advanced'
+  if (activityScore >= 300) return 'expert'
+  if (activityScore >= 200) return 'advanced'
   if (activityScore >= 100) return 'intermediate'
   return 'beginner'
 }

@@ -39,6 +39,10 @@ import {
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { toast } from 'sonner'
 import { supabase, Tables, Views } from '@/lib/supabase/client'
+import { getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
+import { getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons } from '@/lib/skills'
+import { getActivityLevelInfo, calculateLevelProgress } from '@/lib/activityLevels'
+import { getAIToolConfig } from '@/lib/aiTools'
 
 interface ProfileData {
   id: string
@@ -97,33 +101,13 @@ interface UserActivityResponse {
 }
 
 
-const roleLabels = {
-  leader: '동아리장',
-  'vice-leader': '부동아리장',
-  admin: '운영진',
-  member: '일반회원'
-}
-
-const skillLevels = {
-  beginner: '초급',
-  intermediate: '중급',
-  advanced: '고급',
-  expert: '전문가'
-}
-
-const roleColors = {
-  leader: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  'vice-leader': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  admin: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  member: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-}
-
-const skillColors = {
-  beginner: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300',
-  intermediate: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  advanced: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  expert: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300'
-}
+// Get labels and configs from the modules
+const roleLabels = getRoleLabels()
+const roleColors = getRoleColors()
+const roleIcons = getRoleIcons()
+const skillLevels = getSkillLevelLabels()
+const skillColors = getSkillLevelColors()
+const skillIcons = getSkillLevelIcons()
 
 export default function ProfileDetailPage({ userId }: { userId: string }) {
   const router = useRouter()
@@ -306,12 +290,6 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
     return formatDate(dateString)
   }
 
-  const getActivityLevel = (score: number) => {
-    if (score >= 800) return { level: '매우 활발', color: 'text-green-600', progress: 100 }
-    if (score >= 600) return { level: '활발', color: 'text-blue-600', progress: 75 }
-    if (score >= 400) return { level: '보통', color: 'text-yellow-600', progress: 50 }
-    return { level: '조용', color: 'text-gray-600', progress: 25 }
-  }
 
   // Centralized activity configuration for better maintainability
   const activityConfig = {
@@ -455,7 +433,8 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
     )
   }
 
-  const activityLevel = getActivityLevel(profile.activity_score)
+  const activityLevel = getActivityLevelInfo(profile.activity_score)
+  const activityProgress = calculateLevelProgress(profile.activity_score)
   const isOwnProfile = user?.id === profile.id
 
   return (
@@ -499,7 +478,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                   </p>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center justify-center flex-wrap gap-2">
                   <Badge 
                     variant="secondary" 
                     className={roleColors[profile.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
@@ -514,7 +493,18 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                     variant="outline" 
                     className={skillColors[profile.skill_level as keyof typeof skillColors] || 'bg-gray-100 text-gray-800'}
                   >
+                    {(() => {
+                      const Icon = skillIcons[profile.skill_level as keyof typeof skillIcons]
+                      return Icon ? <Icon className="h-3 w-3 mr-1" /> : null
+                    })()}
                     {skillLevels[profile.skill_level as keyof typeof skillLevels] || profile.skill_level}
+                  </Badge>
+                  <Badge 
+                    variant="secondary" 
+                    className={activityLevel.color}
+                  >
+                    <activityLevel.icon className="h-3 w-3 mr-1" />
+                    {activityLevel.level}
                   </Badge>
                 </div>
 
@@ -540,13 +530,13 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 <div className="w-full">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">활동 점수</span>
-                    <span className={`text-sm font-bold ${activityLevel.color}`}>
+                    <span className="text-sm font-bold">
                       {profile.activity_score}점
                     </span>
                   </div>
-                  <Progress value={activityLevel.progress} className="h-2" />
-                  <p className={`text-xs mt-1 ${activityLevel.color}`}>
-                    {activityLevel.level}
+                  <Progress value={activityProgress} className="h-2" />
+                  <p className="text-xs mt-1 text-muted-foreground">
+                    다음 레벨까지 {100 - activityProgress}% 남음
                   </p>
                 </div>
               </div>
@@ -589,11 +579,16 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
                     {profile.ai_expertise.length > 0 ? (
-                      profile.ai_expertise.map((expertise) => (
-                        <Badge key={expertise} variant="secondary">
-                          {expertise}
-                        </Badge>
-                      ))
+                      profile.ai_expertise.map((expertise) => {
+                        const toolConfig = getAIToolConfig(expertise)
+                        const Icon = toolConfig?.icon
+                        return (
+                          <Badge key={expertise} variant="secondary">
+                            {Icon && <Icon className={`h-3 w-3 mr-1 ${toolConfig.color || ''}`} />}
+                            {toolConfig?.label || expertise}
+                          </Badge>
+                        )
+                      })
                     ) : (
                       <p className="text-sm text-muted-foreground">전문분야가 등록되지 않았습니다.</p>
                     )}

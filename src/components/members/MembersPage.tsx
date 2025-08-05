@@ -53,6 +53,8 @@ import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 import { MessageButton } from '@/components/messages'
 import { getRoleConfig, getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons, calculateSkillLevel } from '@/lib/skills'
+import { getActivityLevelInfo } from '@/lib/activityLevels'
+import { getAIToolConfig } from '@/lib/aiTools'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
@@ -345,12 +347,6 @@ function MembersPage() {
     })
   }
 
-  const getActivityLevel = (score: number) => {
-    if (score >= 800) return { level: '매우 활발', color: 'text-green-600' }
-    if (score >= 600) return { level: '활발', color: 'text-blue-600' }
-    if (score >= 400) return { level: '보통', color: 'text-yellow-600' }
-    return { level: '조용', color: 'text-gray-600' }
-  }
 
   const getMemberStats = (member: MemberWithStats) => {
     const stats = member.user_stats?.[0]
@@ -361,8 +357,10 @@ function MembersPage() {
     }
   }
 
-  // Categories for tabs
-  const categories = Object.entries(roleLabels).map(([value, label]) => ({ value, label }))
+  // Categories for tabs - exclude guest and pending
+  const categories = Object.entries(roleLabels)
+    .filter(([value]) => !['guest', 'pending'].includes(value))
+    .map(([value, label]) => ({ value, label }))
 
   // Calculate new members this month
   const newMembersThisMonth = members.filter(m => {
@@ -491,7 +489,7 @@ function MembersPage() {
             </Card>
           ))
         ) : filteredMembers.map((member, index) => {
-          const activityLevel = getActivityLevel(member.activity_score || 0)
+          const activityLevel = getActivityLevelInfo(member.activity_score || 0)
           const stats = getMemberStats(member)
           
           return (
@@ -567,11 +565,16 @@ function MembersPage() {
                       </Badge>
                     </div>
                     <div className="flex flex-wrap gap-1">
-                      {member.ai_expertise?.slice(0, 2).map((expertise) => (
-                        <Badge key={expertise} variant="outline" className="text-xs truncate max-w-20">
-                          {expertise}
-                        </Badge>
-                      )) || (
+                      {member.ai_expertise?.slice(0, 2).map((expertise) => {
+                        const toolConfig = getAIToolConfig(expertise)
+                        const Icon = toolConfig?.icon
+                        return (
+                          <Badge key={expertise} variant="outline" className="text-xs truncate max-w-24">
+                            {Icon && <Icon className={`h-3 w-3 mr-0.5 flex-shrink-0 ${toolConfig.color || ''}`} />}
+                            {toolConfig?.label || expertise}
+                          </Badge>
+                        )
+                      }) || (
                         <Badge variant="outline" className="text-xs text-muted-foreground">
                           전문분야 미정
                         </Badge>
@@ -591,9 +594,10 @@ function MembersPage() {
                       <div className="flex items-center space-x-1">
                         <TrendingUp className="h-4 w-4 text-primary" />
                         <span className="font-medium">{member.activity_score || 0}</span>
-                        <span className={`text-xs ${activityLevel.color}`}>
-                          ({activityLevel.level})
-                        </span>
+                        <Badge variant="outline" className={`text-xs ${activityLevel.color} px-1 py-0`}>
+                          <activityLevel.icon className="h-3 w-3 mr-0.5" />
+                          {activityLevel.level}
+                        </Badge>
                       </div>
                     </div>
                     

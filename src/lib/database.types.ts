@@ -1407,7 +1407,7 @@ export type Database = {
     }
     Functions: {
       calculate_activity_score: {
-        Args: { user_id: string }
+        Args: { p_user_id: string }
         Returns: number
       }
       can_change_user_role: {

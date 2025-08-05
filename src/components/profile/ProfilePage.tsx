@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { 
   User, 
   Mail, 
@@ -40,6 +42,8 @@ import { toast } from 'sonner'
 import { HybridCache, createCacheKey } from '@/lib/utils/cache'
 import { getRoleConfig, getRoleLabels } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels } from '@/lib/skills'
+import { getActivityLevelInfo } from '@/lib/activityLevels'
+import { getAIToolsByCategory, AI_TOOL_CATEGORIES, getAIToolConfig } from '@/lib/aiTools'
 
 interface UserData {
   id: string
@@ -407,7 +411,7 @@ export default function ProfilePage() {
     }
   }
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | string[]) => {
     if (editData) {
       setEditData(prev => ({
         ...prev!,
@@ -501,14 +505,7 @@ export default function ProfilePage() {
     })
   }
 
-  const getActivityLevel = (score: number) => {
-    if (score >= 800) return { level: '매우 활발', color: 'text-kepco-success', bgColor: 'bg-kepco-success/10' }
-    if (score >= 600) return { level: '활발', color: 'text-kepco-blue-600', bgColor: 'bg-kepco-blue-100' }
-    if (score >= 400) return { level: '보통', color: 'text-kepco-warning', bgColor: 'bg-kepco-warning/10' }
-    return { level: '조용', color: 'text-kepco-gray-600', bgColor: 'bg-kepco-gray-100' }
-  }
-
-  const activityLevel = userData ? getActivityLevel(userData.activityScore) : { level: '조용', color: 'text-kepco-gray-600', bgColor: 'bg-kepco-gray-100' }
+  const activityLevel = userData ? getActivityLevelInfo(userData.activityScore) : null
 
   if (loading) {
     return (
@@ -621,24 +618,40 @@ export default function ProfilePage() {
                 <div>
                   <Label className="text-sm font-medium">AI 전문분야</Label>
                   <div className="mt-2 flex flex-wrap gap-1">
-                    {userData.aiExpertise.map((expertise) => (
-                      <Badge key={expertise} variant="outline" className="text-xs">
-                        {expertise}
-                      </Badge>
-                    ))}
+                    {userData.aiExpertise.map((expertise) => {
+                      const toolConfig = getAIToolConfig(expertise)
+                      const Icon = toolConfig?.icon
+                      return (
+                        <Badge key={expertise} variant="outline" className="text-xs">
+                          {Icon && <Icon className={`h-3 w-3 mr-1 ${toolConfig.color || ''}`} />}
+                          {toolConfig?.label || expertise}
+                        </Badge>
+                      )
+                    })}
                   </div>
                   {(() => {
                     const skillConfig = getSkillLevelConfig(userData.skillLevel)
                     if (skillConfig) {
                       const SkillIcon = skillConfig.icon
                       return (
-                        <Badge 
-                          variant="secondary" 
-                          className={`mt-2 ${skillConfig.color}`}
-                        >
-                          <SkillIcon className="h-3 w-3 mr-1" />
-                          {skillConfig.label}
-                        </Badge>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant="secondary" 
+                                className={`mt-2 ${skillConfig.color}`}
+                              >
+                                <SkillIcon className="h-3 w-3 mr-1" />
+                                {skillConfig.label}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="font-semibold">AI 스킬 레벨</p>
+                              <p className="text-xs">{skillConfig.description}</p>
+                              <p className="text-xs mt-1">활동 점수 {skillConfig.minScore}점 이상</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )
                     }
                     return (
@@ -655,11 +668,33 @@ export default function ProfilePage() {
                 {/* Activity Level */}
                 <div>
                   <Label className="text-sm font-medium">활동 레벨</Label>
-                  <div className="mt-2 flex items-center space-x-2">
-                    <div className={`rounded-full px-3 py-1 text-xs font-medium ${activityLevel.bgColor} ${activityLevel.color}`}>
-                      {activityLevel.level}
-                    </div>
-                    <span className="text-sm font-medium">{userData.activityScore}점</span>
+                  <div className="mt-2 space-y-2">
+                    {activityLevel && (
+                      <>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge 
+                                variant="secondary" 
+                                className={`${activityLevel.color} inline-flex items-center`}
+                              >
+                                <activityLevel.icon className="h-3 w-3 mr-1" />
+                                {activityLevel.level}
+                              </Badge>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="font-semibold">활동 레벨</p>
+                              <p className="text-xs">{activityLevel.description}</p>
+                              <p className="text-xs mt-1">점수 범위: {activityLevel.scoreRange}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="font-medium">{userData.activityScore}점</span>
+                          <span className="text-xs text-muted-foreground">{activityLevel.scoreRange}</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
 
@@ -855,9 +890,12 @@ export default function ProfilePage() {
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">레벨</span>
-                          <Badge variant="secondary" className={activityLevel.color}>
-                            {activityLevel.level}
-                          </Badge>
+                          {activityLevel && (
+                            <Badge variant="secondary" className={activityLevel.color}>
+                              <activityLevel.icon className="h-3 w-3 mr-1" />
+                              {activityLevel.level}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </CardContent>
@@ -986,9 +1024,9 @@ export default function ProfilePage() {
                       <span>프로필 편집</span>
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
+                  <CardContent className="space-y-6">
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor="name">이름</Label>
                         <Input
                           id="name"
@@ -996,7 +1034,7 @@ export default function ProfilePage() {
                           onChange={(e) => handleInputChange('name', e.target.value)}
                         />
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor="phone">전화번호</Label>
                         <Input
                           id="phone"
@@ -1007,7 +1045,7 @@ export default function ProfilePage() {
                     </div>
 
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor="department">부서</Label>
                         <Input
                           id="department"
@@ -1015,7 +1053,7 @@ export default function ProfilePage() {
                           onChange={(e) => handleInputChange('department', e.target.value)}
                         />
                       </div>
-                      <div>
+                      <div className="space-y-2">
                         <Label htmlFor="job_position">직급</Label>
                         <Input
                           id="job_position"
@@ -1025,7 +1063,7 @@ export default function ProfilePage() {
                       </div>
                     </div>
                     
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="bio">소개</Label>
                       <Textarea
                         id="bio"
@@ -1035,13 +1073,116 @@ export default function ProfilePage() {
                       />
                     </div>
 
-                    <div>
+                    <div className="space-y-2">
                       <Label htmlFor="location">지역</Label>
                       <Input
                         id="location"
                         value={editData?.location || ''}
                         onChange={(e) => handleInputChange('location', e.target.value)}
                       />
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="aiExpertise">AI 전문분야</Label>
+                        <span className="text-xs text-muted-foreground">
+                          {editData?.aiExpertise?.length || 0}/5 선택됨
+                        </span>
+                      </div>
+                      <Select
+                        value=""
+                        onValueChange={(value) => {
+                          if (!editData?.aiExpertise?.includes(value) && (!editData?.aiExpertise || editData.aiExpertise.length < 5)) {
+                            handleInputChange('aiExpertise', [...(editData?.aiExpertise || []), value])
+                          }
+                        }}
+                      >
+                        <SelectTrigger id="aiExpertise">
+                          <SelectValue placeholder="AI 도구를 선택하세요" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(AI_TOOL_CATEGORIES).map(([category, categoryLabel]) => {
+                            const categoryTools = getAIToolsByCategory()[category]
+                            return categoryTools && categoryTools.length > 0 ? (
+                              <div key={category}>
+                                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                                  {categoryLabel}
+                                </div>
+                                {categoryTools.map((tool) => {
+                                  const Icon = tool.icon
+                                  const isSelected = editData?.aiExpertise?.includes(tool.value)
+                                  return (
+                                    <SelectItem 
+                                      key={tool.value} 
+                                      value={tool.value}
+                                      disabled={isSelected || (editData?.aiExpertise?.length || 0) >= 5}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Icon className="h-4 w-4" />
+                                        <span>{tool.label}</span>
+                                        {isSelected && <span className="ml-auto text-xs text-muted-foreground">✓</span>}
+                                      </div>
+                                    </SelectItem>
+                                  )
+                                })}
+                              </div>
+                            ) : null
+                          })}
+                        </SelectContent>
+                      </Select>
+                      {editData?.aiExpertise && editData.aiExpertise.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {editData.aiExpertise.map((expertise) => {
+                            const toolConfig = getAIToolConfig(expertise)
+                            const Icon = toolConfig?.icon
+                            return (
+                              <Badge
+                                key={expertise}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {Icon && <Icon className={`h-3 w-3 mr-1 ${toolConfig.color || ''}`} />}
+                                {toolConfig?.label || expertise}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleInputChange('aiExpertise', editData.aiExpertise.filter(item => item !== expertise))
+                                  }}
+                                  className="ml-1 hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </Badge>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="skillLevel">스킬 레벨</Label>
+                      <Select
+                        value={editData?.skillLevel || 'beginner'}
+                        onValueChange={(value) => handleInputChange('skillLevel', value)}
+                      >
+                        <SelectTrigger id="skillLevel">
+                          <SelectValue placeholder="스킬 레벨을 선택하세요" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(skillLevels).filter(([key]) => key !== 'all').map(([value, label]) => {
+                            const config = getSkillLevelConfig(value)
+                            const Icon = config?.icon
+                            return (
+                              <SelectItem key={value} value={value}>
+                                <div className="flex items-center gap-2">
+                                  {Icon && <Icon className="h-4 w-4" />}
+                                  <span>{label}</span>
+                                </div>
+                              </SelectItem>
+                            )
+                          })}
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="flex space-x-2">

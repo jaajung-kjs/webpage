@@ -57,7 +57,7 @@ import ContentListLayout from '@/components/shared/ContentListLayout'
 import StatsCard from '@/components/shared/StatsCard'
 
 // Get category data from centralized configuration
-const { categoryLabels, categoryColors } = getBoardCategoryData('activities')
+const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('activities')
 
 const statusLabels = {
   all: '전체',
@@ -604,7 +604,15 @@ function ActivitiesPage() {
                     variant="secondary" 
                     className={categoryColors[activity.category as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'}
                   >
-                    {categoryLabels[activity.category as keyof typeof categoryLabels] || activity.category}
+                    {(() => {
+                      const CategoryIcon = categoryIcons[activity.category as keyof typeof categoryIcons]
+                      return (
+                        <>
+                          {CategoryIcon && <CategoryIcon className="h-3 w-3 mr-1" />}
+                          {categoryLabels[activity.category as keyof typeof categoryLabels] || activity.category}
+                        </>
+                      )
+                    })()}
                   </Badge>
                   <Badge 
                     variant="outline"
