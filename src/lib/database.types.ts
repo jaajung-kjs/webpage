@@ -1584,6 +1584,14 @@ export type Database = {
         Args: { user_id: string }
         Returns: undefined
       }
+      update_last_seen_at: {
+        Args: { user_id_param?: string }
+        Returns: undefined
+      }
+      update_my_last_seen_at: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       update_report_status: {
         Args: {
           p_report_id: string

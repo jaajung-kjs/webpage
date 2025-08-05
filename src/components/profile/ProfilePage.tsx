@@ -34,7 +34,8 @@ import {
   Camera,
   Award,
   TrendingUp,
-  Star
+  Star,
+  Clock
 } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase, Tables } from '@/lib/supabase/client'
@@ -55,6 +56,7 @@ interface UserData {
   role: string
   avatar: string
   joinDate: string
+  lastLogin: string | null
   location: string
   aiExpertise: string[]
   skillLevel: string
@@ -308,6 +310,7 @@ export default function ProfilePage() {
           role: profile.role || 'member',
           avatar: profile.avatar_url || '',
           joinDate: profile.created_at ? new Date(profile.created_at).toISOString().split('T')[0] : (user as any).created_at ? new Date((user as any).created_at).toISOString().split('T')[0] : '2024-01-01',
+          lastLogin: profile.last_seen_at || null,
           location: metadata.location || '미지정',
           bio: profile.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
           aiExpertise: metadata.ai_expertise || ['ChatGPT'],
@@ -503,6 +506,19 @@ export default function ProfilePage() {
       month: 'long',
       day: 'numeric'
     })
+  }
+  
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    
+    if (diffInSeconds < 60) return '방금 전'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}일 전`
+    
+    return formatDate(dateString)
   }
 
   const activityLevel = userData ? getActivityLevelInfo(userData.activityScore) : null
@@ -733,6 +749,12 @@ export default function ProfilePage() {
                     <Calendar className="h-4 w-4" />
                     <span>{formatDate(userData.joinDate)} 가입</span>
                   </div>
+                  {userData.lastLogin && (
+                    <div className="flex items-center space-x-2 text-muted-foreground">
+                      <Clock className="h-4 w-4" />
+                      <span>마지막 로그인: {formatRelativeTime(userData.lastLogin)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <Button 

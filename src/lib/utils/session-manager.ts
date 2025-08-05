@@ -33,6 +33,8 @@ export class SessionManager {
   private listeners = new Set<(state: SessionState) => void>()
   private refreshTimer: NodeJS.Timeout | null = null
   private profileUnsubscribe: (() => void) | null = null
+  private activityTimer: NodeJS.Timeout | null = null
+  private lastActivityUpdate: number = 0
   
   // 싱글톤 인스턴스
   static getInstance(): SessionManager {
@@ -57,6 +59,10 @@ export class SessionManager {
       if (session) {
         await this.loadProfile(session.user.id)
         this.scheduleRefresh(session)
+        // Update last_seen_at when session is loaded
+        this.updateLastSeenAt()
+        // Start activity tracking
+        this.startActivityTracking()
       }
       
       this.updateState({ session, loading: false })
@@ -71,6 +77,10 @@ export class SessionManager {
             if (session) {
               await this.loadProfile(session.user.id)
               this.scheduleRefresh(session)
+              // Update last_seen_at on sign in or token refresh
+              this.updateLastSeenAt()
+              // Start activity tracking
+              this.startActivityTracking()
             }
             break
             
@@ -225,12 +235,63 @@ export class SessionManager {
   
   
   /**
+   * Update last_seen_at timestamp
+   */
+  private async updateLastSeenAt() {
+    try {
+      await supabase.rpc('update_my_last_seen_at')
+      this.lastActivityUpdate = Date.now()
+    } catch (error) {
+      // Silent fail - don't interrupt user experience
+      console.debug('Failed to update last_seen_at:', error)
+    }
+  }
+  
+  /**
+   * Start tracking user activity
+   */
+  private startActivityTracking() {
+    // Clear existing timer
+    if (this.activityTimer) {
+      clearInterval(this.activityTimer)
+    }
+    
+    // Update every 5 minutes if user is active
+    this.activityTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden) {
+        // Only update if it's been more than 5 minutes since last update
+        const now = Date.now()
+        if (now - this.lastActivityUpdate > 5 * 60 * 1000) {
+          this.updateLastSeenAt()
+        }
+      }
+    }, 60 * 1000) // Check every minute
+    
+    // Update when user becomes active after being inactive
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden && this.state.session) {
+          const now = Date.now()
+          if (now - this.lastActivityUpdate > 5 * 60 * 1000) {
+            this.updateLastSeenAt()
+          }
+        }
+      })
+    }
+  }
+  
+  /**
    * 정리
    */
   private cleanup() {
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
+    }
+    
+    if (this.activityTimer) {
+      clearInterval(this.activityTimer)
+      this.activityTimer = null
     }
     
     if (this.profileUnsubscribe) {
