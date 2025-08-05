@@ -61,7 +61,7 @@ export default function Header() {
               className="h-6 w-auto"
               priority
             />
-            <div className="hidden font-bold sm:inline-block">
+            <div className="hidden font-bold lg:inline-block">
               <span className="ml-1 text-sm text-muted-foreground">AI 학습동아리</span>
             </div>
           </Link>
