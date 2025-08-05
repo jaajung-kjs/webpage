@@ -219,12 +219,12 @@ export default function ProfilePage() {
           }
         }
 
-        // Fetch comprehensive activity data using RPC (like ProfileDetailPage)
+        // Fetch comprehensive activity data using enhanced RPC
         let recentActivity: any[] = []
         let activityStats: any = null
         try {
           const { data: activityData, error: activityError } = await supabase
-            .rpc('get_user_content_stats', { user_id_param: user.id })
+            .rpc('get_user_comprehensive_stats', { user_id_param: user.id })
           
           if (!activityError && activityData) {
             const typedData = activityData as unknown as any
@@ -233,13 +233,13 @@ export default function ProfilePage() {
             if (typedData.stats) {
               activityStats = typedData.stats
               
-              // Update main stats with activity data
+              // Update main stats with comprehensive data
               stats = {
                 totalPosts: typedData.stats.posts || 0,
                 totalComments: typedData.stats.comments || 0,
-                totalLikes: stats.totalLikes || 0,
-                totalViews: stats.totalViews || 0,
-                activitiesJoined: stats.activitiesJoined || 0,
+                totalLikes: typedData.stats.likes_received || 0,
+                totalViews: typedData.stats.total_views || 0,
+                activitiesJoined: typedData.stats.activities_joined || 0,
                 resourcesShared: typedData.stats.resources || 0
               }
             }

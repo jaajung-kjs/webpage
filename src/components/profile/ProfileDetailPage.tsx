@@ -211,28 +211,34 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
         })
       }
       
-      // Fetch recent activities and detailed stats using get_user_activity
+      // Fetch recent activities and detailed stats using comprehensive RPC
       try {
         const { data: activityData, error: activityError } = await supabase
-          .rpc('get_user_content_stats', { user_id_param: userId })
+          .rpc('get_user_comprehensive_stats', { user_id_param: userId })
         
         if (!activityError && activityData) {
           // Type assertion for the returned data
-          const typedData = activityData as unknown as UserActivityResponse
+          const typedData = activityData as unknown as any
           
           // Set activity stats separately for better organization
           if (typedData.stats) {
-            setActivityStats(typedData.stats)
+            setActivityStats({
+              posts: typedData.stats.posts || 0,
+              cases: typedData.stats.cases || 0,
+              announcements: typedData.stats.announcements || 0,
+              resources: typedData.stats.resources || 0,
+              comments: typedData.stats.comments || 0
+            })
             
-            // Also update main stats with activity data
-            setStats(prev => ({
+            // Update main stats with comprehensive data
+            setStats({
               totalPosts: typedData.stats.posts || 0,
               totalComments: typedData.stats.comments || 0,
-              totalLikes: prev?.totalLikes || 0,
-              totalViews: prev?.totalViews || 0,
-              activitiesJoined: prev?.activitiesJoined || 0,
+              totalLikes: typedData.stats.likes_received || 0,
+              totalViews: typedData.stats.total_views || 0,
+              activitiesJoined: typedData.stats.activities_joined || 0,
               resourcesShared: typedData.stats.resources || 0
-            }))
+            })
           }
           
           // Set recent activities

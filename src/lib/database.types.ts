@@ -1485,6 +1485,10 @@ export type Database = {
         Args: { target_user_id: string; limit_count?: number }
         Returns: Json
       }
+      get_user_comprehensive_stats: {
+        Args: { user_id_param: string }
+        Returns: Json
+      }
       get_user_content_stats: {
         Args: { user_id_param: string }
         Returns: Json
