@@ -263,24 +263,45 @@ export default function MembershipApplicationManager() {
         </CardHeader>
         <CardContent>
           {/* Filters */}
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="이름, 이메일, 부서로 검색..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-8"
-                />
-              </div>
+          <div className="space-y-4 mb-6">
+            {/* Search */}
+            <div className="relative">
+              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="이름, 이메일, 부서로 검색..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8"
+              />
             </div>
-            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-auto">
-              <TabsList>
-                <TabsTrigger value="all">전체</TabsTrigger>
-                <TabsTrigger value="pending">대기 중</TabsTrigger>
-                <TabsTrigger value="approved">승인됨</TabsTrigger>
-                <TabsTrigger value="rejected">거절됨</TabsTrigger>
+            
+            {/* Status Tabs */}
+            <Tabs value={statusFilter} onValueChange={setStatusFilter} className="w-full">
+              <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground">
+                <TabsTrigger
+                  value="all"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  전체
+                </TabsTrigger>
+                <TabsTrigger
+                  value="pending"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  대기 중
+                </TabsTrigger>
+                <TabsTrigger
+                  value="approved"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  승인됨
+                </TabsTrigger>
+                <TabsTrigger
+                  value="rejected"
+                  className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center"
+                >
+                  거절됨
+                </TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
