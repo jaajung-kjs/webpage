@@ -123,8 +123,9 @@ export default function TiptapEditor({
   })
 
   // Update editor content when value prop changes
+  // Only update if editor is not focused to prevent overwriting user input
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
+    if (editor && value !== editor.getHTML() && !editor.isFocused) {
       editor.commands.setContent(value)
     }
   }, [editor, value])
@@ -489,7 +490,7 @@ export default function TiptapEditor({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx"
+        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.md,.json,.xml,.csv,.mp4,.mp3,.wav,.avi,.mov,.mkv"
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files || [])

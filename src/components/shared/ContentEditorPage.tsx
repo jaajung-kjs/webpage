@@ -34,8 +34,8 @@ import {
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useCreateContent, useContent, useUpdateContent } from '@/hooks/useSupabase'
-import { TablesInsert, TablesUpdate, supabase } from '@/lib/supabase/client'
+import { useCreateContent, useUpdateContent, useSupabaseQuery } from '@/hooks/useSupabase'
+import { TablesInsert, TablesUpdate, supabase, Views } from '@/lib/supabase/client'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -81,7 +81,21 @@ export default function ContentEditorPage({
   const { user, profile } = useOptimizedAuth()
   const { createContent, loading: createLoading } = useCreateContent()
   const { updateContent, loading: updateLoading } = useUpdateContent()
-  const { data: existingContent, loading: loadingContent } = useContent(editId || '')
+  
+  // Use custom query for edit mode to disable auto-refetch
+  const { data: existingContent, loading: loadingContent } = useSupabaseQuery<Views<'content_with_author'>>(
+    'content_with_author',
+    (q) => q.select('*').eq('id', editId || '').single(),
+    [editId],
+    { 
+      enabled: !!editId,
+      ttl: 600000, // 10 minutes cache
+      staleTime: 600000, // 10 minutes fresh (same as TTL to prevent refetch)
+      refetchOnWindowFocus: false, // Disable auto-refetch during editing
+      refetchOnReconnect: false // Disable auto-refetch during editing
+    }
+  )
+  
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
