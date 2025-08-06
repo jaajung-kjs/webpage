@@ -12,6 +12,7 @@ import { supabase, Tables } from '@/lib/supabase/client'
 import { CacheManager, getCacheKey } from './cache-manager'
 import { AuthMonitorLite } from './auth-monitor.lite'
 import { realtimeManager } from '@/lib/realtime/RealtimeManager'
+import { PersistentCache, HybridCache } from './cache'
 
 type UserProfile = Tables<'users'>
 
@@ -393,30 +394,56 @@ export class SessionManager {
    * 정리
    */
   private cleanup() {
+    console.log('Starting SessionManager cleanup...')
+    
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer)
       this.refreshTimer = null
+      console.log('Refresh timer cleared')
     }
     
     if (this.activityTimer) {
       clearInterval(this.activityTimer)
       this.activityTimer = null
+      console.log('Activity timer cleared')
     }
     
     if (this.profileUnsubscribe) {
       this.profileUnsubscribe()
       this.profileUnsubscribe = null
+      console.log('Profile subscription unsubscribed')
     }
     
-    
     // 로그아웃 시 모든 캐시 완전 정리
-    CacheManager.invalidate()
+    try {
+      CacheManager.invalidate()
+      console.log('CacheManager invalidated')
+    } catch (error) {
+      console.error('Error invalidating CacheManager:', error)
+    }
     
+    try {
+      PersistentCache.clear()
+      console.log('PersistentCache cleared')
+    } catch (error) {
+      console.error('Error clearing PersistentCache:', error)
+    }
+    
+    try {
+      HybridCache.invalidate()
+      console.log('HybridCache invalidated')
+    } catch (error) {
+      console.error('Error invalidating HybridCache:', error)
+    }
+    
+    // 상태 초기화
     this.updateState({
       session: null,
       profile: null,
       lastRefresh: 0
     })
+    
+    console.log('SessionManager cleanup completed')
   }
   
   // Public API
@@ -496,12 +523,101 @@ export class SessionManager {
    * 로그아웃
    */
   async signOut(): Promise<void> {
-    await supabase.auth.signOut()
-    this.cleanup()
+    console.log('Starting signOut process...')
     
-    // 페이지 새로고침으로 모든 상태 완전 초기화
-    if (typeof window !== 'undefined') {
-      window.location.reload()
+    try {
+      // 1. Supabase Auth 로그아웃
+      await supabase.auth.signOut()
+      console.log('Supabase auth signOut completed')
+      
+      // 2. SessionManager cleanup
+      this.cleanup()
+      console.log('SessionManager cleanup completed')
+      
+      // 3. 모든 localStorage 캐시 완전 정리
+      this.clearAllStorageData()
+      console.log('All storage data cleared')
+      
+      // 4. 짧은 지연 후 페이지 새로고침 (cleanup 완료 보장)
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          console.log('Reloading page...')
+          window.location.reload()
+        }
+      }, 100)
+    } catch (error) {
+      console.error('SignOut error:', error)
+      // 에러가 발생해도 강제로 모든 데이터 정리
+      this.clearAllStorageData()
+      if (typeof window !== 'undefined') {
+        window.location.reload()
+      }
+    }
+  }
+  
+  /**
+   * 모든 저장소 데이터 완전 정리
+   */
+  private clearAllStorageData(): void {
+    if (typeof window === 'undefined') return
+    
+    try {
+      console.log('Clearing all storage data...')
+      
+      // 모든 localStorage 키 확인 및 정리
+      const keysToRemove: string[] = []
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key) {
+          // KEPCO 관련 모든 데이터 및 Supabase 관련 데이터 정리
+          if (
+            key.startsWith('kepco-') ||
+            key.startsWith('supabase.') ||
+            key.startsWith('sb-') ||
+            key.includes('auth') ||
+            key.includes('session') ||
+            key.includes('profile') ||
+            key.includes('user') ||
+            key.includes('cache')
+          ) {
+            keysToRemove.push(key)
+          }
+        }
+      }
+      
+      // 식별된 키들 삭제
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key)
+        console.log(`Removed localStorage key: ${key}`)
+      })
+      
+      // sessionStorage도 정리
+      const sessionKeysToRemove: string[] = []
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i)
+        if (key) {
+          if (
+            key.startsWith('kepco-') ||
+            key.startsWith('supabase.') ||
+            key.startsWith('sb-') ||
+            key.includes('auth') ||
+            key.includes('session') ||
+            key.includes('profile') ||
+            key.includes('user')
+          ) {
+            sessionKeysToRemove.push(key)
+          }
+        }
+      }
+      
+      sessionKeysToRemove.forEach(key => {
+        sessionStorage.removeItem(key)
+        console.log(`Removed sessionStorage key: ${key}`)
+      })
+      
+      console.log(`Cleared ${keysToRemove.length} localStorage keys and ${sessionKeysToRemove.length} sessionStorage keys`)
+    } catch (error) {
+      console.error('Error clearing storage data:', error)
     }
   }
   

@@ -31,7 +31,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, User } from 'lucide-react'
+import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, User, Trash2 } from 'lucide-react'
 import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
 import { supabase } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -77,6 +77,7 @@ export default function MemberManagement() {
   const [loading, setLoading] = useState(true)
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null)
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [operationLoading, setOperationLoading] = useState(false)
 
   useEffect(() => {
@@ -235,6 +236,51 @@ export default function MemberManagement() {
     } catch (error: any) {
       console.error('Error removing member:', error)
       toast.error(error.message || '회원 제거에 실패했습니다.')
+    } finally {
+      setOperationLoading(false)
+    }
+  }
+
+  const handleDeleteUser = async () => {
+    if (!selectedMember || !user) return
+
+    try {
+      setOperationLoading(true)
+      
+      // Get the user's auth token
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        toast.error('인증 세션이 없습니다.')
+        return
+      }
+
+      // Call the Edge Function to delete the user
+      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-user`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ userId: selectedMember.id })
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || '사용자 삭제에 실패했습니다.')
+      }
+
+      toast.success(`${selectedMember.name} 님의 계정이 완전히 삭제되었습니다.`)
+      setDeleteDialogOpen(false)
+      setSelectedMember(null)
+      
+      // Invalidate cache and refresh
+      const cacheKey = createCacheKey('admin', 'members')
+      HybridCache.invalidate(cacheKey)
+      fetchMembers(true) // Force refresh
+    } catch (error: any) {
+      console.error('Error deleting user:', error)
+      toast.error(error.message || '사용자 삭제에 실패했습니다.')
     } finally {
       setOperationLoading(false)
     }
@@ -421,6 +467,18 @@ export default function MemberManagement() {
                                   </DropdownMenuItem>
                                 </>
                               )}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedMember(member)
+                                  setDeleteDialogOpen(true)
+                                }}
+                                disabled={operationLoading}
+                                className="text-red-600 focus:text-red-600"
+                              >
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                계정 삭제
+                              </DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
                         )}
@@ -456,6 +514,43 @@ export default function MemberManagement() {
               className="bg-red-600 hover:bg-red-700"
             >
               {operationLoading ? '처리 중...' : '변경'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>⚠️ 계정 완전 삭제 확인</AlertDialogTitle>
+            <AlertDialogDescription>
+              <strong className="text-red-600">{selectedMember?.name} ({selectedMember?.email})</strong> 님의 계정을 완전히 삭제하시겠습니까?
+              <br />
+              <br />
+              <strong className="text-red-600">이 작업은 되돌릴 수 없습니다!</strong>
+              <br />
+              <br />
+              삭제되는 데이터:
+              <ul className="list-disc list-inside mt-2 space-y-1">
+                <li>사용자 계정 및 인증 정보</li>
+                <li>프로필 정보</li>
+                <li>작성한 모든 게시글과 댓글</li>
+                <li>활동 기록 및 메시지</li>
+                <li>가입 신청 이력</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={operationLoading}>
+              취소
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteUser}
+              disabled={operationLoading}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {operationLoading ? '삭제 중...' : '영구 삭제'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
