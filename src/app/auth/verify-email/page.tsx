@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Mail, ArrowLeft, RefreshCw, CheckCircle } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 
 export default function VerifyEmailPage() {
   const router = useRouter()
-  const { user, loading, signOut, resendEmailConfirmation } = useOptimizedAuth()
+  const { user, loading, signOut, resendEmailConfirmation } = useAuth()
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
   const [resendError, setResendError] = useState('')
@@ -37,8 +37,8 @@ export default function VerifyEmailPage() {
       const interval = setInterval(async () => {
         try {
           // 사용자 정보를 다시 가져와서 확인
-          const { supabase } = await import('@/lib/supabase/client')
-          const { data: { user: updatedUser } } = await supabase.auth.getUser()
+          const { supabaseClient } = await import('@/lib/core/connection-core')
+          const { data: { user: updatedUser } } = await supabaseClient.auth.getUser()
           
 
           if (updatedUser?.email_confirmed_at && !isVerified) {

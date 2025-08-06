@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo, memo } from 'react'
+import { useState, useEffect, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -45,11 +45,11 @@ import {
   Activity,
   Zap
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase, Tables } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
-import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { useMembers, useUpdateMemberRole, useDeleteMember } from '@/hooks/features/useMembers'
 import { MessageButton } from '@/components/messages'
 import { getRoleConfig, getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons, calculateSkillLevel } from '@/lib/skills'
@@ -96,13 +96,15 @@ const skillColors = getSkillLevelColors()
 const skillIcons = getSkillLevelIcons()
 
 function MembersPage() {
-  const { user, isMember } = useOptimizedAuth()
-  const [members, setMembers] = useState<MemberWithStats[]>([])
-  const [filteredMembers, setFilteredMembers] = useState<MemberWithStats[]>([])
+  const { user, isMember, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeRole, setActiveRole] = useState('all')
   const [activeSkill, setActiveSkill] = useState('all')
-  const [loading, setLoading] = useState(true)
+  
+  // Use new hooks
+  const { data: members = [], isLoading: loading } = useMembers()
+  const updateMemberRoleMutation = useUpdateMemberRole()
+  const deleteMemberMutation = useDeleteMember()
   
   // Admin functionality state
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
@@ -110,114 +112,73 @@ function MembersPage() {
   const [operationLoading, setOperationLoading] = useState(false)
   const [assignableRoles, setAssignableRoles] = useState<string[]>([])
 
-  useEffect(() => {
-    fetchMembers()
-    if (user) {
-      fetchAssignableRoles()
-    }
-  }, [user])
-
-  useEffect(() => {
-    filterMembers(searchTerm, activeRole, activeSkill)
-  }, [searchTerm, activeRole, activeSkill, members])
-
-  const fetchMembers = async () => {
-    try {
-      setLoading(true)
-      
-      // Check cache first
-      const cacheKey = createCacheKey('members', 'list')
-      const cachedMembers = HybridCache.get<MemberWithStats[]>(cacheKey)
-      
-      if (cachedMembers !== null) {
-        setMembers(cachedMembers)
-        setFilteredMembers(cachedMembers)
-        setLoading(false)
-        
-        // Still fetch fresh data in background
-        fetchMembersData(true)
-        return
-      }
-      
-      await fetchMembersData(false)
-    } catch (error) {
-      console.error('Error fetching members:', error)
-      toast.error('회원 목록을 불러오는데 실패했습니다.')
-      setLoading(false)
-    }
-  }
-
-  const fetchMembersData = async (isBackgroundUpdate: boolean) => {
-    try {
-      // Fetch members directly from users table
-      const { data: userData, error } = await supabase
-        .from('users')
-        .select(`
-          *,
-          content:content!author_id(count),
-          comments:comments!author_id(count)
-        `)
-        .in('role', ['member', 'vice-leader', 'leader', 'admin'])
-      
-      if (error) throw error
-
-      // Filter to only show members with role 'member' or higher
-      const membersOnly = userData || []
-
-      // Transform user data to MemberWithStats format
-      const transformedData: MemberWithStats[] = membersOnly.map((userData: any) => {
-        const metadata = (userData.metadata || {}) as any
-        return {
-          id: userData.id || '',
-          name: userData.name || '익명',
-          email: userData.email || '',
-          phone: metadata.phone || null,
-          department: userData.department || null,
-          job_position: metadata.job_position || null,
-          role: userData.role || 'member',
-          avatar_url: userData.avatar_url || null,
-          location: metadata.location || null,
-          skill_level: metadata.skill_level || 'beginner',
-          bio: userData.bio || null,
-          activity_score: userData.activity_score || 0,
-          ai_expertise: metadata.ai_expertise || [],
-          achievements: metadata.achievements || [],
-          join_date: userData.created_at || new Date().toISOString(),
-          user_stats: [{
-            total_posts: userData.content?.[0]?.count || 0,
-            total_comments: userData.comments?.[0]?.count || 0,
-            total_likes_received: 0, // Would need a separate query
-            total_views: 0, // Would need a separate query
-            activities_joined: 0, // Would need a separate query
-            resources_shared: 0 // Would need a separate query
-          }],
-          metadata: userData.metadata // Preserve the full metadata object
-        }
-      })
-
-      // Cache the members list (10 minutes TTL)
-      const cacheKey = createCacheKey('members', 'list')
-      HybridCache.set(cacheKey, transformedData, 600000) // 10 minutes
-
-      if (!isBackgroundUpdate) {
-        setMembers(transformedData)
-        setFilteredMembers(transformedData)
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error('Error fetching members data:', error)
-      if (!isBackgroundUpdate) {
-        toast.error('회원 목록을 불러오는데 실패했습니다.')
-        setLoading(false)
-      }
-    }
-  }
-
-  const fetchAssignableRoles = async () => {
-    if (!user) return
+  // Transform members data to expected format
+  const transformedMembers = useMemo(() => {
+    if (!members) return []
     
-    try {
-      // Define role hierarchy
+    return members.map((userData: any) => {
+      const metadata = (userData.metadata || {}) as any
+      return {
+        id: userData.id || '',
+        name: userData.name || '익명',
+        email: userData.email || '',
+        phone: metadata.phone || null,
+        department: userData.department || null,
+        job_position: metadata.job_position || null,
+        role: userData.role || 'member',
+        avatar_url: userData.avatar_url || null,
+        location: metadata.location || null,
+        skill_level: metadata.skill_level || 'beginner',
+        bio: userData.bio || null,
+        activity_score: userData.activity_score || 0,
+        ai_expertise: metadata.ai_expertise || [],
+        achievements: metadata.achievements || [],
+        join_date: userData.created_at || new Date().toISOString(),
+        user_stats: [{
+          total_posts: 0,
+          total_comments: 0,
+          total_likes_received: 0,
+          total_views: 0,
+          activities_joined: 0,
+          resources_shared: 0
+        }],
+        metadata: userData.metadata
+      } as MemberWithStats
+    })
+  }, [members])
+
+  // Filter members based on search and filters
+  const filteredMembers = useMemo(() => {
+    let filtered = transformedMembers
+
+    if (searchTerm) {
+      filtered = filtered.filter(member =>
+        member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.job_position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.ai_expertise?.some(expertise => 
+          expertise.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      )
+    }
+
+    if (activeRole !== 'all') {
+      filtered = filtered.filter(member => member.role === activeRole)
+    }
+
+    if (activeSkill !== 'all') {
+      filtered = filtered.filter(member => member.skill_level === activeSkill)
+    }
+
+    // Sort by activity score
+    filtered.sort((a, b) => (b.activity_score || 0) - (a.activity_score || 0))
+
+    return filtered
+  }, [transformedMembers, searchTerm, activeRole, activeSkill])
+
+  // Determine assignable roles based on user's role
+  useEffect(() => {
+    if (profile?.role) {
       const roleHierarchy: Record<string, string[]> = {
         'admin': ['leader', 'vice-leader', 'member', 'guest'],
         'leader': ['vice-leader', 'member', 'guest'],
@@ -225,19 +186,9 @@ function MembersPage() {
         'member': [],
         'guest': []
       }
-      
-      const { data: profile } = await supabase
-        .from('users')
-        .select('role')
-        .eq('id', user.id)
-        .single()
-      
-      const userRole = profile?.role || 'member'
-      setAssignableRoles(roleHierarchy[userRole] || [])
-    } catch (error) {
-      console.error('Error fetching assignable roles:', error)
+      setAssignableRoles(roleHierarchy[profile.role] || [])
     }
-  }
+  }, [profile?.role])
 
   const handleSearch = (term: string) => {
     setSearchTerm(term)
@@ -251,59 +202,20 @@ function MembersPage() {
     setActiveSkill(skill)
   }
 
-  const filterMembers = (term: string, role: string, skill: string) => {
-    let filtered = members
-
-    // No need to filter removed members as we now use guest role
-
-    if (term) {
-      filtered = filtered.filter(member =>
-        member.name?.toLowerCase().includes(term.toLowerCase()) ||
-        member.department?.toLowerCase().includes(term.toLowerCase()) ||
-        member.job_position?.toLowerCase().includes(term.toLowerCase()) ||
-        member.ai_expertise?.some(expertise => 
-          expertise.toLowerCase().includes(term.toLowerCase())
-        )
-      )
-    }
-
-    if (role !== 'all') {
-      filtered = filtered.filter(member => member.role === role)
-    }
-
-    if (skill !== 'all') {
-      filtered = filtered.filter(member => member.skill_level === skill)
-    }
-
-    // Note: Permission-based filtering disabled for MVP
-    // filtered = filterMembersByPermissions(user, filtered, 'view')
-
-    // Sort by activity score
-    filtered.sort((a, b) => (b.activity_score || 0) - (a.activity_score || 0))
-
-    setFilteredMembers(filtered)
-  }
-
   // Admin functions
   const handleRemoveMember = async () => {
     if (!selectedMember || !user) return
 
+    setOperationLoading(true)
     try {
-      setOperationLoading(true)
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          role: 'guest' as Database['public']['Enums']['user_role'],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedMember.id)
-      
-      if (error) throw error
+      await updateMemberRoleMutation.mutateAsync({
+        userId: selectedMember.id,
+        newRole: 'guest'
+      })
 
       toast.success(`${selectedMember.name} 님을 일반 회원에서 게스트로 변경했습니다.`)
       setRemoveDialogOpen(false)
       setSelectedMember(null)
-      fetchMembers() // Refresh the list
     } catch (error: any) {
       console.error('Error removing member:', error)
       toast.error(error.message || '회원 제거에 실패했습니다.')
@@ -315,21 +227,15 @@ function MembersPage() {
   const handleChangeRole = async (memberId: string, newRole: string) => {
     if (!user) return
 
+    setOperationLoading(true)
     try {
-      setOperationLoading(true)
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          role: newRole as Database['public']['Enums']['user_role'],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', memberId)
-      
-      if (error) throw error
+      await updateMemberRoleMutation.mutateAsync({
+        userId: memberId,
+        newRole: newRole as Database['public']['Enums']['user_role']
+      })
 
-      const member = members.find(m => m.id === memberId)
+      const member = transformedMembers.find(m => m.id === memberId)
       toast.success(`${member?.name} 님의 역할을 ${roleLabels[newRole as keyof typeof roleLabels] || newRole}로 변경했습니다.`)
-      fetchMembers() // Refresh the list
     } catch (error: any) {
       console.error('Error changing member role:', error)
       toast.error(error.message || '역할 변경에 실패했습니다.')
@@ -363,22 +269,22 @@ function MembersPage() {
     .map(([value, label]) => ({ value, label }))
 
   // Calculate new members this month
-  const newMembersThisMonth = members.filter(m => {
+  const newMembersThisMonth = transformedMembers.filter(m => {
     const joinDate = new Date(m.join_date)
     const now = new Date()
     return joinDate.getMonth() === now.getMonth() && joinDate.getFullYear() === now.getFullYear()
   }).length
 
   // Calculate active members percentage
-  const activeMembers = members.filter(m => (m.activity_score || 0) > 200).length
-  const activePercentage = members.length > 0 ? Math.round((activeMembers / members.length) * 100) : 0
+  const activeMembers = transformedMembers.filter(m => (m.activity_score || 0) > 200).length
+  const activePercentage = transformedMembers.length > 0 ? Math.round((activeMembers / transformedMembers.length) * 100) : 0
 
   // Stats Section
   const statsSection = (
     <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
       <StatsCard
         title="총 회원"
-        value={members.length}
+        value={transformedMembers.length}
         icon={Users}
         subtitle={`이번 달 +${newMembersThisMonth}`}
         loading={loading}
@@ -392,14 +298,14 @@ function MembersPage() {
       />
       <StatsCard
         title="신규 회원"
-        value={members.filter(m => new Date(m.join_date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000).length}
+        value={transformedMembers.filter(m => new Date(m.join_date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000).length}
         icon={UserPlus}
         subtitle="최근 7일"
         loading={loading}
       />
       <StatsCard
         title="운영진"
-        value={members.filter(m => ['leader', 'vice-leader', 'admin'].includes(m.role)).length}
+        value={transformedMembers.filter(m => ['leader', 'vice-leader', 'admin'].includes(m.role)).length}
         icon={Shield}
         subtitle="리더 및 관리자"
         loading={loading}
@@ -424,8 +330,8 @@ function MembersPage() {
             <span>{label}</span>
             <span className="ml-auto text-xs text-muted-foreground">
               {value === 'all' 
-                ? members.length
-                : members.filter(m => m.skill_level === value).length}
+                ? transformedMembers.length
+                : transformedMembers.filter(m => m.skill_level === value).length}
             </span>
           </Button>
         ))}

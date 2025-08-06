@@ -36,9 +36,10 @@ import {
   Eye,
   Heart
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { supabase, Tables, Views } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
+import { Tables } from '@/lib/database.types'
 import { getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
 import { getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons } from '@/lib/skills'
 import { getActivityLevelInfo, calculateLevelProgress } from '@/lib/activityLevels'
@@ -111,7 +112,7 @@ const skillIcons = getSkillLevelIcons()
 
 export default function ProfileDetailPage({ userId }: { userId: string }) {
   const router = useRouter()
-  const { user, profile: userProfile } = useOptimizedAuth()
+  const { user, profile: userProfile } = useAuth()
   const [profile, setProfile] = useState<ProfileData | null>(null)
   const [stats, setStats] = useState<UserStats | null>(null)
   const [recentActivities, setRecentActivities] = useState<ActivityData[]>([])
@@ -138,7 +139,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
       setLoading(true)
       
       // Fetch profile using direct query
-      const { data: userData, error: userError } = await supabase
+      const { data: userData, error: userError } = await supabaseClient
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -172,7 +173,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
       
       // Fetch user stats
       try {
-        const { data: userStatsData, error: statsError } = await supabase
+        const { data: userStatsData, error: statsError } = await supabaseClient
           .from('user_stats')
           .select('*')
           .eq('user_id', userId)
@@ -213,7 +214,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
       
       // Fetch comprehensive stats
       try {
-        const { data: comprehensiveData, error: comprehensiveError } = await supabase
+        const { data: comprehensiveData, error: comprehensiveError } = await supabaseClient
           .rpc('get_user_comprehensive_stats', { p_user_id: userId })
         
         if (!comprehensiveError && comprehensiveData && comprehensiveData.length > 0) {
@@ -231,7 +232,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
         }
         
         // Fetch content stats and recent activities
-        const { data: contentData, error: contentError } = await supabase
+        const { data: contentData, error: contentError } = await supabaseClient
           .rpc('get_user_content_stats', { user_id_param: userId })
         
         if (!contentError && contentData) {

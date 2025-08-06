@@ -18,12 +18,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { supabase, Tables } from '@/lib/supabase/client'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-
-type ReportType = Tables<'report_types'>
+import { Tables } from '@/lib/database.types'
+import { useAuth } from '@/providers'
+import { useCreateReport } from '@/hooks/features/useReports'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+
+type ReportType = Tables<'report_types'>
 
 interface ReportDialogProps {
   open: boolean
@@ -49,12 +51,12 @@ export function ReportDialog({
   targetId,
   parentContentId
 }: ReportDialogProps) {
-  const { user } = useOptimizedAuth()
+  const { user } = useAuth()
   const [reportTypes, setReportTypes] = useState<ReportType[]>([])
   const [selectedType, setSelectedType] = useState<string>('')
   const [description, setDescription] = useState('')
-  const [loading, setLoading] = useState(false)
   const [fetchingTypes, setFetchingTypes] = useState(false)
+  const createReportMutation = useCreateReport()
 
   useEffect(() => {
     if (open) {
@@ -66,7 +68,7 @@ export function ReportDialog({
   const fetchReportTypes = async () => {
     try {
       setFetchingTypes(true)
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('report_types')
         .select('*')
         .eq('is_active', true)
@@ -97,7 +99,7 @@ export function ReportDialog({
       if (!reportableId) return
       
       // Check if user has already reported this content
-      const { data: existingReports, error } = await supabase
+      const { data: existingReports, error } = await supabaseClient
         .from('reports')
         .select('*')
         .eq('reporter_id', user.id)
@@ -125,7 +127,6 @@ export function ReportDialog({
     }
 
     try {
-      setLoading(true)
       const reportableId = targetId || commentId || postId
       const reportTargetType = targetType || (commentId ? 'comment' : 'content')
       
@@ -136,25 +137,13 @@ export function ReportDialog({
         throw new Error('선택한 신고 유형을 찾을 수 없습니다.')
       }
       
-      const reportData: any = {
-        target_type: reportTargetType,
-        target_id: reportableId,
-        report_type_id: selectedType,
+      await createReportMutation.mutateAsync({
+        targetType: reportTargetType as 'content' | 'comment' | 'user',
+        targetId: reportableId,
         reason: selectedReportType.name,
-        description: description.trim() || null,
-        reporter_id: user.id
-      }
-      
-      // Add parent_content_id for comment reports
-      if (reportTargetType === 'comment' && parentContentId) {
-        reportData.parent_content_id = parentContentId
-      }
-      
-      const { error } = await supabase
-        .from('reports')
-        .insert(reportData)
-
-      if (error) throw error
+        description: description.trim() || undefined,
+        parentContentId: reportTargetType === 'comment' ? parentContentId : undefined
+      })
 
       toast.success('신고가 접수되었습니다. 검토 후 조치하겠습니다.')
       onOpenChange(false)
@@ -163,8 +152,6 @@ export function ReportDialog({
       console.error('Error creating report:', error)
       const message = error instanceof Error ? error.message : '신고 접수에 실패했습니다.'
       toast.error(message)
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -262,15 +249,15 @@ export function ReportDialog({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={handleClose} disabled={loading}>
+          <Button variant="outline" onClick={handleClose} disabled={createReportMutation.isPending}>
             취소
           </Button>
           <Button 
             onClick={handleSubmit} 
-            disabled={loading || !selectedType || fetchingTypes}
+            disabled={createReportMutation.isPending || !selectedType || fetchingTypes}
             className="bg-red-600 hover:bg-red-700"
           >
-            {loading ? (
+            {createReportMutation.isPending ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 신고 접수 중...

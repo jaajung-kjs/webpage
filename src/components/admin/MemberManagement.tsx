@@ -32,11 +32,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, User, Trash2 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
-import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { useMembers, useUpdateMemberRole, useDeleteMember } from '@/hooks/features/useMembers'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 interface MemberData {
   id: string
@@ -70,90 +71,35 @@ const roleColors = {
 }
 
 export default function MemberManagement() {
-  const { user } = useOptimizedAuth()
-  const [members, setMembers] = useState<MemberData[]>([])
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const { data: membersData = [], isLoading: loading } = useMembers()
+  const updateMemberRoleMutation = useUpdateMemberRole()
+  const deleteMemberMutation = useDeleteMember()
+  
   const [filteredMembers, setFilteredMembers] = useState<MemberData[]>([])
   const [searchTerm, setSearchTerm] = useState('')
-  const [loading, setLoading] = useState(true)
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null)
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [operationLoading, setOperationLoading] = useState(false)
 
-  useEffect(() => {
-    fetchMembers()
-  }, [])
+  // Transform members data to expected format
+  const members: MemberData[] = (membersData || []).map((userData: any) => ({
+    id: userData.id || '',
+    name: userData.name || '',
+    email: userData.email || '',
+    role: userData.role || 'guest',
+    department: userData.department === '미지정' ? null : userData.department,
+    created_at: userData.created_at || '',
+    activity_score: userData.activity_score || 0,
+    post_count: 0,
+    comment_count: 0,
+    metadata: userData.metadata || {}
+  }))
 
   useEffect(() => {
     filterMembers()
   }, [searchTerm, members])
-
-  const fetchMembers = async (forceRefresh = false) => {
-    try {
-      setLoading(true)
-      
-      // Check cache first
-      const cacheKey = createCacheKey('admin', 'members')
-      if (!forceRefresh) {
-        const cachedData = HybridCache.get<MemberData[]>(cacheKey)
-        if (cachedData !== null) {
-          setMembers(cachedData)
-          setFilteredMembers(cachedData)
-          setLoading(false)
-          
-          // Still fetch fresh data in background
-          fetchMembersData(true)
-          return
-        }
-      }
-      
-      await fetchMembersData(false)
-    } catch (error) {
-      console.error('Error fetching members:', error)
-      toast.error('회원 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const fetchMembersData = async (isBackgroundUpdate: boolean) => {
-    // Fetch users with stats from the view - single query!
-    const { data: users, error } = await supabase
-      .from('members_with_stats')
-      .select('*')
-      .order('created_at', { ascending: false })
-    
-    if (error) throw error
-
-    // If no users, just set empty arrays
-    if (!users || users.length === 0) {
-      setMembers([])
-      setFilteredMembers([])
-      return
-    }
-
-    const transformedData: MemberData[] = users.map((userData) => ({
-      id: userData.id || '',
-      name: userData.name || '',
-      email: userData.email || '',
-      role: userData.role || 'guest',
-      department: userData.department === '미지정' ? null : userData.department,
-      created_at: userData.created_at || '',
-      activity_score: userData.activity_score || 0,
-      post_count: userData.content_count || 0,
-      comment_count: userData.comment_count || 0,
-      metadata: userData.metadata || {}
-    }))
-
-    // Cache the data (10 minutes TTL)
-    const cacheKey = createCacheKey('admin', 'members')
-    HybridCache.set(cacheKey, transformedData, 600000) // 10 minutes
-
-    if (!isBackgroundUpdate) {
-      setMembers(transformedData)
-      setFilteredMembers(transformedData)
-    }
-  }
 
   const filterMembers = () => {
     let filtered = members
@@ -184,29 +130,19 @@ export default function MemberManagement() {
     if (!user) return
 
     try {
-      setOperationLoading(true)
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          role: newRole as Database['public']['Enums']['user_role'],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', memberId)
-      
-      if (error) throw error
+      await updateMemberRoleMutation.mutateAsync({
+        userId: memberId,
+        newRole: newRole as Database['public']['Enums']['user_role']
+      })
 
       const member = members.find(m => m.id === memberId)
       toast.success(`${member?.name} 님의 역할을 ${roleLabels[newRole as keyof typeof roleLabels] || newRole}로 변경했습니다.`)
       
-      // Invalidate cache and refresh
-      const cacheKey = createCacheKey('admin', 'members')
-      HybridCache.invalidate(cacheKey)
-      fetchMembers(true) // Force refresh
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['members'] })
     } catch (error: any) {
       console.error('Error changing member role:', error)
       toast.error(error.message || '역할 변경에 실패했습니다.')
-    } finally {
-      setOperationLoading(false)
     }
   }
 
@@ -214,30 +150,17 @@ export default function MemberManagement() {
     if (!selectedMember || !user) return
 
     try {
-      setOperationLoading(true)
-      const { error } = await supabase
-        .from('users')
-        .update({ 
-          role: 'guest' as Database['public']['Enums']['user_role'],
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedMember.id)
-      
-      if (error) throw error
+      await updateMemberRoleMutation.mutateAsync({
+        userId: selectedMember.id,
+        newRole: 'guest'
+      })
 
       toast.success(`${selectedMember.name} 님을 일반 회원에서 게스트로 변경했습니다.`)
       setRemoveDialogOpen(false)
       setSelectedMember(null)
-      
-      // Invalidate cache and refresh
-      const cacheKey = createCacheKey('admin', 'members')
-      HybridCache.invalidate(cacheKey)
-      fetchMembers(true) // Force refresh
     } catch (error: any) {
       console.error('Error removing member:', error)
       toast.error(error.message || '회원 제거에 실패했습니다.')
-    } finally {
-      setOperationLoading(false)
     }
   }
 
@@ -245,10 +168,8 @@ export default function MemberManagement() {
     if (!selectedMember || !user) return
 
     try {
-      setOperationLoading(true)
-      
       // Get the user's auth token
-      const { data: { session } } = await supabase.auth.getSession()
+      const { data: { session } } = await supabaseClient.auth.getSession()
       if (!session) {
         toast.error('인증 세션이 없습니다.')
         return
@@ -274,15 +195,11 @@ export default function MemberManagement() {
       setDeleteDialogOpen(false)
       setSelectedMember(null)
       
-      // Invalidate cache and refresh
-      const cacheKey = createCacheKey('admin', 'members')
-      HybridCache.invalidate(cacheKey)
-      fetchMembers(true) // Force refresh
+      // Refresh data
+      queryClient.invalidateQueries({ queryKey: ['members'] })
     } catch (error: any) {
       console.error('Error deleting user:', error)
       toast.error(error.message || '사용자 삭제에 실패했습니다.')
-    } finally {
-      setOperationLoading(false)
     }
   }
 
@@ -443,7 +360,7 @@ export default function MemberManagement() {
                                   <DropdownMenuItem
                                     key={role}
                                     onClick={() => handleChangeRole(member.id, role)}
-                                    disabled={operationLoading || member.role === role}
+                                    disabled={updateMemberRoleMutation.isPending || member.role === role}
                                     className="pl-6"
                                   >
                                     <RoleIcon className="mr-2 h-4 w-4" />
@@ -459,7 +376,7 @@ export default function MemberManagement() {
                                       setSelectedMember(member)
                                       setRemoveDialogOpen(true)
                                     }}
-                                    disabled={operationLoading}
+                                    disabled={updateMemberRoleMutation.isPending}
                                     className="text-red-600 focus:text-red-600"
                                   >
                                     <UserMinus className="mr-2 h-4 w-4" />
@@ -473,7 +390,7 @@ export default function MemberManagement() {
                                   setSelectedMember(member)
                                   setDeleteDialogOpen(true)
                                 }}
-                                disabled={operationLoading}
+                                disabled={false}
                                 className="text-red-600 focus:text-red-600"
                               >
                                 <Trash2 className="mr-2 h-4 w-4" />
@@ -505,15 +422,15 @@ export default function MemberManagement() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={operationLoading}>
+            <AlertDialogCancel disabled={updateMemberRoleMutation.isPending}>
               취소
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleRemoveMember}
-              disabled={operationLoading}
+              disabled={updateMemberRoleMutation.isPending}
               className="bg-red-600 hover:bg-red-700"
             >
-              {operationLoading ? '처리 중...' : '변경'}
+              {updateMemberRoleMutation.isPending ? '처리 중...' : '변경'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -542,15 +459,14 @@ export default function MemberManagement() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={operationLoading}>
+            <AlertDialogCancel>
               취소
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteUser}
-              disabled={operationLoading}
               className="bg-red-600 hover:bg-red-700"
             >
-              {operationLoading ? '삭제 중...' : '영구 삭제'}
+              영구 삭제
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

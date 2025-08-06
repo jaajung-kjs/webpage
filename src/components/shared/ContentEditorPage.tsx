@@ -33,9 +33,9 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { toast } from 'sonner'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useCreateContent, useUpdateContent, useSupabaseQuery } from '@/hooks/useSupabase'
-import { TablesInsert, TablesUpdate, supabase, Views } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { useContent, useCreateContent, useUpdateContent } from '@/hooks/features/useContent'
+import { TablesInsert, TablesUpdate, Tables } from '@/lib/database.types'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -78,23 +78,12 @@ export default function ContentEditorPage({
   editId
 }: ContentEditorPageProps) {
   const router = useRouter()
-  const { user, profile } = useOptimizedAuth()
-  const { createContent, loading: createLoading } = useCreateContent()
-  const { updateContent, loading: updateLoading } = useUpdateContent()
+  const { user, profile } = useAuth()
+  const createMutation = useCreateContent()
+  const updateMutation = useUpdateContent()
   
   // Use custom query for edit mode to disable auto-refetch
-  const { data: existingContent, loading: loadingContent } = useSupabaseQuery<Views<'content_with_author'>>(
-    'content_with_author',
-    (q) => q.select('*').eq('id', editId || '').single(),
-    [editId],
-    { 
-      enabled: !!editId,
-      ttl: 600000, // 10 minutes cache
-      staleTime: 600000, // 10 minutes fresh (same as TTL to prevent refetch)
-      refetchOnWindowFocus: false, // Disable auto-refetch during editing
-      refetchOnReconnect: false // Disable auto-refetch during editing
-    }
-  )
+  const { data: existingContent, isLoading: loadingContent } = useContent(editId)
   
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -228,7 +217,7 @@ export default function ContentEditorPage({
     setIsSubmitting(true)
 
     try {
-      let result
+      let contentId: string
       
       if (isEditMode) {
         // Update existing content
@@ -240,7 +229,8 @@ export default function ContentEditorPage({
           updated_at: new Date().toISOString()
         }
 
-        result = await updateContent(editId!, updates)
+        await updateMutation.mutateAsync({ id: editId!, updates })
+        contentId = editId!
       } else {
         // Create new content
         const newContent: TablesInsert<'content'> = {
@@ -253,11 +243,8 @@ export default function ContentEditorPage({
           status: 'published'
         }
 
-        result = await createContent(newContent)
-      }
-      
-      if (result.error) {
-        throw new Error(result.error.message)
+        const result = await createMutation.mutateAsync(newContent)
+        contentId = result.id
       }
 
       // Clear draft on successful submission
@@ -274,7 +261,7 @@ export default function ContentEditorPage({
       } as const
       
       toast.success(isEditMode ? '게시글이 수정되었습니다.' : '게시글이 작성되었습니다.')
-      router.push(`/${routeMap[contentType]}/${isEditMode ? editId : result.data?.id}`)
+      router.push(`/${routeMap[contentType]}/${contentId}`)
     } catch (error: any) {
       console.error(isEditMode ? 'Error updating content:' : 'Error creating content:', error)
       toast.error(error.message || (isEditMode ? '게시글 수정에 실패했습니다.' : '게시글 작성에 실패했습니다.'))
@@ -548,10 +535,10 @@ export default function ContentEditorPage({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createLoading || updateLoading || isSubmitting}
+                  disabled={createMutation.isPending || updateMutation.isPending || isSubmitting}
                   className="kepco-gradient"
                 >
-                  {(createLoading || updateLoading || isSubmitting) && (
+                  {(createMutation.isPending || updateMutation.isPending || isSubmitting) && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   <Save className="mr-2 h-4 w-4" />

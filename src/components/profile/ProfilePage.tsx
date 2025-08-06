@@ -37,10 +37,10 @@ import {
   Star,
   Clock
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase, Tables } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
-import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { useUserProfile, useUserStats, useUserActivities, useUpdateProfile, useUploadAvatar } from '@/hooks/features/useProfile'
 import { getRoleConfig, getRoleLabels } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels } from '@/lib/skills'
 import { getActivityLevelInfo } from '@/lib/activityLevels'
@@ -117,17 +117,82 @@ const getActivityTitle = (activityType: string, targetType?: string) => {
 }
 
 export default function ProfilePage() {
-  const { user } = useOptimizedAuth()
+  const { user } = useAuth()
   const [userData, setUserData] = useState<UserData | null>(null)
   const [editData, setEditData] = useState<UserData | null>(null)
+  // Use profile hooks
+  const { data: profileData, isLoading: profileLoading } = useUserProfile(user?.id)
+  const { data: statsData, isLoading: statsLoading } = useUserStats(user?.id)
+  const { data: activitiesData, isLoading: activitiesLoading } = useUserActivities(user?.id, 8)
+  const updateProfileMutation = useUpdateProfile()
+  const uploadAvatarMutation = useUploadAvatar()
+  
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('activity')
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   // 실제 사용자 데이터 로딩
+  // Update userData when hook data changes
   useEffect(() => {
-    async function loadUserData() {
+    if (profileData && statsData) {
+      const metadata = (profileData.metadata || {}) as any
+      const formattedData: UserData = {
+        id: profileData.id,
+        name: profileData.name || '',
+        email: profileData.email || '',
+        phone: metadata.phone || '010-0000-0000',
+        department: profileData.department || '미지정',
+        job_position: metadata.job_position || '미지정',
+        role: profileData.role || 'member',
+        avatar: profileData.avatar_url || '',
+        joinDate: profileData.created_at || new Date().toISOString(),
+        lastLogin: profileData.last_seen_at || null,
+        location: metadata.location || '미지정',
+        aiExpertise: metadata.ai_expertise || ['ChatGPT'],
+        skillLevel: metadata.skill_level || 'beginner',
+        bio: profileData.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
+        achievements: metadata.achievements || [],
+        activityScore: profileData.activity_score || 0,
+        stats: {
+          totalPosts: statsData.posts_count || 0,
+          totalComments: statsData.comments_count || 0,
+          totalLikes: statsData.likes_received || 0,
+          totalViews: 0,
+          activitiesJoined: 0,
+          resourcesShared: 0
+        },
+        activityStats: {
+          posts: statsData.posts_count || 0,
+          cases: 0,
+          announcements: 0,
+          resources: 0,
+          comments: statsData.comments_count || 0
+        },
+        recentActivity: (activitiesData || []).map(activity => ({
+          type: activity.activity_type.includes('post') ? 'post' : 
+                activity.activity_type.includes('comment') ? 'comment' : 
+                activity.activity_type.includes('resource') ? 'resource' : 'activity' as any,
+          title: activity.activity_data?.title || getActivityTitle(activity.activity_type),
+          date: activity.created_at,
+          engagement: {
+            likes: 0,
+            comments: 0,
+            views: 0
+          }
+        }))
+      }
+      setUserData(formattedData)
+      setEditData(formattedData)
+      setLoading(false)
+    } else if (!profileLoading && !statsLoading && !user) {
+      setLoading(false)
+    }
+  }, [profileData, statsData, activitiesData, profileLoading, statsLoading, user])
+
+  // Remove the old complex loadUserData function
+  /*
+  async function loadUserData() {
       if (!user) {
         setLoading(false)
         return
@@ -135,21 +200,6 @@ export default function ProfilePage() {
 
       try {
         setLoading(true)
-        
-        // Check cache first
-        const cacheKey = createCacheKey('profile', 'data', user.id)
-        const cachedData = HybridCache.get<UserData>(cacheKey)
-        
-        if (cachedData !== null) {
-          setUserData(cachedData)
-          setEditData(cachedData)
-          setLoading(false)
-          
-          // Still fetch fresh data in background
-          loadFreshUserData(true)
-          return
-        }
-        
         await loadFreshUserData(false)
       } catch (error) {
         console.error('Error loading user data:', error)
@@ -330,9 +380,6 @@ export default function ProfilePage() {
           recentActivity
         }
         
-        // Cache the user data (10 minutes TTL)
-        const cacheKey = createCacheKey('profile', 'data', user.id)
-        HybridCache.set(cacheKey, realUserData, 600000) // 10 minutes
         
         if (!isBackgroundUpdate) {
           setUserData(realUserData)
@@ -348,8 +395,7 @@ export default function ProfilePage() {
       }
     }
 
-    loadUserData()
-  }, [user])
+  */
 
   const handleEdit = () => {
     // 편집 탭으로 이동
@@ -365,28 +411,20 @@ export default function ProfilePage() {
     try {
       setSaving(true)
       
-      // Update user in DB
-      const { error } = await supabase
-        .from('users')
-        .update({
-          name: editData.name,
-          bio: editData.bio,
-          department: editData.department,
-          metadata: {
-            phone: editData.phone,
-            location: editData.location,
-            job_position: editData.job_position,
-            ai_expertise: editData.aiExpertise,
-            skill_level: editData.skillLevel,
-            achievements: editData.achievements
-          },
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
-      
-      if (error) {
-        throw error
-      }
+      // Update user profile using mutation
+      await updateProfileMutation.mutateAsync({
+        name: editData.name,
+        bio: editData.bio,
+        department: editData.department,
+        metadata: {
+          phone: editData.phone,
+          location: editData.location,
+          job_position: editData.job_position,
+          ai_expertise: editData.aiExpertise,
+          skill_level: editData.skillLevel,
+          achievements: editData.achievements
+        }
+      })
       
       // 업데이트된 프로필 데이터로 상태 업데이트
       const updatedUserData = {
@@ -404,8 +442,6 @@ export default function ProfilePage() {
       setActiveTab('activity') // 저장 후 활동 탭으로 이동
       
       // Invalidate cache after update
-      const cacheKey = createCacheKey('profile', 'data', user.id)
-      HybridCache.invalidate(cacheKey)
       
       toast.success('프로필이 성공적으로 업데이트되었습니다.')
     } catch (error) {
@@ -455,35 +491,16 @@ export default function ProfilePage() {
       const fileName = `${user.id}-${Date.now()}.${fileExt}`
       const filePath = `avatars/${fileName}`
       
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        })
+      // Use uploadAvatarMutation instead of direct supabase call
+      const avatarUrl = await uploadAvatarMutation.mutateAsync(file)
       
-      if (uploadError) {
-        console.error('Upload error details:', uploadError)
-        throw uploadError
-      }
+      // The mutation already returns the public URL
+      const publicUrl = avatarUrl
       
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
-        .getPublicUrl(filePath)
-      
-      // Update user avatar URL in database
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ 
-          avatar_url: publicUrl,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', user.id)
-      
-      if (updateError) {
-        throw updateError
-      }
+      // Update user avatar URL in database using updateProfile mutation
+      await updateProfileMutation.mutateAsync({
+        avatar_url: publicUrl
+      })
       
       const successMessage = '프로필 사진이 업로드되었습니다.'
       
@@ -492,8 +509,6 @@ export default function ProfilePage() {
       setEditData(prev => prev ? { ...prev, avatar: publicUrl } : null)
       
       // Invalidate cache after avatar update
-      const cacheKey = createCacheKey('profile', 'data', user.id)
-      HybridCache.invalidate(cacheKey)
       
       toast.success(successMessage)
     } catch (error) {

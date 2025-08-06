@@ -26,19 +26,19 @@ import {
   Download,
   Upload
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { useSupabaseMutation, useUpdateProfile } from '@/hooks/useSupabase'
-import { Tables, supabase } from '@/lib/supabase/client'
+import { Tables } from '@/lib/database.types'
+import { useUserProfile, useUpdateProfile } from '@/hooks/features/useProfile'
 import { ChangePasswordDialog } from './ChangePasswordDialog'
-import { HybridCache, createCacheKey } from '@/lib/utils/cache'
+import { supabaseClient } from '@/lib/core/connection-core'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 
 export default function SettingsPage() {
-  const { user } = useOptimizedAuth()
-  const { updateProfile, loading: profileLoading } = useUpdateProfile()
-  const { mutate: updateSettings, loading: settingsLoading } = useSupabaseMutation()
+  const { user } = useAuth()
+  const queryClient = useQueryClient()
+  const updateProfileMutation = useUpdateProfile()
   
-  const loading = profileLoading || settingsLoading
   const [initialLoading, setInitialLoading] = useState(true)
   
   // 알림 설정
@@ -68,109 +68,70 @@ export default function SettingsPage() {
   // Password change dialog
   const [passwordDialogOpen, setPasswordDialogOpen] = useState(false)
 
-  // Load user settings on mount
+  // Load user settings using React Query
+  const { data: settingsData, isLoading: settingsLoading } = useQuery({
+    queryKey: ['user-settings', user?.id],
+    queryFn: async () => {
+      if (!user) return null
+      
+      // Load settings and user data in parallel
+      const [settingsResult, userResult] = await Promise.allSettled([
+        supabaseClient.from('user_settings').select('*').eq('user_id', user.id).single(),
+        supabaseClient.from('users').select('*').eq('id', user.id).single()
+      ])
+      
+      const data: any = {}
+      
+      if (settingsResult.status === 'fulfilled' && !settingsResult.value.error && settingsResult.value.data) {
+        data.settings = settingsResult.value.data
+      }
+      
+      if (userResult.status === 'fulfilled' && !userResult.value.error && userResult.value.data) {
+        data.metadata = {
+          joinDate: userResult.value.data.created_at || null,
+          lastLogin: userResult.value.data.last_seen_at || null
+        }
+      }
+      
+      return data
+    },
+    enabled: !!user,
+    staleTime: 30 * 60 * 1000, // 30 minutes
+  })
+
+  // Apply settings when data loads
   useEffect(() => {
-    const loadSettings = async () => {
-      if (!user) {
-        setInitialLoading(false)
-        return
-      }
-
-      try {
-        // Check cache first
-        const cacheKey = createCacheKey('settings', 'user', user.id)
-        const cachedSettings = HybridCache.get<any>(cacheKey)
-        
-        if (cachedSettings !== null) {
-          applySettings(cachedSettings)
-          setInitialLoading(false)
-          
-          // Still fetch fresh data in background
-          loadFreshSettings(true)
-          return
-        }
-        
-        await loadFreshSettings(false)
-      } catch (error) {
-        console.error('Failed to load settings:', error)
-        toast.error('설정을 불러오는데 실패했습니다.')
-        setInitialLoading(false)
-      }
-    }
-
-    const loadFreshSettings = async (isBackgroundUpdate: boolean) => {
-      if (!user) return
-      
-      try {
-        // Load settings and user data in parallel
-        const [settingsResult, userResult] = await Promise.allSettled([
-          supabase.from('user_settings').select('*').eq('user_id', user.id).single(),
-          supabase.from('users').select('*').eq('id', user.id).single()
-        ])
-        
-        const settingsData: any = {}
-        
-        if (settingsResult.status === 'fulfilled' && !settingsResult.value.error && settingsResult.value.data) {
-          const settings = settingsResult.value.data
-          settingsData.settings = settings
-        }
-        
-        // Update user metadata
-        if (userResult.status === 'fulfilled' && !userResult.value.error && userResult.value.data) {
-          settingsData.metadata = {
-            joinDate: userResult.value.data.created_at || null,
-            lastLogin: userResult.value.data.last_seen_at || null
-          }
-        }
-        
-        // Cache the settings (30 minutes TTL)
-        const cacheKey = createCacheKey('settings', 'user', user.id)
-        HybridCache.set(cacheKey, settingsData, 1800000) // 30 minutes
-        
-        if (!isBackgroundUpdate) {
-          applySettings(settingsData)
-          setInitialLoading(false)
-        }
-      } catch (error) {
-        console.error('Failed to load fresh settings:', error)
-        if (!isBackgroundUpdate) {
-          toast.error('설정을 불러오는데 실패했습니다.')
-          setInitialLoading(false)
-        }
-      }
-    }
-
-    const applySettings = (data: any) => {
-      if (data.settings) {
-        const settings = data.settings
-        // Update state with loaded settings
-        setEmailNotifications(settings.email_notifications)
-        setPushNotifications(settings.push_notifications)
-        setCommunityUpdates(settings.community_updates)
-        setWeeklyDigest(settings.weekly_digest)
-        setProfilePublic(settings.profile_public)
-        setShowEmail(settings.show_email)
-        setShowPhone(settings.show_phone)
-        setTheme(settings.theme as 'light' | 'dark' | 'system')
-        setLanguage(settings.language as 'ko' | 'en')
+    if (settingsData) {
+      if (settingsData.settings) {
+        const settings = settingsData.settings
+        setEmailNotifications(settings.email_notifications ?? true)
+        setPushNotifications(settings.push_notifications ?? false)
+        setCommunityUpdates(settings.community_updates ?? true)
+        setWeeklyDigest(settings.weekly_digest ?? true)
+        setProfilePublic(settings.profile_public ?? true)
+        setShowEmail(settings.show_email ?? false)
+        setShowPhone(settings.show_phone ?? false)
+        setTheme(settings.theme as 'light' | 'dark' | 'system' || 'system')
+        setLanguage(settings.language as 'ko' | 'en' || 'ko')
       }
       
-      if (data.metadata) {
-        setUserMetadata(data.metadata)
+      if (settingsData.metadata) {
+        setUserMetadata(settingsData.metadata)
       }
+      
+      setInitialLoading(false)
+    } else if (!settingsLoading) {
+      setInitialLoading(false)
     }
+  }, [settingsData, settingsLoading])
 
-    loadSettings()
-  }, [user])
-
-  const handleSaveSettings = async () => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-
-    try {
+  // Settings update mutation
+  const updateSettingsMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error('로그인이 필요합니다.')
+      
       const settingsUpdate = {
+        user_id: user.id,
         email_notifications: emailNotifications,
         push_notifications: pushNotifications,
         community_updates: communityUpdates,
@@ -183,26 +144,42 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString()
       }
 
-      const result = await updateSettings(async () =>
-        await supabase
+      // Check if settings exist
+      const { data: existingSettings } = await supabaseClient
+        .from('user_settings')
+        .select('id')
+        .eq('user_id', user.id)
+        .single()
+      
+      if (existingSettings) {
+        // Update existing settings
+        const { error } = await supabaseClient
           .from('user_settings')
           .update(settingsUpdate)
           .eq('user_id', user.id)
-      )
-      
-      if (result.error) {
-        throw result.error
+        
+        if (error) throw error
+      } else {
+        // Create new settings
+        const { error } = await supabaseClient
+          .from('user_settings')
+          .insert(settingsUpdate)
+        
+        if (error) throw error
       }
-      
-      // Invalidate cache after save
-      const cacheKey = createCacheKey('settings', 'user', user.id)
-      HybridCache.invalidate(cacheKey)
-      
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-settings', user?.id] })
       toast.success('설정이 저장되었습니다.')
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Failed to save settings:', error)
       toast.error('설정 저장에 실패했습니다.')
     }
+  })
+
+  const handleSaveSettings = () => {
+    updateSettingsMutation.mutate()
   }
 
   const handleExportData = () => {
@@ -579,11 +556,11 @@ export default function SettingsPage() {
         <div className="flex justify-end">
           <Button 
             onClick={handleSaveSettings} 
-            disabled={loading}
+            disabled={updateSettingsMutation.isPending}
             className="kepco-gradient"
           >
             <Save className="mr-2 h-4 w-4" />
-            {loading ? '저장 중...' : '설정 저장'}
+            {updateSettingsMutation.isPending ? '저장 중...' : '설정 저장'}
           </Button>
         </div>
       </motion.div>

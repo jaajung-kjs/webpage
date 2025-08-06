@@ -8,9 +8,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase } from '@/lib/supabase/client'
-import { MessagesAPI } from '@/lib/api/messages'
+import { useAuth } from '@/providers'
+import { useStartConversation, useSendMessage } from '@/hooks/features/useMessages'
+import { useSearchUsers } from '@/hooks/features/useSearch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,59 +50,49 @@ export function NewMessageDialog({
   onOpenChange,
   onConversationStart
 }: NewMessageDialogProps) {
-  const { user } = useOptimizedAuth()
+  const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
-  const [members, setMembers] = useState<Member[]>([])
-  const [filteredMembers, setFilteredMembers] = useState<Member[]>([])
   const [selectedRecipient, setSelectedRecipient] = useState<Member | null>(null)
   const [message, setMessage] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [sending, setSending] = useState(false)
+  
+  const startConversation = useStartConversation()
+  const sendMessage = useSendMessage()
+  const sending = sendMessage.isPending
+  
+  // 사용자 검색 hook 사용
+  const { data: searchResults, isLoading: loading } = useSearchUsers(searchQuery, {
+    excludeCurrentUser: true,
+    onlyMembers: true,
+    limit: 20
+  })
+  
+  // 검색 결과를 Member 타입으로 변환
+  const filteredMembers = (searchResults || []).map(user => ({
+    id: user.id,
+    name: user.name || '',
+    email: user.email || '',
+    department: user.department,
+    avatar_url: user.avatar_url,
+    role: user.role || 'member'
+  }))
 
-  // 멤버 목록 로드
-  useEffect(() => {
-    if (!open) return
-
-    const fetchMembers = async () => {
-      if (!user?.id) return
-      
-      setLoading(true)
-      try {
-        const { data, error } = await supabase
-          .from('users')
-          .select('id, name, email, department, avatar_url, role')
-          .in('role', ['member', 'vice-leader', 'leader', 'admin'])
-          .neq('id', user.id) // 자신 제외
-          .order('name')
-
-        if (error) throw error
-        setMembers(data || [])
-      } catch (error) {
-        console.error('Failed to fetch members:', error)
-        toast.error('회원 목록을 불러오지 못했습니다.')
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchMembers()
-  }, [open, user?.id])
-
-  // 검색 필터
-  useEffect(() => {
-    if (!searchQuery.trim()) {
-      setFilteredMembers(members)
-      return
-    }
-
-    const query = searchQuery.toLowerCase()
-    const filtered = members.filter(member =>
-      member.name.toLowerCase().includes(query) ||
-      member.email.toLowerCase().includes(query) ||
-      member.department?.toLowerCase().includes(query)
-    )
-    setFilteredMembers(filtered)
-  }, [searchQuery, members])
+  // 초기 회원 목록 로드 (검색어 없을 때)
+  const { data: allMembers } = useSearchUsers('', {
+    excludeCurrentUser: true,
+    onlyMembers: true,
+    limit: 50
+  })
+  
+  // 검색어가 없을 때는 모든 회원 표시
+  const displayMembers = searchQuery.length >= 2 ? filteredMembers : 
+    (allMembers || []).map(user => ({
+      id: user.id,
+      name: user.name || '',
+      email: user.email || '',
+      department: user.department,
+      avatar_url: user.avatar_url,
+      role: user.role || 'member'
+    }))
 
   const handleRecipientSelect = (member: Member) => {
     setSelectedRecipient(member)
@@ -112,34 +102,21 @@ export function NewMessageDialog({
   const handleSendMessage = async () => {
     if (!user || !selectedRecipient || !message.trim()) return
 
-    setSending(true)
     try {
       // 대화방 찾기 또는 생성
-      const conversationResult = await MessagesAPI.findOrCreateConversation(
-        user.id,
-        selectedRecipient.id
-      )
-
-      if (!conversationResult.success) {
-        throw new Error(conversationResult.error)
-      }
+      const conversationId = await startConversation.mutateAsync(selectedRecipient.id)
 
       // 메시지 전송
-      const messageResult = await MessagesAPI.sendMessage(
-        user.id,
-        selectedRecipient.id,
-        message.trim(),
-        conversationResult.data
-      )
-
-      if (!messageResult.success) {
-        throw new Error(messageResult.error)
-      }
+      await sendMessage.mutateAsync({
+        conversationId,
+        recipientId: selectedRecipient.id,
+        content: message.trim()
+      })
 
       // 성공 시 대화방으로 이동
       if (onConversationStart) {
         onConversationStart(
-          conversationResult.data!,
+          conversationId,
           selectedRecipient.id,
           selectedRecipient.name,
           selectedRecipient.avatar_url
@@ -154,8 +131,6 @@ export function NewMessageDialog({
     } catch (error) {
       console.error('Failed to send message:', error)
       toast.error('메시지 전송에 실패했습니다.')
-    } finally {
-      setSending(false)
     }
   }
 

@@ -24,10 +24,10 @@ export {
 } from './MessageButton'
 
 
-// API and utilities
-export { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
-export type { 
-  MessageWithSender, 
-  ConversationWithLastMessage, 
-  InboxMessage 
-} from '@/lib/api/messages'
+// API and utilities - migrated to hooks
+// export { MessagesAPI, MessageNotifications } from '@/lib/api/messages'
+// export type { 
+//   MessageWithSender, 
+//   ConversationWithLastMessage, 
+//   InboxMessage 
+// } from '@/lib/api/messages'

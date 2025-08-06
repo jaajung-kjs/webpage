@@ -29,7 +29,7 @@ import {
   AlignRight
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -149,14 +149,14 @@ export default function TiptapEditor({
         const filePath = `content/${fileName}`
 
         // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
           .from('attachments')
           .upload(filePath, file)
 
         if (error) throw error
 
         // Get public URL
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = supabaseClient.storage
           .from('attachments')
           .getPublicUrl(filePath)
 
@@ -186,14 +186,14 @@ export default function TiptapEditor({
         const filePath = `content/${fileName}`
 
         // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
           .from('attachments')
           .upload(filePath, file)
 
         if (error) throw error
 
         // Get public URL
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = supabaseClient.storage
           .from('attachments')
           .getPublicUrl(filePath)
 

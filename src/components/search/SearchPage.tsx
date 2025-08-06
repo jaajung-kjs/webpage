@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
@@ -32,8 +32,8 @@ import {
   Megaphone,
   Loader2
 } from 'lucide-react'
-import { supabase, Views } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { useSearch, usePopularSearches, useRecentSearches, saveSearchHistory } from '@/hooks/features/useSearch'
 
 const contentTypeLabels = {
   all: '전체',
@@ -70,17 +70,16 @@ export default function SearchPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState(searchParams.get('q') || '')
   const [activeTab, setActiveTab] = useState<'all' | 'community' | 'case' | 'resource' | 'announcement'>('all')
-  const [searchResults, setSearchResults] = useState<any>({
-    community: [],
-    cases: [],
-    resources: [],
-    announcements: [],
-    total: 0
-  })
-  const [loading, setLoading] = useState(false)
+  const [debouncedQuery, setDebouncedQuery] = useState(searchQuery)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [popularSearches, setPopularSearches] = useState<string[]>([])
+  
+  // Use new hooks
+  const { data: searchResults = [], isLoading: loading } = useSearch(debouncedQuery, {
+    type: activeTab === 'community' ? 'post' : activeTab
+  })
+  const { data: popularSearches = [] } = usePopularSearches()
+  const { data: recentSearches = [] } = useRecentSearches()
 
   // URL 업데이트
   const updateURL = useCallback((query: string) => {
@@ -91,131 +90,62 @@ export default function SearchPage() {
     }
   }, [router])
 
-  // 검색 실행
-  const performSearch = useCallback(async (query: string) => {
-    if (!query.trim()) {
-      setSearchResults({ community: [], cases: [], resources: [], announcements: [], total: 0 })
-      return
-    }
-
-    try {
-      setLoading(true)
-      
-      if (activeTab === 'all') {
-        // Search all content types
-        const { data, error } = await supabase
-          .from('content_with_author')
-          .select('*')
-          .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
-          .in('type', ['post', 'case', 'resource', 'announcement'])
-          .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .limit(20)
-        
-        if (error) throw error
-        
-        // Transform results into expected format
-        const results = { community: [], cases: [], resources: [], announcements: [], total: 0 } as any
-        if (data) {
-          data.forEach((item: any) => {
-            switch (item.type) {
-              case 'post':
-                results.community.push(item)
-                break
-              case 'case':
-                results.cases.push(item)
-                break
-              case 'resource':
-                results.resources.push(item)
-                break
-              case 'announcement':
-                results.announcements.push(item)
-                break
-            }
-          })
-          results.total = data.length
+  // Transform search results into categorized format
+  const categorizedResults = useMemo(() => {
+    const results = { community: [], cases: [], resources: [], announcements: [], total: 0 } as any
+    
+    if (searchResults && Array.isArray(searchResults)) {
+      searchResults.forEach((item: any) => {
+        switch (item.type) {
+          case 'post':
+            results.community.push(item)
+            break
+          case 'case':
+            results.cases.push(item)
+            break
+          case 'resource':
+            results.resources.push(item)
+            break
+          case 'announcement':
+            results.announcements.push(item)
+            break
         }
-        setSearchResults(results)
-      } else {
-        const contentType = activeTab === 'community' ? 'post' : activeTab
-        const { data, error } = await supabase
-          .from('content_with_author')
-          .select('*')
-          .or(`title.ilike.%${query}%,content.ilike.%${query}%`)
-          .eq('type', contentType)
-          .eq('status', 'published')
-          .order('created_at', { ascending: false })
-          .limit(20)
-        
-        if (error) throw error
-        
-        // 결과를 적절한 카테고리에 배치
-        const results = { community: [], cases: [], resources: [], announcements: [], total: 0 } as any
-        const key = activeTab === 'case' ? 'cases' : activeTab === 'resource' ? 'resources' : activeTab === 'announcement' ? 'announcements' : activeTab
-        results[key] = data || []
-        results.total = data?.length || 0
-        setSearchResults(results)
-      }
-    } catch (error) {
-      console.error('Search error:', error)
-      toast.error('검색 중 오류가 발생했습니다.')
-    } finally {
-      setLoading(false)
+      })
+      results.total = searchResults.length
     }
-  }, [activeTab])
+    
+    return results
+  }, [searchResults])
 
-  // 검색어 제안 가져오기
-  const fetchSuggestions = useCallback(async (query: string) => {
-    if (query.length < 2) {
-      setSuggestions([])
-      return
-    }
-
-    try {
-      // Search suggestions not implemented in modern API yet
-      // For now, just clear suggestions
-      setSuggestions([])
-    } catch (error) {
-      console.error('Error fetching suggestions:', error)
-    }
-  }, [])
-
-  // 인기 검색어 가져오기
-  const fetchPopularSearches = useCallback(async () => {
-    try {
-      // Popular searches not implemented in modern API yet
-      // For now, just use empty array
-      setPopularSearches([])
-    } catch (error) {
-      console.error('Error fetching popular searches:', error)
-    }
-  }, [])
+  // Debounce search query
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery)
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [searchQuery])
 
   // 초기 로드
   useEffect(() => {
-    fetchPopularSearches()
     const query = searchParams.get('q')
     if (query) {
       setSearchQuery(query)
-      performSearch(query)
+      setDebouncedQuery(query)
     }
-  }, [searchParams, performSearch, fetchPopularSearches])
+  }, [searchParams])
 
-  // 검색어 변경 시 제안 가져오기
+  // Get search suggestions from recent searches
   useEffect(() => {
-    const debounceTimer = setTimeout(() => {
-      fetchSuggestions(searchQuery)
-    }, 300)
-
-    return () => clearTimeout(debounceTimer)
-  }, [searchQuery, fetchSuggestions])
-
-  // 탭 변경 시 검색 재실행
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      performSearch(searchQuery)
+    if (searchQuery.length >= 2 && recentSearches.length > 0) {
+      const filtered = recentSearches
+        .filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+        .slice(0, 5)
+      setSuggestions(filtered)
+    } else {
+      setSuggestions([])
     }
-  }, [activeTab, searchQuery, performSearch])
+  }, [searchQuery, recentSearches])
 
   const handleSearch = (query: string) => {
     if (!query.trim()) {
@@ -223,9 +153,10 @@ export default function SearchPage() {
       return
     }
     setSearchQuery(query)
+    setDebouncedQuery(query)
     setShowSuggestions(false)
     updateURL(query)
-    performSearch(query)
+    saveSearchHistory(query) // Save to recent searches
   }
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -503,7 +434,7 @@ export default function SearchPage() {
                 &quot;{searchQuery}&quot; 검색 결과
               </h2>
               <p className="text-sm text-muted-foreground">
-                {loading ? '검색 중...' : `총 ${searchResults.total}개의 결과를 찾았습니다`}
+                {loading ? '검색 중...' : `총 ${categorizedResults.total}개의 결과를 찾았습니다`}
               </p>
             </div>
           </div>
@@ -515,31 +446,31 @@ export default function SearchPage() {
                 value="all"
                 className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
               >
-                전체 ({searchResults.total})
+                전체 ({categorizedResults.total})
               </TabsTrigger>
               <TabsTrigger
                 value="community"
                 className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
               >
-                커뮤니티 ({searchResults.community.length})
+                커뮤니티 ({categorizedResults.community.length})
               </TabsTrigger>
               <TabsTrigger
                 value="case"
                 className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
               >
-                활용사례 ({searchResults.cases.length})
+                활용사례 ({categorizedResults.cases.length})
               </TabsTrigger>
               <TabsTrigger
                 value="resource"
                 className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
               >
-                학습자료 ({searchResults.resources.length})
+                학습자료 ({categorizedResults.resources.length})
               </TabsTrigger>
               <TabsTrigger
                 value="announcement"
                 className="flex-1 px-2.5 py-1 text-xs font-medium touch-manipulation min-h-[28px] flex items-center justify-center whitespace-nowrap"
               >
-                공지사항 ({searchResults.announcements.length})
+                공지사항 ({categorizedResults.announcements.length})
               </TabsTrigger>
             </TabsList>
 
@@ -556,28 +487,28 @@ export default function SearchPage() {
                     {activeTab === 'all' ? (
                       // All results
                       <>
-                        {[...searchResults.community, ...searchResults.cases, ...searchResults.resources, ...searchResults.announcements]
+                        {[...categorizedResults.community, ...categorizedResults.cases, ...categorizedResults.resources, ...categorizedResults.announcements]
                           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
                           .map((item, index) => {
-                            const type = searchResults.community.includes(item) ? 'community' :
-                                        searchResults.cases.includes(item) ? 'case' :
-                                        searchResults.resources.includes(item) ? 'resource' : 'announcement'
+                            const type = categorizedResults.community.includes(item) ? 'community' :
+                                        categorizedResults.cases.includes(item) ? 'case' :
+                                        categorizedResults.resources.includes(item) ? 'resource' : 'announcement'
                             return renderResultItem(type, item, index)
                           })}
                       </>
                     ) : (
                       // Specific type results
                       <>
-                        {(activeTab === 'community' ? searchResults.community :
-                          activeTab === 'case' ? searchResults.cases :
-                          activeTab === 'resource' ? searchResults.resources :
-                          searchResults.announcements
+                        {(activeTab === 'community' ? categorizedResults.community :
+                          activeTab === 'case' ? categorizedResults.cases :
+                          activeTab === 'resource' ? categorizedResults.resources :
+                          categorizedResults.announcements
                         ).map((item: any, index: number) => renderResultItem(activeTab === 'case' ? 'case' : activeTab === 'resource' ? 'resource' : activeTab, item, index))}
                       </>
                     )}
 
                     {/* Empty State */}
-                    {searchResults.total === 0 && !loading && (
+                    {categorizedResults.total === 0 && !loading && (
                       <div className="text-center py-12">
                         <div className="mb-4 text-6xl">🔍</div>
                         <h3 className="mb-2 text-xl font-semibold">

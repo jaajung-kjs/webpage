@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
+import { useAuth } from '@/providers'
+import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
-import { Views, supabase } from '@/lib/supabase/client'
+import { Tables } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
 import { 
   Plus,
@@ -33,17 +34,14 @@ const sortOptions = [
 
 export default function AnnouncementsPage() {
   const router = useRouter()
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
   
   // Use Supabase hooks
-  const { data: announcements, loading, refetch } = useContentList({
-    type: 'announcement',
-    status: 'published'
-  })
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  const { data: announcements, isLoading: loading, refetch } = useContentList('announcement')
+  const deleteContentMutation = useDeleteContent()
 
   // Filter and sort announcements
   const filteredAnnouncements = useMemo(() => {
@@ -108,10 +106,7 @@ export default function AnnouncementsPage() {
     }
     
     try {
-      const result = await deleteContent(id)
-      if (result.error) {
-        throw result.error
-      }
+      await deleteContentMutation.mutateAsync({ id, contentType: 'announcement' })
       toast.success('공지사항이 삭제되었습니다.')
       refetch()
     } catch (error: any) {
@@ -121,11 +116,11 @@ export default function AnnouncementsPage() {
   }
 
   // Check permissions
-  const canEdit = (item: Views<'content_with_author'>) => {
+  const canEdit = (item: Tables<'content_with_author'>) => {
     return !!(user && profile && item.author_id === user.id)
   }
 
-  const canDelete = (item: Views<'content_with_author'>) => {
+  const canDelete = (item: Tables<'content_with_author'>) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 
@@ -134,7 +129,7 @@ export default function AnnouncementsPage() {
     ))
   }
 
-  const canPin = (item: Views<'content_with_author'>) => {
+  const canPin = (item: Tables<'content_with_author'>) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 
@@ -150,7 +145,7 @@ export default function AnnouncementsPage() {
     }
 
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('content')
         .update({
           metadata: { is_pinned: pinned }

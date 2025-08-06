@@ -11,16 +11,11 @@ import {
   BookOpen,
   Flag
 } from 'lucide-react'
-import { 
-  useContent,
-  useIsLiked,
-  useToggleLike,
-  useDeleteContent
-} from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
+
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
 import DetailLayout from '@/components/shared/DetailLayout'
@@ -57,26 +52,29 @@ const categoryIcons = {
 }
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use Supabase hooks
-  const { data: postData, loading } = useContent(postId)
-  const isLikedFromHook = useIsLiked(user?.id, postId)
-  const { toggleLike, loading: likeLoading } = useToggleLike()
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  // Use hooks
+  const { data: postData, isLoading: loading } = useContent(postId)
+  const { data: isLikedFromHook } = useIsLiked(postId)
+  const toggleLikeMutation = useToggleLike()
+  const deleteContentMutation = useDeleteContent()
+  const incrementViewMutation = useIncrementView()
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
 
 
   // Increment view count when post is loaded
   useEffect(() => {
     if (postData?.id) {
-      ContentAPI.incrementViewCount(postData.id)
+      incrementViewMutation.mutate(postData.id)
     }
   }, [postData?.id])
 
@@ -90,7 +88,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   
   // Update like state from hook
   useEffect(() => {
-    setIsLiked(isLikedFromHook)
+    setIsLiked(isLikedFromHook || false)
   }, [isLikedFromHook])
 
   // Listen for report dialog events
@@ -126,40 +124,19 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     // Prevent multiple clicks
     if (likeLoading) return
 
+    setLikeLoading(true)
     try {
-      const result = await toggleLike(user.id, postId)
+      const isNowLiked = await toggleLikeMutation.mutateAsync(postId)
       
-      if (result.error) {
-        throw result.error
-      }
-      
-      // Get the updated state by checking the current like status
-      const { data: currentLike } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('content_id', postId)
-        .eq('type', 'like')
-        .single()
-      
-      const isNowLiked = !!currentLike
       setIsLiked(isNowLiked)
-      
-      // Get updated like count from content
-      const { data: updatedContent } = await supabase
-        .from('content_with_author')
-        .select('like_count')
-        .eq('id', postId)
-        .single()
-      
-      if (updatedContent) {
-        setLikeCount(updatedContent.like_count || 0)
-      }
+      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
       
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    } finally {
+      setLikeLoading(false)
     }
   }
 
@@ -188,18 +165,17 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       return
     }
 
+    setDeleteLoading(true)
     try {
-      const result = await deleteContent(postId)
+      await deleteContentMutation.mutateAsync({ id: postId, contentType: 'community' })
       
-      if (result.error) {
-        throw result.error
-      }
-
       toast.success('게시글이 삭제되었습니다.')
       router.push('/community')
     } catch (error: any) {
       console.error('Error deleting post:', error)
       toast.error(error.message || '게시글 삭제에 실패했습니다.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 

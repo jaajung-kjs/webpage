@@ -4,11 +4,11 @@ import { Button } from '@/components/ui/button'
 import { ArrowRight, Zap, Users, BookOpen, Lightbulb } from 'lucide-react'
 import { motion } from 'framer-motion'
 import QuickSearchBar from '@/components/ui/quick-search-bar'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { useRouter } from 'next/navigation'
 
 export default function HeroSection() {
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   const router = useRouter()
   
   const handleJoinClick = () => {

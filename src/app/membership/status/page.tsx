@@ -4,19 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Clock, CheckCircle, XCircle, User } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
-import type { Tables } from '@/lib/supabase/client'
-
-type MembershipApplication = Tables<'membership_applications'>
+import { useEffect } from 'react'
+import { Tables } from '@/lib/database.types'
+import { useMembershipApplications } from '@/hooks/features/useMembership'
 
 export default function MembershipStatusPage() {
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   const router = useRouter()
-  const [application, setApplication] = useState<MembershipApplication | null>(null)
-  const [loading, setLoading] = useState(true)
+  const { data: applications, isLoading: loading } = useMembershipApplications()
+  const application = applications?.[0] || null
 
   useEffect(() => {
     if (!user) {
@@ -29,29 +27,7 @@ export default function MembershipStatusPage() {
       router.push('/community')
       return
     }
-
-    fetchApplication()
   }, [user, profile, router])
-
-  const fetchApplication = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('membership_applications')
-        .select('*')
-        .eq('user_id', user!.id)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .single()
-
-      if (!error && data) {
-        setApplication(data)
-      }
-    } catch (error) {
-      console.error('Error fetching application:', error)
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const getStatusIcon = (status: string) => {
     switch (status) {

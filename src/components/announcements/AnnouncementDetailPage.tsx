@@ -12,16 +12,11 @@ import {
   Pin,
   Flag
 } from 'lucide-react'
-import { supabase, Views } from '@/lib/supabase/client'
-import { 
-  useContent,
-  useIsLiked,
-  useToggleLike,
-  useDeleteContent
-} from '@/hooks/useSupabase'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
+import { useIsBookmarked, useToggleBookmark } from '@/hooks/features/useBookmarks'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import PermissionGate from '@/components/shared/PermissionGate'
 import DetailLayout from '@/components/shared/DetailLayout'
@@ -65,27 +60,33 @@ const categoryIcons = {
 }
 
 export default function AnnouncementDetailPage({ announcementId }: AnnouncementDetailPageProps) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use Supabase hooks
-  const { data: announcementData, loading } = useContent(announcementId)
-  const isLikedFromHook = useIsLiked(user?.id, announcementId)
-  const { toggleLike, loading: likeLoading } = useToggleLike()
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  // Use hooks
+  const { data: announcementData, isLoading: loading } = useContent(announcementId)
+  const { data: isLikedFromHook } = useIsLiked(announcementId)
+  const toggleLikeMutation = useToggleLike()
+  const deleteContentMutation = useDeleteContent()
+  const incrementViewMutation = useIncrementView()
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
-  const [isBookmarked, setIsBookmarked] = useState(false)
+  // Use bookmark hooks
+  const { data: isBookmarkedData } = useIsBookmarked(announcementId)
+  const toggleBookmarkMutation = useToggleBookmark()
+  const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Increment view count when announcement is loaded
   useEffect(() => {
     if (announcementData?.id) {
-      ContentAPI.incrementViewCount(announcementData.id)
+      incrementViewMutation.mutate(announcementData.id)
     }
-  }, [announcementData?.id])
+  }, [announcementData?.id, incrementViewMutation])
 
 
   // Update like count when data changes
@@ -97,7 +98,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   
   // Update like state from hook
   useEffect(() => {
-    setIsLiked(isLikedFromHook)
+    setIsLiked(isLikedFromHook || false)
   }, [isLikedFromHook])
 
   // Listen for report dialog events
@@ -117,29 +118,8 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     }
   }, [])
 
-  // Check if user has bookmarked this announcement
-  useEffect(() => {
-    const checkBookmark = async () => {
-      if (!user || !announcementData) return
-      
-      try {
-        const { data } = await supabase
-          .from('interactions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('content_id', announcementId)
-          .eq('type', 'bookmark')
-          .single()
-          
-        setIsBookmarked(!!data)
-      } catch (error) {
-        console.error('Error checking bookmark:', error)
-        setIsBookmarked(false)
-      }
-    }
-    
-    checkBookmark()
-  }, [user, announcementId, announcementData])
+  // Bookmark state is now managed by the hook
+  const isBookmarked = isBookmarkedData || false
 
   const handleLike = async () => {
     if (!user) {
@@ -155,79 +135,32 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     // Prevent multiple clicks
     if (likeLoading) return
 
+    setLikeLoading(true)
     try {
-      const result = await toggleLike(user.id, announcementId)
+      const isNowLiked = await toggleLikeMutation.mutateAsync(announcementId)
       
-      if (result.error) {
-        throw result.error
-      }
-      
-      // Get the updated state by checking the current like status
-      const { data: currentLike } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('content_id', announcementId)
-        .eq('type', 'like')
-        .single()
-      
-      const isNowLiked = !!currentLike
       setIsLiked(isNowLiked)
-      
-      // Get updated like count from content
-      const { data: updatedContent } = await supabase
-        .from('content_with_author')
-        .select('like_count')
-        .eq('id', announcementId)
-        .single()
-      
-      if (updatedContent) {
-        setLikeCount(updatedContent.like_count || 0)
-      }
+      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
       
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    } finally {
+      setLikeLoading(false)
     }
   }
 
   const handleBookmark = async () => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
-
+    if (bookmarkLoading) return
+    
+    setBookmarkLoading(true)
     try {
-      if (isBookmarked) {
-        // Remove bookmark
-        const { error } = await supabase
-          .from('interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('content_id', announcementId)
-          .eq('type', 'bookmark')
-          
-        if (error) throw error
-        setIsBookmarked(false)
-        toast.success('북마크에서 제거되었습니다.')
-      } else {
-        // Add bookmark
-        const { error } = await supabase
-          .from('interactions')
-          .insert({
-            user_id: user.id,
-            content_id: announcementId,
-            type: 'bookmark'
-          })
-          
-        if (error) throw error
-        setIsBookmarked(true)
-        toast.success('북마크에 추가되었습니다.')
-      }
+      await toggleBookmarkMutation.mutateAsync(announcementId)
     } catch (error) {
-      console.error('Error toggling bookmark:', error)
-      toast.error('북마크 처리에 실패했습니다.')
+      // Error is handled by the mutation hook
+    } finally {
+      setBookmarkLoading(false)
     }
   }
 
@@ -246,18 +179,17 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
       return
     }
 
+    setDeleteLoading(true)
     try {
-      const result = await deleteContent(announcementId)
+      await deleteContentMutation.mutateAsync({ id: announcementId, contentType: 'announcement' })
       
-      if (result.error) {
-        throw result.error
-      }
-
       toast.success('공지사항이 삭제되었습니다.')
       router.push('/announcements')
     } catch (error: any) {
       console.error('Error deleting announcement:', error)
       toast.error(error.message || '공지사항 삭제에 실패했습니다.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 

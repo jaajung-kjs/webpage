@@ -29,10 +29,8 @@ import {
   PinOff,
 } from 'lucide-react'
 import { cn, extractCleanPreview } from '@/lib/utils'
-import { Views } from '@/lib/supabase/client'
-
 interface ContentCardProps {
-  content: Views<'content_with_author'>
+  content: any
   viewMode?: 'grid' | 'list'
   categoryLabels?: Record<string, string>
   categoryColors?: Record<string, string>
@@ -195,7 +193,7 @@ export default function ContentCard({
         {/* Tags */}
         {content.tags && content.tags.length > 0 && (
           <div className="mb-4 flex flex-wrap gap-1">
-            {content.tags.slice(0, 3).map((tag) => (
+            {content.tags.slice(0, 3).map((tag: string) => (
               <Badge key={tag} variant="outline" className="text-xs">
                 {tag}
               </Badge>

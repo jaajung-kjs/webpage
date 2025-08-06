@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
 
 interface EnvCheckData {
   status: string
@@ -29,7 +29,7 @@ export function EnvCheck() {
     console.log('NEXT_PUBLIC_SUPABASE_ANON_KEY:', process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ? '✅ Set' : '❌ Missing')
     
     // Supabase 클라이언트 초기화 상태 확인
-    console.log('Supabase client:', supabase ? '✅ Initialized' : '❌ Not initialized')
+    console.log('Supabase client:', supabaseClient ? '✅ Initialized' : '❌ Not initialized')
 
     // API 엔드포인트 호출
     fetch('/api/env-test')
@@ -49,7 +49,7 @@ export function EnvCheck() {
 
   const testSupabaseConnection = async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('users')
         .select('count')
         .limit(1)

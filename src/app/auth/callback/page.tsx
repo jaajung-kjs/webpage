@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { CheckCircle, XCircle, Loader2 } from 'lucide-react'
@@ -16,7 +16,7 @@ export default function AuthCallbackPage() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        if (!supabase) {
+        if (!supabaseClient) {
           setStatus('error')
           setMessage('인증 서비스에 연결할 수 없습니다.')
           return
@@ -30,7 +30,7 @@ export default function AuthCallbackPage() {
         
         // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등)
         if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken) {
-          const { data, error } = await supabase.auth.setSession({
+          const { data, error } = await supabaseClient.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
@@ -44,7 +44,7 @@ export default function AuthCallbackPage() {
           
           if (data.user && data.user.email_confirmed_at) {
             // 이메일 인증이 완료되었으므로 public.users에 프로필 생성
-            const { error: profileError } = await supabase
+            const { error: profileError } = await supabaseClient
               .from('users')
               .insert({
                 id: data.user.id,
@@ -76,7 +76,7 @@ export default function AuthCallbackPage() {
         }
         
         // 일반 세션 확인
-        const { data, error } = await supabase.auth.getSession()
+        const { data, error } = await supabaseClient.auth.getSession()
         
         if (error) {
           setStatus('error')

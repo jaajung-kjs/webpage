@@ -4,8 +4,8 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { ArrowRight, Lightbulb, Cpu, ChartBar, Zap, BookOpen } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { supabase, Views } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
+import { supabaseClient } from '@/lib/core/connection-core'
 import ContentCard from '@/components/shared/ContentCard'
 
 interface PostWithAuthor {
@@ -49,18 +49,13 @@ const categoryIcons = {
   other: BookOpen
 }
 
-export default function RecentPostsSection() {
-  const [recentPosts, setRecentPosts] = useState<PostWithAuthor[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchRecentPosts()
-  }, [])
-
-  const fetchRecentPosts = async () => {
-    try {
+// Custom hook for fetching recent posts
+function useRecentPosts() {
+  return useQuery<PostWithAuthor[]>({
+    queryKey: ['recent-posts'],
+    queryFn: async () => {
       // Fetch recent cases from DB with all necessary fields
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('content_with_author')
         .select(`
           id,
@@ -89,7 +84,7 @@ export default function RecentPostsSection() {
       
       // Transform data to match expected type, filtering out items with null IDs or titles
       const transformedData = (data || [])
-        .filter((item): item is Views<'content_with_author'> & { id: string; title: string; author_id: string } => 
+        .filter((item): item is any => 
           item.id !== null && item.title !== null && item.author_id !== null
         )
         .map((caseItem) => ({
@@ -109,15 +104,15 @@ export default function RecentPostsSection() {
           metadata: (caseItem.metadata || {}) as Record<string, any>
         }))
       
-      setRecentPosts(transformedData)
-    } catch (error) {
-      console.error('Error fetching recent posts:', error)
-      // 에러가 발생해도 빈 배열로 설정하여 UI가 깨지지 않도록 함
-      setRecentPosts([])
-    } finally {
-      setLoading(false)
-    }
-  }
+      return transformedData
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+  })
+}
+
+export default function RecentPostsSection() {
+  const { data: recentPosts = [], isLoading } = useRecentPosts()
 
   const getDescription = (content: string) => {
     // Remove markdown and get first 100 characters
@@ -158,7 +153,7 @@ export default function RecentPostsSection() {
             </Button>
           </div>
 
-          {loading ? (
+          {isLoading ? (
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {[1, 2, 3].map((i) => (
                 <div key={i} className="h-full bg-card rounded-lg border p-6 animate-pulse">
@@ -213,7 +208,7 @@ export default function RecentPostsSection() {
                   status: 'published',
                   updated_at: null,
                   is_pinned: false
-                } as Views<'content_with_author'>
+                } as any
 
                 return (
                   <motion.div
@@ -238,7 +233,7 @@ export default function RecentPostsSection() {
             </div>
           )}
 
-          {!loading && recentPosts.length === 0 && (
+          {!isLoading && recentPosts.length === 0 && (
             <div className="text-center py-12">
               <p className="text-muted-foreground mb-4">아직 공유된 게시글이 없습니다.</p>
               <Button size="lg" className="kepco-gradient" asChild>
@@ -250,7 +245,7 @@ export default function RecentPostsSection() {
             </div>
           )}
 
-          {!loading && recentPosts.length > 0 && (
+          {!isLoading && recentPosts.length > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}

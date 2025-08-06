@@ -2,10 +2,10 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
+import { useAuth } from '@/providers'
+import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
 import { toast } from 'sonner'
-import { Views, type Enums } from '@/lib/supabase/client'
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
 import { Plus, Lightbulb } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -13,8 +13,6 @@ import { Button } from '@/components/ui/button'
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import ContentCard from '@/components/shared/ContentCard'
-
-type PostCategory = Enums<'post_category'>
 
 // 카테고리 정보 가져오기
 const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('cases')
@@ -29,18 +27,14 @@ const sortOptions = [
 export default function CasesListPage() {
   const router = useRouter()
   const [searchTerm, setSearchTerm] = useState('')
-  const [activeCategory, setActiveCategory] = useState<PostCategory | 'all'>('all')
+  const [activeCategory, setActiveCategory] = useState<string>('all')
   const [sortBy, setSortBy] = useState('latest')
   
-  const { user, profile } = useOptimizedAuth()
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  const { user, profile } = useAuth()
+  const deleteContentMutation = useDeleteContent()
   
-  // Use Supabase hook
-  const { data: cases, loading, refetch } = useContentList({
-    type: 'case',
-    category: activeCategory !== 'all' ? activeCategory : undefined,
-    status: 'published'
-  })
+  // Use new architecture Hook
+  const { data: cases, isLoading: loading, refetch } = useContentList('case')
   
   // Filter and sort cases
   const filteredCases = useMemo(() => {
@@ -54,7 +48,7 @@ export default function CasesListPage() {
       filtered = filtered.filter(item => 
         item.title?.toLowerCase().includes(lowerSearch) ||
         item.content?.toLowerCase().includes(lowerSearch) ||
-        item.tags?.some(tag => tag.toLowerCase().includes(lowerSearch))
+        item.tags?.some((tag: string) => tag.toLowerCase().includes(lowerSearch))
       )
     }
     
@@ -84,10 +78,7 @@ export default function CasesListPage() {
     }
     
     try {
-      const result = await deleteContent(id)
-      if (result.error) {
-        throw result.error
-      }
+      await deleteContentMutation.mutateAsync({ id: id, contentType: 'case' })
       toast.success('활용사례가 삭제되었습니다.')
       refetch()
     } catch (error: any) {
@@ -97,11 +88,11 @@ export default function CasesListPage() {
   }
 
   // Check permissions
-  const canEdit = (item: Views<'content_with_author'>) => {
+  const canEdit = (item: any) => {
     return !!(user && profile && item.author_id === user.id)
   }
 
-  const canDelete = (item: Views<'content_with_author'>) => {
+  const canDelete = (item: any) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 
@@ -133,7 +124,7 @@ export default function CasesListPage() {
         onCreateClick={() => router.push('/cases/new')}
         categories={categories}
         activeCategory={activeCategory}
-        onCategoryChange={(value) => setActiveCategory(value as PostCategory | 'all')}
+        onCategoryChange={(value) => setActiveCategory(value)}
         sortOptions={sortOptions}
         activeSortBy={sortBy}
         onSortChange={setSortBy}

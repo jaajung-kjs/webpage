@@ -9,8 +9,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
 import { Menu, User, LogOut, Settings, Shield, MessageCircle } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { sessionManager } from '@/lib/utils/session-manager'
+import { useAuth } from '@/providers'
 import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
 import LoginDialog from '@/components/auth/LoginDialog'
 
@@ -27,12 +26,12 @@ export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { user, profile, loading, isMember } = useOptimizedAuth()
+  const { user, profile, loading, isMember, signOut } = useAuth()
   const { openModal, modalProps } = useMessageModal()
   const router = useRouter()
   
   const handleSignOut = async () => {
-    await sessionManager.signOut()
+    await signOut()
     router.push('/')
   }
   
@@ -223,13 +222,13 @@ export default function Header() {
 }
 
 function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMessage?: () => void }) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember, signOut } = useAuth()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const router = useRouter()
   
   const handleSignOut = async () => {
-    await sessionManager.signOut()
+    await signOut()
     router.push('/')
   }
   

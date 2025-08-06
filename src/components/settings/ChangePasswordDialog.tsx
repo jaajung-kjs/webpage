@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 
 interface ChangePasswordDialogProps {
@@ -52,7 +52,7 @@ export function ChangePasswordDialog({
       setLoading(true)
       
       // Update password using Supabase Auth
-      const { error } = await supabase.auth.updateUser({
+      const { error } = await supabaseClient.auth.updateUser({
         password: newPassword
       })
 

@@ -2,10 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useContentList, useDeleteContent } from '@/hooks/useSupabase'
+import { useAuth } from '@/providers'
+import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+
 import { toast } from 'sonner'
-import { Views } from '@/lib/supabase/client'
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
 import { 
   Plus,
@@ -36,17 +37,14 @@ const sortOptions = [
 
 export default function CommunityPage() {
   const router = useRouter()
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
   
   // Use Supabase hooks
-  const { data: posts, loading, refetch } = useContentList({
-    type: 'post',
-    status: 'published'
-  })
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  const { data: posts, isLoading: loading, refetch } = useContentList('post')
+  const deleteContentMutation = useDeleteContent()
 
   // Filter and sort posts
   const filteredPosts = useMemo(() => {
@@ -111,10 +109,7 @@ export default function CommunityPage() {
     }
     
     try {
-      const result = await deleteContent(id)
-      if (result.error) {
-        throw result.error
-      }
+      await deleteContentMutation.mutateAsync({ id: id, contentType: 'community' })
       toast.success('게시글이 삭제되었습니다.')
       refetch()
     } catch (error: any) {
@@ -124,11 +119,11 @@ export default function CommunityPage() {
   }
 
   // Check permissions
-  const canEdit = (item: Views<'content_with_author'>) => {
+  const canEdit = (item: Tables<'content_with_author'>) => {
     return !!(user && profile && item.author_id === user.id)
   }
 
-  const canDelete = (item: Views<'content_with_author'>) => {
+  const canDelete = (item: Tables<'content_with_author'>) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 

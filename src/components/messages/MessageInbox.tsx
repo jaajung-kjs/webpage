@@ -8,9 +8,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useRealtimeMessageInbox } from '@/hooks/useRealtime'
-import { MessageNotifications } from '@/lib/api/messages'
+import { useAuth } from '@/providers'
+import { useMessageInbox } from '@/hooks/features/useMessages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -22,7 +21,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import type { InboxMessage } from '@/lib/api/messages'
+// InboxMessage type is now handled internally by the hook
 
 interface MessageInboxProps {
   onConversationSelect?: (conversationId: string, recipientId: string, recipientName: string, recipientAvatar?: string | null) => void
@@ -30,8 +29,8 @@ interface MessageInboxProps {
 }
 
 export function MessageInbox({ onConversationSelect, className }: MessageInboxProps) {
-  const { user, isMember } = useOptimizedAuth()
-  const { messages, loading, error, refetch } = useRealtimeMessageInbox(user?.id || '')
+  const { user, isMember } = useAuth()
+  const { data: messages, isLoading: loading, error, refetch } = useMessageInbox()
   const [refreshing, setRefreshing] = useState(false)
 
   const handleRefresh = async () => {
@@ -40,7 +39,7 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
     setTimeout(() => setRefreshing(false), 1000)
   }
 
-  const handleConversationClick = (message: InboxMessage) => {
+  const handleConversationClick = (message: any) => {
     if (onConversationSelect) {
       onConversationSelect(
         message.conversation_id,
@@ -72,7 +71,7 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
         <CardContent className="flex flex-col items-center justify-center py-12">
           <div className="text-destructive mb-4">⚠️</div>
           <h3 className="text-lg font-semibold mb-2">오류 발생</h3>
-          <p className="text-muted-foreground text-center mb-4">{error}</p>
+          <p className="text-muted-foreground text-center mb-4">{error?.message || '메시지를 불러올 수 없습니다.'}</p>
           <Button onClick={handleRefresh} variant="outline" size="sm">
             <RefreshCw className="h-4 w-4 mr-2" />
             다시 시도
@@ -104,11 +103,11 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
         <ScrollArea className="h-[400px]">
           {loading ? (
             <InboxSkeleton />
-          ) : messages.length === 0 ? (
+          ) : messages && messages.length === 0 ? (
             <EmptyInbox />
           ) : (
             <AnimatePresence>
-              {messages.map((message, index) => (
+              {messages?.map((message: any, index: number) => (
                 <motion.div
                   key={message.conversation_id}
                   initial={{ opacity: 0, y: 20 }}
@@ -134,7 +133,7 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
  * Individual message item in inbox
  */
 interface InboxMessageItemProps {
-  message: InboxMessage
+  message: any // Use any for now until proper type is defined
   onClick: () => void
 }
 

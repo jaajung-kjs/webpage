@@ -7,16 +7,11 @@ import {
   Lightbulb,
   Flag
 } from 'lucide-react'
-import { 
-  useContent,
-  useIsLiked,
-  useToggleLike,
-  useDeleteContent
-} from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
+
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { ContentAPI } from '@/lib/api/content'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
 import DetailLayout from '@/components/shared/DetailLayout'
@@ -52,25 +47,28 @@ const categoryIcons = {
 }
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use Supabase hooks
-  const { data: caseData, loading, error } = useContent(caseId)
-  const isLikedFromHook = useIsLiked(user?.id, caseId)
-  const { toggleLike, loading: likeLoading } = useToggleLike()
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  // Use hooks
+  const { data: caseData, isLoading: loading } = useContent(caseId)
+  const { data: isLikedFromHook } = useIsLiked(caseId)
+  const toggleLikeMutation = useToggleLike()
+  const deleteContentMutation = useDeleteContent()
+  const incrementViewMutation = useIncrementView()
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Increment view count when case is loaded
   useEffect(() => {
     if (caseData?.id) {
-      ContentAPI.incrementViewCount(caseData.id)
+      incrementViewMutation.mutate(caseData.id)
     }
   }, [caseData?.id])
 
@@ -84,7 +82,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   
   // Update like state from hook
   useEffect(() => {
-    setIsLiked(isLikedFromHook)
+    setIsLiked(isLikedFromHook || false)
   }, [isLikedFromHook])
 
   // Listen for report dialog events
@@ -118,40 +116,19 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     // Prevent multiple clicks
     if (likeLoading) return
 
+    setLikeLoading(true)
     try {
-      const result = await toggleLike(user.id, caseId)
+      const isNowLiked = await toggleLikeMutation.mutateAsync(caseId)
       
-      if (result.error) {
-        throw result.error
-      }
-      
-      // Get the updated state by checking the current like status
-      const { data: currentLike } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('content_id', caseId)
-        .eq('type', 'like')
-        .single()
-      
-      const isNowLiked = !!currentLike
       setIsLiked(isNowLiked)
-      
-      // Get updated like count from content
-      const { data: updatedContent } = await supabase
-        .from('content_with_author')
-        .select('like_count')
-        .eq('id', caseId)
-        .single()
-      
-      if (updatedContent) {
-        setLikeCount(updatedContent.like_count || 0)
-      }
+      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
       
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    } finally {
+      setLikeLoading(false)
     }
   }
 
@@ -180,18 +157,17 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
       return
     }
 
+    setDeleteLoading(true)
     try {
-      const result = await deleteContent(caseId)
+      await deleteContentMutation.mutateAsync({ id: caseId, contentType: 'case' })
       
-      if (result.error) {
-        throw result.error
-      }
-
       toast.success('활용사례가 삭제되었습니다.')
       router.push('/cases')
     } catch (error: any) {
       console.error('Error deleting case:', error)
       toast.error(error.message || '활용사례 삭제에 실패했습니다.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 

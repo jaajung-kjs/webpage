@@ -8,8 +8,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { MessagesAPI } from '@/lib/api/messages'
+import { useAuth } from '@/providers'
+import { useStartConversation, useSendMessage } from '@/hooks/features/useMessages'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,10 +46,13 @@ export function MessageButton({
   disabled,
   onMessageSent
 }: MessageButtonProps) {
-  const { user, isMember } = useOptimizedAuth()
+  const { user, isMember } = useAuth()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
-  const [sending, setSending] = useState(false)
+  
+  const startConversation = useStartConversation()
+  const sendMessage = useSendMessage()
+  const sending = sendMessage.isPending
 
   // 자신에게는 메시지를 보낼 수 없음
   if (!user || !isMember || user.id === recipientId) {
@@ -59,29 +62,16 @@ export function MessageButton({
   const handleSendMessage = async () => {
     if (!message.trim() || sending) return
 
-    setSending(true)
     try {
       // 대화방 찾기 또는 생성
-      const conversationResult = await MessagesAPI.findOrCreateConversation(
-        user.id,
-        recipientId
-      )
-
-      if (!conversationResult.success) {
-        throw new Error(conversationResult.error)
-      }
+      const conversationId = await startConversation.mutateAsync(recipientId)
 
       // 메시지 전송
-      const messageResult = await MessagesAPI.sendMessage(
-        user.id,
+      await sendMessage.mutateAsync({
+        conversationId,
         recipientId,
-        message.trim(),
-        conversationResult.data
-      )
-
-      if (!messageResult.success) {
-        throw new Error(messageResult.error)
-      }
+        content: message.trim()
+      })
 
       // 성공 처리
       setMessage('')
@@ -89,14 +79,12 @@ export function MessageButton({
       toast.success(`${recipientName}님에게 메시지를 전송했습니다.`)
 
       if (onMessageSent) {
-        onMessageSent(conversationResult.data!)
+        onMessageSent(conversationId)
       }
 
     } catch (error) {
       console.error('Failed to send message:', error)
       toast.error('메시지 전송에 실패했습니다.')
-    } finally {
-      setSending(false)
     }
   }
 

@@ -23,7 +23,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 // import { logger } from '@/lib/logger'
@@ -56,7 +56,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false)
   const [emailForVerification, setEmailForVerification] = useState('')
-  const { signIn, signUp, user } = useOptimizedAuth()
+  const { signIn, signUp, user } = useAuth()
   const router = useRouter()
 
   // Update activeTab when defaultTab changes
@@ -150,8 +150,10 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
       const { error } = await signUp(
         values.email,
         values.password,
-        values.name,
-        values.department
+        {
+          name: values.name,
+          department: values.department
+        }
       )
       
       if (error) {

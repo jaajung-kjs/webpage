@@ -4,7 +4,7 @@ import "./globals.css";
 import "@/styles/colors.css";
 import "@/styles/mobile.css";
 import { ErrorBoundary } from "@/components/ui/error-boundary";
-import { PerformanceProvider } from "@/components/providers/performance-provider";
+import { RootProvider } from "@/providers";
 import { Toaster } from "@/components/ui/sonner";
 
 const notoSansKR = Noto_Sans_KR({
@@ -54,12 +54,12 @@ export default function RootLayout({
         className={`${notoSansKR.variable} font-sans antialiased`}
       >
         <ErrorBoundary>
-          <PerformanceProvider>
+          <RootProvider>
             <div className="relative flex min-h-screen flex-col">
               {children}
             </div>
             <Toaster position="top-right" richColors />
-          </PerformanceProvider>
+          </RootProvider>
         </ErrorBoundary>
       </body>
     </html>

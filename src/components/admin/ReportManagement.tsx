@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -35,24 +35,13 @@ import {
   MessageSquare,
   ExternalLink
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase, Tables } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { useReports, useUpdateReport, type ReportWithDetails } from '@/hooks/features/useReports'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
 
-type Report = Tables<'reports'> & {
-  reporter?: {
-    id: string
-    name: string
-    email: string
-  }
-  reviewer?: {
-    id: string
-    name: string
-  }
-  parent_content_id?: string | null
-}
+// ReportWithDetails 타입은 이제 useReports에서 import
 
 const statusConfig = {
   pending: { label: '대기중', color: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -68,83 +57,32 @@ const targetTypeLabels = {
 }
 
 export default function ReportManagement() {
-  const { user } = useOptimizedAuth()
-  const [reports, setReports] = useState<Report[]>([])
-  const [filteredReports, setFilteredReports] = useState<Report[]>([])
-  const [loading, setLoading] = useState(true)
+  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'reviewing' | 'resolved' | 'dismissed'>('all')
   
   // Dialog state
-  const [selectedReport, setSelectedReport] = useState<Report | null>(null)
+  const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
   const [actionDialogOpen, setActionDialogOpen] = useState(false)
   const [actionType, setActionType] = useState<'reviewing' | 'resolved' | 'dismissed'>('resolved')
   const [resolutionNotes, setResolutionNotes] = useState('')
-  const [operationLoading, setOperationLoading] = useState(false)
 
-  useEffect(() => {
-    fetchReports()
-  }, [])
+  // Fetch reports using TanStack Query hook
+  const { data: reports = [], isLoading, refetch } = useReports(
+    activeTab === 'all' ? undefined : { status: activeTab as any }
+  )
+  
+  // Update report mutation
+  const updateReportMutation = useUpdateReport()
 
-  useEffect(() => {
-    filterReports()
+  // Filter reports based on active tab
+  const filteredReports = useMemo(() => {
+    if (activeTab === 'all') {
+      return reports
+    }
+    return reports.filter(report => report.status === activeTab)
   }, [activeTab, reports])
 
-  const fetchReports = async () => {
-    try {
-      setLoading(true)
-      const { data: reportsData, error: reportsError } = await supabase
-        .from('reports')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
-      if (reportsError) throw reportsError
-      
-      // Fetch user data separately
-      const userIds = new Set<string>()
-      reportsData?.forEach(report => {
-        if (report.reporter_id) userIds.add(report.reporter_id)
-        if (report.reviewed_by) userIds.add(report.reviewed_by)
-      })
-      
-      let usersMap: Record<string, any> = {}
-      if (userIds.size > 0) {
-        const { data: users, error: usersError } = await supabase
-          .from('users')
-          .select('id, name, email')
-          .in('id', Array.from(userIds))
-        
-        if (!usersError && users) {
-          users.forEach(user => {
-            usersMap[user.id] = user
-          })
-        }
-      }
-      
-      // Combine data
-      const reportsWithUsers = (reportsData || []).map(report => ({
-        ...report,
-        reporter: report.reporter_id ? usersMap[report.reporter_id] : undefined,
-        reviewer: report.reviewed_by ? { id: usersMap[report.reviewed_by]?.id, name: usersMap[report.reviewed_by]?.name } : undefined
-      }))
-      
-      setReports(reportsWithUsers)
-    } catch (error) {
-      console.error('Error fetching reports:', error)
-      toast.error('신고 목록을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const filterReports = () => {
-    if (activeTab === 'all') {
-      setFilteredReports(reports)
-    } else {
-      setFilteredReports(reports.filter(report => report.status === activeTab))
-    }
-  }
-
-  const handleAction = (report: Report, action: 'reviewing' | 'resolved' | 'dismissed') => {
+  const handleAction = (report: ReportWithDetails, action: 'reviewing' | 'resolved' | 'dismissed') => {
     setSelectedReport(report)
     setActionType(action)
     setResolutionNotes('')
@@ -155,29 +93,20 @@ export default function ReportManagement() {
     if (!selectedReport || !user) return
 
     try {
-      setOperationLoading(true)
-      const { error } = await supabase
-        .from('reports')
-        .update({
-          status: actionType,
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString(),
-          resolution_notes: resolutionNotes || null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', selectedReport.id)
-      
-      if (error) throw error
+      await updateReportMutation.mutateAsync({
+        reportId: selectedReport.id,
+        status: actionType === 'reviewing' ? 'resolved' : actionType,
+        adminNote: resolutionNotes || undefined,
+        action: actionType === 'reviewing' ? 'under_review' : actionType
+      })
       
       toast.success(`신고를 ${statusConfig[actionType].label} 처리했습니다.`)
       setActionDialogOpen(false)
       setSelectedReport(null)
-      fetchReports()
+      refetch()
     } catch (error: any) {
       console.error('Error updating report:', error)
       toast.error(error.message || '신고 처리에 실패했습니다.')
-    } finally {
-      setOperationLoading(false)
     }
   }
 
@@ -298,7 +227,7 @@ export default function ReportManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {loading ? (
+                    {isLoading ? (
                       <TableRow>
                         <TableCell colSpan={7} className="text-center">
                           로딩 중...
@@ -326,7 +255,7 @@ export default function ReportManagement() {
                                     {report.reporter?.name || '익명'}
                                   </div>
                                   <div className="text-sm text-muted-foreground">
-                                    {report.reporter?.email}
+                                    {report.reporter?.email || ''}
                                   </div>
                                 </div>
                               </div>
@@ -356,9 +285,9 @@ export default function ReportManagement() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {report.reviewer ? (
+                              {report.reviewed_by ? (
                                 <div className="text-sm">
-                                  <div>{report.reviewer.name}</div>
+                                  <div>처리자</div>
                                   {report.reviewed_at && (
                                     <div className="text-xs text-muted-foreground">
                                       {formatDate(report.reviewed_at)}
@@ -513,14 +442,14 @@ export default function ReportManagement() {
           </div>
           
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={operationLoading}>
+            <AlertDialogCancel disabled={updateReportMutation.isPending}>
               취소
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmAction}
-              disabled={operationLoading}
+              disabled={updateReportMutation.isPending}
             >
-              {operationLoading ? '처리 중...' : '확인'}
+              {updateReportMutation.isPending ? '처리 중...' : '확인'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

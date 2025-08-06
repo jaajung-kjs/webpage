@@ -8,9 +8,8 @@
 'use client'
 
 import { useState, useRef, useEffect, memo } from 'react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { useRealtimeConversationPaginated } from '@/hooks/useRealtime'
-import { MessagesAPI } from '@/lib/api/messages'
+import { useAuth } from '@/providers'
+import { useConversation, useSendMessage, useMarkAsRead } from '@/hooks/features/useMessages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -23,7 +22,7 @@ import { ko } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { MessageWithSender } from '@/lib/api/messages'
+// Message type is now handled internally by the hook
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,18 +52,10 @@ export function ConversationThread({
   onBack,
   className
 }: ConversationThreadProps) {
-  const { user, profile } = useOptimizedAuth()
-  const { 
-    messages, 
-    loading, 
-    loadingMore,
-    error, 
-    hasMore,
-    loadMoreMessages,
-    addOptimisticMessage, 
-    replaceOptimisticMessage, 
-    updateMessageStatus 
-  } = useRealtimeConversationPaginated(conversationId, user?.id)
+  const { user, profile } = useAuth()
+  const { data: messages, isLoading: loading, error, refetch } = useConversation(conversationId)
+  const sendMessageMutation = useSendMessage()
+  const markAsReadMutation = useMarkAsRead()
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [optimisticId, setOptimisticId] = useState<string | null>(null)
@@ -79,7 +70,7 @@ export function ConversationThread({
   // 자동 스크롤 (디바운스 적용)
   useEffect(() => {
     // 메시지가 추가되었을 때만 스크롤 (초기 로드 또는 새 메시지)
-    if (messages.length > previousMessageCountRef.current) {
+    if (messages && messages.length > previousMessageCountRef.current) {
       // 이전 타이머 취소
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
@@ -88,37 +79,47 @@ export function ConversationThread({
       // 디바운스로 스크롤 지연
       scrollTimeoutRef.current = setTimeout(() => {
         messagesEndRef.current?.scrollIntoView({ 
-          behavior: messages.length > 20 ? 'auto' : 'smooth' // 많은 메시지일 때는 즉시 스크롤
+          behavior: messages && messages.length > 20 ? 'auto' : 'smooth' // 많은 메시지일 때는 즉시 스크롤
         })
       }, 100)
     }
     
-    previousMessageCountRef.current = messages.length
+    previousMessageCountRef.current = messages?.length || 0
     
     return () => {
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
       }
     }
-  }, [messages.length])
+  }, [messages?.length])
 
   // 대화방 진입 시 메시지 읽음 처리 (중복 방지)
   useEffect(() => {
-    if (user && conversationId && messages.length > 0) {
+    if (user && conversationId && messages && messages.length > 0) {
       // 읽지 않은 메시지가 있는지 확인 후 읽음 처리
-      const hasUnreadMessages = messages.some((msg: MessageWithSender) => 
+      const hasUnreadMessages = messages.some((msg: any) => 
         msg.recipient_id === user.id && !msg.is_read
       )
       
       if (hasUnreadMessages) {
         log('📖 Marking messages as read for conversation:', conversationId)
-        MessagesAPI.markMessagesAsRead(user.id, conversationId)
+        const unreadMessageIds = messages
+          .filter((msg: any) => msg.recipient_id === user.id && !msg.is_read)
+          .map((msg: any) => msg.id)
+        if (unreadMessageIds.length > 0) {
+          markAsReadMutation.mutate(unreadMessageIds)
+        }
       }
     }
-  }, [user, conversationId, messages.length])
+  }, [user, conversationId, messages?.length])
 
   // 메시지 재전송
   const handleRetryMessage = async (messageId: string) => {
+    // TODO: Implement retry functionality with new hooks
+    toast.error('재전송 기능은 아직 구현되지 않았습니다.')
+    return
+    
+    /*
     const messageContent = failedMessages.get(messageId)
     if (!messageContent || !user) return
 
@@ -161,11 +162,12 @@ export function ConversationThread({
       })
       toast.error('재전송에 실패했습니다.')
     }
+    */
   }
 
   // 메시지 삭제
   const handleDeleteMessage = (messageId: string) => {
-    replaceOptimisticMessage(messageId, null)
+    // TODO: Implement delete functionality with new hooks
     setFailedMessages(prev => {
       const next = new Map(prev)
       next.delete(messageId)
@@ -189,7 +191,27 @@ export function ConversationThread({
     setNewMessage('')
     setSending(true)
 
-    // 낙관적 메시지 생성
+    try {
+      await sendMessageMutation.mutateAsync({
+        conversationId,
+        recipientId,
+        content: messageContent
+      })
+      
+      // Success - message will be added via realtime subscription
+      log('✅ Message sent successfully')
+    } catch (error) {
+      logError('❌ Failed to send message:', error)
+      toast.error('메시지 전송에 실패했습니다.')
+      setNewMessage(messageContent) // Restore message on failure
+    } finally {
+      setSending(false)
+    }
+    
+    return
+    
+    /*
+    // 낙관적 메시지 생성 - OLD CODE
     const tempId = `temp-${Date.now()}`
     const optimisticMessage: MessageWithSender = {
       id: tempId,
@@ -262,6 +284,7 @@ export function ConversationThread({
     } finally {
       setSending(false)
     }
+    */
   }
 
   if (error) {
@@ -270,7 +293,7 @@ export function ConversationThread({
         <CardContent className="flex flex-col items-center justify-center py-12">
           <div className="text-destructive mb-4">⚠️</div>
           <h3 className="text-lg font-semibold mb-2">오류 발생</h3>
-          <p className="text-muted-foreground text-center">{error}</p>
+          <p className="text-muted-foreground text-center">{error?.message || '메시지를 불러올 수 없습니다.'}</p>
         </CardContent>
       </Card>
     )
@@ -306,11 +329,11 @@ export function ConversationThread({
         <ScrollArea ref={scrollAreaRef} className="flex-1 p-4">
           {loading ? (
             <ConversationSkeleton />
-          ) : messages.length === 0 ? (
+          ) : messages && messages.length === 0 ? (
             <EmptyConversation recipientName={recipientName} />
           ) : (
             <div className="space-y-4">
-              {/* 이전 대화 보기 버튼 */}
+              {/* 이전 대화 보기 버튼 - TODO: Implement pagination
               {hasMore && (
                 <div className="flex justify-center pb-4">
                   <Button
@@ -333,16 +356,16 @@ export function ConversationThread({
                     )}
                   </Button>
                 </div>
-              )}
+              )} */}
               
               <AnimatePresence initial={false}>
-                {messages.map((message: MessageWithSender, index: number) => {
+                {messages?.map((message: any, index: number) => {
                   const isOwn = message.sender_id === user?.id
                   const showAvatar = index === 0 || messages[index - 1]?.sender_id !== message.sender_id
                   
                   // 시간 표시 여부 결정: 다음 메시지와 1분 이상 차이나거나 마지막 메시지인 경우
                   const showTime = (() => {
-                    if (index === messages.length - 1) return true // 마지막 메시지
+                    if (index === (messages?.length || 0) - 1) return true // 마지막 메시지
                     
                     const currentTime = new Date(message.created_at)
                     const nextMessage = messages[index + 1]
@@ -429,7 +452,7 @@ export function ConversationThread({
  * Individual message bubble
  */
 interface MessageBubbleProps {
-  message: MessageWithSender
+  message: any // Use any for now until proper type is defined
   isOwn: boolean
   showAvatar: boolean
   showTime: boolean

@@ -23,8 +23,8 @@ import {
   BookOpen,
   Target
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
-import { supabase, Tables, TablesInsert } from '@/lib/supabase/client'
+import { useAuth } from '@/providers'
+import { useMyMembershipApplication, useCreateMembershipApplication } from '@/hooks/features/useMembership'
 import { toast } from 'sonner'
 
 const interests = [
@@ -47,11 +47,10 @@ const experienceLevels = [
 ]
 
 export default function MembershipApplicationPage() {
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [application, setApplication] = useState<Tables<'membership_applications'> | null>(null)
+  const { data: application, isLoading: checking } = useMyMembershipApplication()
+  const createApplicationMutation = useCreateMembershipApplication()
   
   // Form state
   const [applicationReason, setApplicationReason] = useState('')
@@ -60,10 +59,6 @@ export default function MembershipApplicationPage() {
   const [agreedToTerms, setAgreedToTerms] = useState(false)
   
   useEffect(() => {
-    checkApplicationStatus()
-  }, [user, profile])
-  
-  const checkApplicationStatus = async () => {
     if (!user) {
       router.push('/')
       return
@@ -87,23 +82,7 @@ export default function MembershipApplicationPage() {
       router.push('/')
       return
     }
-    
-    try {
-      const { data, error } = await supabase
-        .from('membership_applications')
-        .select('*')
-        .eq('user_id', user.id)
-        .single()
-        
-      if (data) {
-        setApplication(data)
-      }
-    } catch (error) {
-      console.error('Error checking application status:', error)
-    } finally {
-      setChecking(false)
-    }
-  }
+  }, [user, profile, router])
   
   const handleSubmit = async () => {
     if (!user) return
@@ -129,34 +108,18 @@ export default function MembershipApplicationPage() {
       return
     }
     
-    setLoading(true)
-    
     try {
-      const applicationData: TablesInsert<'membership_applications'> = {
-        user_id: user.id,
+      await createApplicationMutation.mutateAsync({
         application_reason: applicationReason,
         interests: selectedInterests,
-        experience_level: experienceLevel,
-        status: 'pending'
-      }
+        experience_level: experienceLevel
+      })
       
-      const { data, error } = await supabase
-        .from('membership_applications')
-        .insert(applicationData)
-        .select()
-        .single()
-      
-      if (error) throw error
-      
-      if (data) {
-        toast.success('가입 신청이 완료되었습니다.')
-        setApplication(data)
-      }
+      toast.success('가입 신청이 완료되었습니다.')
+      router.push('/membership/status')
     } catch (error) {
       console.error('Error submitting application:', error)
       toast.error(error instanceof Error ? error.message : '가입 신청에 실패했습니다.')
-    } finally {
-      setLoading(false)
     }
   }
   
@@ -408,10 +371,10 @@ export default function MembershipApplicationPage() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={loading}
+                disabled={createApplicationMutation.isPending}
                 className="flex-1 kepco-gradient"
               >
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {createApplicationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 가입 신청
               </Button>
             </div>

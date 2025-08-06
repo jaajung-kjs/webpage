@@ -1,9 +1,8 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { useEffect, useState } from 'react'
-import { HybridCache, createCacheKey } from '@/lib/utils/cache'
-import { supabase } from '@/lib/supabase/client'
+import { useQuery } from '@tanstack/react-query'
+import { supabaseClient } from '@/lib/core/connection-core'
 
 interface Stats {
   membersCount: number
@@ -12,57 +11,17 @@ interface Stats {
   avgScore: number
 }
 
-const defaultStats = {
-  membersCount: 0,
-  casesCount: 0,
-  activitiesCount: 0,
-  avgScore: 0
-}
-
-export default function StatsSection() {
-  const [stats, setStats] = useState<Stats>(defaultStats)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    fetchStats()
-  }, [])
-
-  const fetchStats = async () => {
-    try {
-      // Check cache first
-      const cacheKey = createCacheKey('stats', 'home')
-      const cachedStats = HybridCache.get<Stats>(cacheKey)
-      
-      if (cachedStats !== null) {
-        setStats(cachedStats)
-        setLoading(false)
-        
-        // Still fetch fresh data in background
-        fetchFreshStats(true)
-        return
-      }
-      
-      await fetchFreshStats(false)
-    } catch (error) {
-      console.error('Error fetching stats:', error)
-      setStats({
-        membersCount: 0,
-        casesCount: 0,
-        activitiesCount: 0,
-        avgScore: 0
-      })
-      setLoading(false)
-    }
-  }
-
-  const fetchFreshStats = async (isBackgroundUpdate: boolean) => {
-    try {
+// Custom hook for fetching stats
+function useHomeStats() {
+  return useQuery<Stats>({
+    queryKey: ['home-stats'],
+    queryFn: async () => {
       // Direct DB query for real statistics
       const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
-        supabase.from('users').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
-        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),
-        supabase.from('activities').select('*', { count: 'exact', head: true }),
-        supabase.from('content').select('*', { count: 'exact', head: true }).eq('type', 'resource')
+        supabaseClient.from('users').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
+        supabaseClient.from('content').select('*', { count: 'exact', head: true }).eq('type', 'case'),
+        supabaseClient.from('activities').select('*', { count: 'exact', head: true }),
+        supabaseClient.from('content').select('*', { count: 'exact', head: true }).eq('type', 'resource')
       ])
 
       // Filter only members (member role and above)
@@ -79,54 +38,39 @@ export default function StatsSection() {
       // Use actual learning sessions count, fallback to resources count if activities table doesn't exist
       const learningSessionsCount = activitiesCount > 0 ? activitiesCount : resourcesCount
       
-      const freshStats = {
+      return {
         membersCount: membersCount, // Show actual member count (member role and above)
         casesCount: casesCount,
         activitiesCount: learningSessionsCount, // Use actual learning sessions or resources
         avgScore: avgScore // Use real average for members only
       }
-      
-      // Cache the stats (30 minutes TTL)
-      const cacheKey = createCacheKey('stats', 'home')
-      HybridCache.set(cacheKey, freshStats, 1800000) // 30 minutes
-      
-      if (!isBackgroundUpdate) {
-        setStats(freshStats)
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error('Error fetching fresh stats:', error)
-      if (!isBackgroundUpdate) {
-        // Fallback data on any error
-        setStats({
-          membersCount: 0,
-          casesCount: 0,
-          activitiesCount: 0,
-          avgScore: 0
-        })
-        setLoading(false)
-      }
-    }
-  }
+    },
+    staleTime: 30 * 60 * 1000, // 30 minutes
+    refetchOnWindowFocus: false,
+  })
+}
+
+export default function StatsSection() {
+  const { data: stats, isLoading } = useHomeStats()
 
   const statsDisplay = [
     {
-      value: loading ? '-' : `${stats.membersCount}+`,
+      value: isLoading || !stats ? '-' : `${stats.membersCount}+`,
       label: '동아리 멤버',
       description: '전력관리처 직원들이 함께 하고 있습니다'
     },
     {
-      value: loading ? '-' : `${stats.casesCount}+`,
+      value: isLoading || !stats ? '-' : `${stats.casesCount}+`,
       label: 'AI 활용사례',
       description: '실무에 적용된 다양한 사례들을 공유했습니다'
     },
     {
-      value: loading ? '-' : `${stats.activitiesCount}+`,
+      value: isLoading || !stats ? '-' : `${stats.activitiesCount}+`,
       label: '학습 세션',
       description: '정기적인 워크샵과 스터디를 진행했습니다'
     },
     {
-      value: loading ? '-' : `${stats.avgScore}점`,
+      value: isLoading || !stats ? '-' : `${stats.avgScore}점`,
       label: '평균 활동점수',
       description: '멤버들의 평균 활동 점수입니다'
     }

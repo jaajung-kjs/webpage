@@ -43,13 +43,12 @@ import {
   Check,
   X
 } from 'lucide-react'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { 
   useMembershipApplications, 
-  useUpdateMembershipApplication, 
-  useSupabaseMutation 
-} from '@/hooks/useSupabase'
-import { supabase } from '@/lib/supabase/client'
+  useUpdateMembershipApplication
+} from '@/hooks/features/useMembership'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -84,12 +83,11 @@ const experienceLevels: Record<string, string> = {
 }
 
 export default function MembershipApplicationManager() {
-  const { user, profile } = useOptimizedAuth()
+  const { user, profile } = useAuth()
   
-  // Use Supabase hooks for data fetching
-  const { data: applications = [], loading, refetch } = useMembershipApplications()
-  const { updateApplication, loading: updateLoading } = useUpdateMembershipApplication()
-  const { mutate: updateUserRole, loading: roleLoading } = useSupabaseMutation()
+  // Use hooks for data fetching
+  const { data: applications = [], isLoading: loading, refetch } = useMembershipApplications()
+  const updateMembershipMutation = useUpdateMembershipApplication()
   
   const [filteredApplications, setFilteredApplications] = useState<MembershipApplication[]>([])
   const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null)
@@ -97,7 +95,7 @@ export default function MembershipApplicationManager() {
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
   
-  const processing = updateLoading || roleLoading
+  const processing = updateMembershipMutation.isPending
   
   // Filter states
   const [statusFilter, setStatusFilter] = useState('all')
@@ -130,31 +128,12 @@ export default function MembershipApplicationManager() {
     if (!selectedApplication || !reviewDecision || !user) return
     
     try {
-      // Update membership application
-      const result = await updateApplication(selectedApplication.id, {
+      // Update membership application (the hook handles user role update too)
+      await updateMembershipMutation.mutateAsync({
+        applicationId: selectedApplication.id,
         status: reviewDecision,
-        reviewed_by: user.id,
-        reviewed_at: new Date().toISOString(),
-        review_notes: reviewNotes || null
+        reviewNote: reviewNotes || undefined
       })
-      
-      if (result.error) {
-        throw result.error
-      }
-      
-      // If approved, update user role to 'member'
-      if (reviewDecision === 'approved') {
-        const roleResult = await updateUserRole(async () =>
-          await supabase
-            .from('users')
-            .update({ role: 'member' })
-            .eq('id', selectedApplication.user_id)
-        )
-        
-        if (roleResult.error) {
-          throw roleResult.error
-        }
-      }
       
       toast.success(
         reviewDecision === 'approved' 

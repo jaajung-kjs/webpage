@@ -38,20 +38,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { 
-  useComments, 
-  useCreateComment, 
-  useUpdateComment, 
-  useDeleteComment,
-  useToggleCommentLike
-} from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
+import { useComments, useCreateComment, useUpdateComment, useDeleteComment, useToggleCommentLike } from '@/hooks/features/useComments'
+import { supabaseClient } from '@/lib/core/connection-core'
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { LoadingDots, EmptyState } from '@/components/shared/LoadingStates'
 import { Skeleton, SkeletonList } from '@/components/ui/skeleton'
 
@@ -63,7 +58,7 @@ interface CommentSectionProps {
   autoCollapseDepth?: number // 자동 접기 깊이
 }
 
-type CommentWithReplies = Views<'comments_with_author'> & {
+type CommentWithReplies = any & {
   replies?: CommentWithReplies[]
 }
 
@@ -85,13 +80,14 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useAuth()
   
-  const { data: commentsData, loading, refetch } = useComments(contentId)
-  const { createComment, loading: createLoading } = useCreateComment()
-  const { updateComment, loading: updateLoading } = useUpdateComment()
-  const { deleteComment, loading: deleteLoading } = useDeleteComment()
-  const { toggleCommentLike, loading: likeLoading } = useToggleCommentLike()
+  const { data: commentsData, isLoading: loading, refetch } = useComments(contentId)
+  const createCommentMutation = useCreateComment()
+  const updateCommentMutation = useUpdateComment()
+  const deleteCommentMutation = useDeleteComment()
+  const toggleCommentLikeMutation = useToggleCommentLike()
+  const [likeLoading, setLikeLoading] = useState(false)
   
   const [comments, setComments] = useState<CommentWithReplies[]>([])
   const [newComment, setNewComment] = useState('')
@@ -102,7 +98,7 @@ export default function CommentSection({
   const [editContents, setEditContents] = useState<{ [key: string]: string }>({})
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popular'>('newest')
   
-  const commentActionLoading = createLoading || updateLoading || deleteLoading
+  const commentActionLoading = createCommentMutation.isPending || updateCommentMutation.isPending || deleteCommentMutation.isPending
 
   // Helper functions for individual comment state management
   const startReply = (commentId: string) => {
@@ -129,8 +125,8 @@ export default function CommentSection({
   useEffect(() => {
     if (commentsData) {
       // Organize comments into tree structure
-      const commentMap = new Map<string, Views<'comments_with_author'>[]>()
-      const rootComments: Views<'comments_with_author'>[] = []
+      const commentMap = new Map<string, typeof commentsData[0][]>()
+      const rootComments: typeof commentsData[0][] = []
       
       // First pass: separate root comments and create map for replies
       commentsData.forEach(comment => {
@@ -159,7 +155,7 @@ export default function CommentSection({
       })
       
       // Attach replies to comments (flat structure - only one level deep)
-      const attachReplies = (comments: Views<'comments_with_author'>[]): CommentWithReplies[] => {
+      const attachReplies = (comments: typeof rootComments): CommentWithReplies[] => {
         return comments.map(comment => ({
           ...comment,
           replies: comment.id ? (commentMap.get(comment.id) || []).map(reply => ({
@@ -227,7 +223,7 @@ export default function CommentSection({
       
       if (allCommentIds.length === 0) return
       
-      const { data: likes } = await supabase
+      const { data: likes } = await supabaseClient
         .from('interactions')
         .select('comment_id')
         .eq('user_id', user.id)
@@ -252,11 +248,10 @@ export default function CommentSection({
     if (!user || !newComment.trim() || !isMember) return
 
     try {
-      await createComment({
-        content_id: contentId,
-        author_id: user.id,
-        comment: newComment.trim(),
-        parent_id: null
+      await createCommentMutation.mutateAsync({
+        contentId: contentId,
+        content: newComment.trim(),
+        parentId: undefined
       })
       
       setNewComment('')
@@ -278,11 +273,10 @@ export default function CommentSection({
       // For flat structure: always use the root parent ID
       const rootParentId = findRootParentId(parentId)
       
-      await createComment({
-        content_id: contentId,
-        author_id: user.id,
-        comment: content,
-        parent_id: rootParentId
+      await createCommentMutation.mutateAsync({
+        contentId: contentId,
+        content: content,
+        parentId: rootParentId
       })
       
       cancelReply(parentId)
@@ -305,16 +299,16 @@ export default function CommentSection({
       return
     }
 
+    const wasLiked = commentLikes[commentId] || false
+
     try {
-      const wasLiked = commentLikes[commentId] || false
-      
       // Optimistically update UI
       setCommentLikes(prev => ({
         ...prev,
         [commentId]: !wasLiked
       }))
       
-      setComments(prev => prev.map(comment => {
+      setComments(prev => prev.map((comment: any) => {
         if (comment.id === commentId) {
           return { 
             ...comment, 
@@ -323,7 +317,7 @@ export default function CommentSection({
         }
         // Check nested replies
         if (comment.replies) {
-          const updatedReplies = comment.replies.map(reply => {
+          const updatedReplies = comment.replies.map((reply: any) => {
             if (reply.id === commentId) {
               return {
                 ...reply,
@@ -337,41 +331,38 @@ export default function CommentSection({
         return comment
       }))
       
-      const result = await toggleCommentLike(user.id, commentId, contentId)
+      await toggleCommentLikeMutation.mutateAsync({ commentId: commentId, contentId: contentId })
       
-      if (result.error) {
-        // Revert on error
-        setCommentLikes(prev => ({
-          ...prev,
-          [commentId]: wasLiked
-        }))
-        
-        setComments(prev => prev.map(comment => {
-          if (comment.id === commentId) {
-            return { 
-              ...comment, 
-              like_count: (comment.like_count || 0) + (wasLiked ? 1 : -1) 
-            }
-          }
-          // Check nested replies
-          if (comment.replies) {
-            const updatedReplies = comment.replies.map(reply => {
-              if (reply.id === commentId) {
-                return {
-                  ...reply,
-                  like_count: (reply.like_count || 0) + (wasLiked ? 1 : -1)
-                }
-              }
-              return reply
-            })
-            return { ...comment, replies: updatedReplies }
-          }
-          return comment
-        }))
-        
-        throw result.error
-      }
     } catch (error) {
+      // Revert on error
+      setCommentLikes(prev => ({
+        ...prev,
+        [commentId]: wasLiked
+      }))
+      
+      setComments(prev => prev.map((comment: any) => {
+        if (comment.id === commentId) {
+          return { 
+            ...comment, 
+            like_count: (comment.like_count || 0) + (wasLiked ? 1 : -1) 
+          }
+        }
+        // Check nested replies
+        if (comment.replies) {
+          const updatedReplies = comment.replies.map((reply: any) => {
+            if (reply.id === commentId) {
+              return {
+                ...reply,
+                like_count: (reply.like_count || 0) + (wasLiked ? 1 : -1)
+              }
+            }
+            return reply
+          })
+          return { ...comment, replies: updatedReplies }
+        }
+        return comment
+      }))
+      
       console.error('Error toggling comment like:', error)
       toast.error('좋아요 처리에 실패했습니다.')
     }
@@ -384,14 +375,11 @@ export default function CommentSection({
     if (!content) return
 
     try {
-      const result = await updateComment(commentId, {
-        comment: content,
-        updated_at: new Date().toISOString()
-      }, contentId)
-      
-      if (result.error) {
-        throw result.error
-      }
+      await updateCommentMutation.mutateAsync({ 
+        id: commentId, 
+        content: content,
+        contentId: contentId 
+      })
       
       cancelEdit(commentId)
       await refetch()
@@ -408,11 +396,7 @@ export default function CommentSection({
     if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) return
 
     try {
-      const result = await deleteComment(commentId, contentId)
-      
-      if (result.error) {
-        throw result.error
-      }
+      await deleteCommentMutation.mutateAsync({ id: commentId, contentId: contentId })
       
       await refetch()
       toast.success('댓글이 삭제되었습니다.')
@@ -891,7 +875,7 @@ function CommentItem({
       {/* Nested replies */}
       {comment.replies && comment.replies.length > 0 && !isCollapsed && (
         <div className="mt-4 space-y-4">
-          {comment.replies.map((reply) => (
+          {comment.replies.map((reply: any) => (
             <CommentItem
               key={reply.id}
               comment={reply}

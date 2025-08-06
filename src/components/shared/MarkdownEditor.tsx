@@ -16,7 +16,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabase } from '@/lib/supabase/client'
+import { supabaseClient } from '@/lib/core/connection-core'
 
 // Dynamic import for the editor to avoid SSR issues
 const MDEditor = dynamic(
@@ -70,14 +70,14 @@ export default function MarkdownEditor({
         const filePath = `content/${fileName}`
 
         // Upload to Supabase Storage
-        const { data, error } = await supabase.storage
+        const { data, error } = await supabaseClient.storage
           .from('attachments')
           .upload(filePath, file)
 
         if (error) throw error
 
         // Get public URL
-        const { data: { publicUrl } } = supabase.storage
+        const { data: { publicUrl } } = supabaseClient.storage
           .from('attachments')
           .getPublicUrl(filePath)
 

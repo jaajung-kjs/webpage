@@ -14,17 +14,11 @@ import {
   ExternalLink,
   Tag
 } from 'lucide-react'
-import { 
-  useContent,
-  useIsLiked,
-  useToggleLike,
-  useUpdateContent,
-  useDeleteContent
-} from '@/hooks/useSupabase'
-import { Views, supabase } from '@/lib/supabase/client'
-import { useOptimizedAuth } from '@/hooks/useOptimizedAuth'
+import { useContent, useToggleLike, useDeleteContent, useIsLiked, useUpdateContent, useIncrementView } from '@/hooks/features/useContent'
+import { useIsBookmarked, useToggleBookmark } from '@/hooks/features/useBookmarks'
+import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { ContentAPI } from '@/lib/api/content'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
 
@@ -67,25 +61,32 @@ const typeIcons = {
 }
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
-  const { user, profile, isMember } = useOptimizedAuth()
+  const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use Supabase hooks
-  const { data: resourceData, loading, error } = useContent(resourceId)
-  const isLikedFromHook = useIsLiked(user?.id, resourceId)
-  const { toggleLike, loading: likeLoading } = useToggleLike()
-  const { updateContent, loading: updateLoading } = useUpdateContent()
-  const { deleteContent, loading: deleteLoading } = useDeleteContent()
+  // Use hooks
+  const { data: resourceData, isLoading: loading, error } = useContent(resourceId)
+  const { data: isLikedFromHook } = useIsLiked(resourceId)
+  const toggleLikeMutation = useToggleLike()
+  const updateContentMutation = useUpdateContent()
+  const deleteContentMutation = useDeleteContent()
+  const incrementViewMutation = useIncrementView()
   
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(0)
-  const [isBookmarked, setIsBookmarked] = useState(false)
+  // Use bookmark hooks
+  const { data: isBookmarkedData } = useIsBookmarked(resourceId)
+  const toggleBookmarkMutation = useToggleBookmark()
+  const [bookmarkLoading, setBookmarkLoading] = useState(false)
   const [downloadCount, setDownloadCount] = useState(0)
+  const [likeLoading, setLikeLoading] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [updateLoading, setUpdateLoading] = useState(false)
 
   // Increment view count when resource is loaded
   useEffect(() => {
     if (resourceData?.id) {
-      ContentAPI.incrementViewCount(resourceData.id)
+      incrementViewMutation.mutate(resourceData.id)
     }
   }, [resourceData?.id])
 
@@ -103,7 +104,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   
   // Update like state from hook
   useEffect(() => {
-    setIsLiked(isLikedFromHook)
+    setIsLiked(isLikedFromHook || false)
   }, [isLikedFromHook])
 
   // Handle error state
@@ -114,29 +115,8 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
   }, [error])
 
-  // Check if user has bookmarked this resource
-  useEffect(() => {
-    const checkBookmark = async () => {
-      if (!user || !resourceData) return
-      
-      try {
-        const { data } = await supabase
-          .from('interactions')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('content_id', resourceId)
-          .eq('type', 'bookmark')
-          .single()
-          
-        setIsBookmarked(!!data)
-      } catch (error) {
-        console.error('Error checking bookmark:', error)
-        setIsBookmarked(false)
-      }
-    }
-    
-    checkBookmark()
-  }, [user, resourceId, resourceData])
+  // Bookmark state is now managed by the hook
+  const isBookmarked = isBookmarkedData || false
 
   const handleLike = async () => {
     if (!user) {
@@ -152,40 +132,19 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     // Prevent multiple clicks
     if (likeLoading) return
 
+    setLikeLoading(true)
     try {
-      const result = await toggleLike(user.id, resourceId)
+      const isNowLiked = await toggleLikeMutation.mutateAsync(resourceId)
       
-      if (result.error) {
-        throw result.error
-      }
-      
-      // Get the updated state by checking the current like status
-      const { data: currentLike } = await supabase
-        .from('interactions')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('content_id', resourceId)
-        .eq('type', 'like')
-        .single()
-      
-      const isNowLiked = !!currentLike
       setIsLiked(isNowLiked)
-      
-      // Get updated like count from content
-      const { data: updatedContent } = await supabase
-        .from('content_with_author')
-        .select('like_count')
-        .eq('id', resourceId)
-        .single()
-      
-      if (updatedContent) {
-        setLikeCount(updatedContent.like_count || 0)
-      }
+      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
       
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
+    } finally {
+      setLikeLoading(false)
     }
   }
 
@@ -202,6 +161,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       return
     }
 
+    setUpdateLoading(true)
     try {
       // Update download count in metadata
       const metadata = resourceData.metadata as any
@@ -210,13 +170,12 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
         downloads: (metadata?.downloads || 0) + 1
       }
       
-      const result = await updateContent(resourceId, {
-        metadata: newMetadata
+      await updateContentMutation.mutateAsync({
+        id: resourceId,
+        updates: {
+          metadata: newMetadata
+        }
       })
-      
-      if (result.error) {
-        throw result.error
-      }
       
       setDownloadCount(prev => prev + 1)
 
@@ -236,50 +195,21 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     } catch (error: any) {
       console.error('Error updating download count:', error)
       toast.error(error.message || '다운로드에 실패했습니다.')
+    } finally {
+      setUpdateLoading(false)
     }
   }
 
   const handleBookmark = async () => {
-    if (!user) {
-      toast.error('로그인이 필요합니다.')
-      return
-    }
+    if (bookmarkLoading) return
     
-    if (!isMember) {
-      toast.error('동아리 회원만 북마크할 수 있습니다.')
-      return
-    }
-
+    setBookmarkLoading(true)
     try {
-      if (isBookmarked) {
-        // Remove bookmark
-        const { error } = await supabase
-          .from('interactions')
-          .delete()
-          .eq('user_id', user.id)
-          .eq('content_id', resourceId)
-          .eq('type', 'bookmark')
-          
-        if (error) throw error
-        setIsBookmarked(false)
-        toast.success('북마크에서 제거되었습니다.')
-      } else {
-        // Add bookmark
-        const { error } = await supabase
-          .from('interactions')
-          .insert({
-            user_id: user.id,
-            content_id: resourceId,
-            type: 'bookmark'
-          })
-          
-        if (error) throw error
-        setIsBookmarked(true)
-        toast.success('북마크에 추가되었습니다.')
-      }
-    } catch (error: any) {
-      console.error('Error toggling bookmark:', error)
-      toast.error(error.message || '북마크 처리에 실패했습니다.')
+      await toggleBookmarkMutation.mutateAsync(resourceId)
+    } catch (error) {
+      // Error is handled by the mutation hook
+    } finally {
+      setBookmarkLoading(false)
     }
   }
 
@@ -298,18 +228,17 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       return
     }
 
+    setDeleteLoading(true)
     try {
-      const result = await deleteContent(resourceId)
+      await deleteContentMutation.mutateAsync({ id: resourceId, contentType: 'resource' })
       
-      if (result.error) {
-        throw result.error
-      }
-
       toast.success('학습자료가 삭제되었습니다.')
       router.push('/resources')
     } catch (error: any) {
       console.error('Error deleting resource:', error)
       toast.error(error.message || '학습자료 삭제에 실패했습니다.')
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
