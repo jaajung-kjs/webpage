@@ -7,10 +7,13 @@
 
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { supabase, Tables, Views, TablesInsert, TablesUpdate, handleSupabaseError, Database } from '@/lib/supabase/client'
 import type { PostgrestError } from '@supabase/supabase-js'
 import { HybridCache, createCacheKey, optimisticUpdate } from '@/lib/utils/cache'
+import { CacheManager } from '@/lib/utils/cache-manager'
+import { focusManager } from '@/lib/utils/focus-manager'
+import { onlineManager } from '@/lib/utils/online-manager'
 
 type TableName = keyof Database['public']['Tables']
 type ViewName = keyof Database['public']['Views']
@@ -29,6 +32,9 @@ interface CacheOptions {
   enabled?: boolean
   ttl?: number // Time to live in milliseconds
   key?: string
+  refetchOnWindowFocus?: boolean // 창 포커스 시 다시 가져오기
+  refetchOnReconnect?: boolean // 네트워크 재연결 시 다시 가져오기
+  staleTime?: number // 데이터가 신선한 것으로 간주되는 시간
 }
 
 // Enhanced hook for fetching with cache support
@@ -36,17 +42,41 @@ export function useSupabaseQuery<T>(
   table: TableOrViewName,
   query: (q: any) => any,
   deps: any[] = [],
-  cacheOptions: CacheOptions = { enabled: true, ttl: 300000 } // 5 minutes default
+  cacheOptions: CacheOptions = { 
+    enabled: true, 
+    ttl: 300000, // 5 minutes default
+    refetchOnWindowFocus: true, // 기본값 true (TanStack Query와 동일)
+    refetchOnReconnect: true, // 기본값 true
+    staleTime: 0 // 기본값 0 (즉시 stale)
+  }
 ): UseSupabaseResult<T> {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<PostgrestError | null>(null)
   const [loading, setLoading] = useState(true)
+  const lastFetchTimeRef = useRef<number>(0)
+  const isMountedRef = useRef(true)
 
   // Generate cache key
   const cacheKey = cacheOptions.key || createCacheKey('supabase', table, ...deps)
 
-  const fetchData = useCallback(async (retryCount: number = 0) => {
-    setLoading(retryCount === 0) // Only show loading on first attempt
+  // 데이터가 stale한지 확인하는 함수
+  const isStale = useCallback(() => {
+    if (!cacheOptions.staleTime || cacheOptions.staleTime === 0) {
+      return true // staleTime이 0이면 항상 stale
+    }
+    const timeSinceLastFetch = Date.now() - lastFetchTimeRef.current
+    return timeSinceLastFetch > cacheOptions.staleTime
+  }, [cacheOptions.staleTime])
+
+  const fetchData = useCallback(async (retryCount: number = 0, isBackgroundRefetch: boolean = false) => {
+    // 백그라운드 refetch이고 데이터가 fresh하면 스킵
+    if (isBackgroundRefetch && !isStale()) {
+      return
+    }
+
+    if (!isMountedRef.current) return
+
+    setLoading(retryCount === 0 && !isBackgroundRefetch) // 백그라운드 refetch는 로딩 표시 안함
     setError(null)
     
     try {
@@ -100,6 +130,9 @@ export function useSupabaseQuery<T>(
       if (cacheOptions.enabled && data) {
         HybridCache.set(cacheKey, data, cacheOptions.ttl)
       }
+      
+      // 마지막 fetch 시간 업데이트
+      lastFetchTimeRef.current = Date.now()
     } catch (err: any) {
       // Check if this is a network error that should be retried
       const isNetworkError = err.message?.includes('fetch') || 
@@ -141,12 +174,53 @@ export function useSupabaseQuery<T>(
         setLoading(false)
       }
     }
-  }, [table, cacheKey, cacheOptions.enabled, cacheOptions.ttl, ...deps])
+  }, [table, cacheKey, cacheOptions.enabled, cacheOptions.ttl, isStale, ...deps])
 
-  // Fetch data when component mounts
+  // Fetch data when component mounts and setup event listeners
   useEffect(() => {
+    isMountedRef.current = true
+    
+    // 초기 데이터 가져오기
     fetchData()
-  }, [fetchData])
+    
+    // CacheManager에 재검증 콜백 등록 (백그라운드 복귀 시 호출됨)
+    const revalidateCallback = async () => {
+      if (isMountedRef.current && cacheOptions.enabled) {
+        await fetchData(0, true)
+      }
+    }
+    CacheManager.registerRevalidationCallback(cacheKey, revalidateCallback)
+    
+    // Focus 이벤트 구독
+    let unsubscribeFocus: (() => void) | undefined
+    if (cacheOptions.refetchOnWindowFocus) {
+      unsubscribeFocus = focusManager.subscribe((isFocused) => {
+        if (isFocused && isMountedRef.current) {
+          // 백그라운드에서 refetch
+          fetchData(0, true)
+        }
+      })
+    }
+    
+    // Online 이벤트 구독
+    let unsubscribeOnline: (() => void) | undefined
+    if (cacheOptions.refetchOnReconnect) {
+      unsubscribeOnline = onlineManager.subscribe((isOnline) => {
+        if (isOnline && isMountedRef.current) {
+          // 백그라운드에서 refetch
+          fetchData(0, true)
+        }
+      })
+    }
+    
+    // Cleanup
+    return () => {
+      isMountedRef.current = false
+      CacheManager.unregisterRevalidationCallback(cacheKey)
+      unsubscribeFocus?.()
+      unsubscribeOnline?.()
+    }
+  }, [fetchData, cacheKey, cacheOptions.enabled, cacheOptions.refetchOnWindowFocus, cacheOptions.refetchOnReconnect])
 
   const refetch = useCallback(async () => {
     // Invalidate cache before refetching
@@ -167,7 +241,13 @@ export function useContent(id: string) {
     'content_with_author',
     queryFn,
     [id],
-    { enabled: true, ttl: 600000 } // 10 minutes cache
+    { 
+      enabled: true, 
+      ttl: 600000, // 10 minutes cache
+      staleTime: 300000, // 5 minutes fresh
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true
+    }
   )
 }
 
@@ -200,7 +280,13 @@ export function useContentList(filters: ContentFilters = {}) {
     'content_with_author',
     queryFn,
     [JSON.stringify(filters)],
-    { enabled: true, ttl: 300000 } // 5 minutes cache
+    { 
+      enabled: true, 
+      ttl: 300000, // 5 minutes cache
+      staleTime: 60000, // 1 minute fresh (리스트는 더 자주 변경됨)
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true
+    }
   )
 }
 
@@ -215,7 +301,13 @@ export function useComments(contentId: string) {
     'comments_with_author',
     queryFn,
     [contentId],
-    { enabled: true, ttl: 300000 } // 5 minutes cache
+    { 
+      enabled: true, 
+      ttl: 300000, // 5 minutes cache
+      staleTime: 30000, // 30 seconds fresh (댓글은 자주 변경됨)
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true
+    }
   )
 }
 
@@ -227,7 +319,13 @@ export function useUserProfile(userId: string) {
     'users',
     queryFn,
     [userId],
-    { enabled: true, ttl: 1800000 } // 30 minutes cache
+    { 
+      enabled: true, 
+      ttl: 1800000, // 30 minutes cache
+      staleTime: 900000, // 15 minutes fresh (프로필은 덜 자주 변경됨)
+      refetchOnWindowFocus: false, // 프로필은 포커스 시 refetch 안함
+      refetchOnReconnect: true
+    }
   )
 }
 

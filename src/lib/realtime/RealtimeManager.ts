@@ -89,21 +89,8 @@ export class RealtimeManager {
       }
     })
     
-    // Page Visibility API로 백그라운드 복귀 감지
-    if (typeof document !== 'undefined') {
-      document.addEventListener('visibilitychange', () => {
-        if (document.visibilityState === 'visible') {
-          log('🔌 RealtimeManager: Page became visible, checking connection')
-          this.handleVisibilityChange()
-        }
-      })
-      
-      // 포커스 이벤트도 추가 (일부 브라우저 호환성)
-      window.addEventListener('focus', () => {
-        log('🔌 RealtimeManager: Window focused, checking connection')
-        this.handleVisibilityChange()
-      })
-    }
+    // focusManager를 통한 visibility 감지 (통합된 방식)
+    this.setupVisibilityHandling()
     
     // 초기 세션 체크 및 초기화
     this.checkSessionAndInitialize()
@@ -131,6 +118,53 @@ export class RealtimeManager {
     } catch (error) {
       logError('🔌 RealtimeManager: Error checking initial session:', error)
     }
+  }
+  
+  /**
+   * Visibility 처리 설정 (focusManager와 통합)
+   */
+  private setupVisibilityHandling() {
+    if (typeof window === 'undefined') return
+    
+    // focusManager import 지연 (순환 참조 방지)
+    import('@/lib/utils/focus-manager').then(({ focusManager }) => {
+      log('🔌 RealtimeManager: Setting up visibility handling via focusManager')
+      
+      // focusManager를 통해 포커스 이벤트 구독
+      focusManager.subscribe((isFocused) => {
+        if (isFocused) {
+          log('🔌 RealtimeManager: Focus detected via focusManager, checking connection')
+          this.handleVisibilityChange()
+        }
+      })
+    }).catch(error => {
+      // focusManager를 로드할 수 없으면 기본 방식 사용
+      logWarn('🔌 RealtimeManager: Could not load focusManager, using default visibility handling', error)
+      this.setupDefaultVisibilityHandling()
+    })
+  }
+  
+  /**
+   * 기본 Visibility 처리 (fallback)
+   */
+  private setupDefaultVisibilityHandling() {
+    if (typeof document === 'undefined') return
+    
+    log('🔌 RealtimeManager: Setting up default visibility handling')
+    
+    // 기본 visibilitychange 이벤트
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        log('🔌 RealtimeManager: Page became visible (default handler), checking connection')
+        this.handleVisibilityChange()
+      }
+    })
+    
+    // 포커스 이벤트도 추가 (일부 브라우저 호환성)
+    window.addEventListener('focus', () => {
+      log('🔌 RealtimeManager: Window focused (default handler), checking connection')
+      this.handleVisibilityChange()
+    })
   }
   
   

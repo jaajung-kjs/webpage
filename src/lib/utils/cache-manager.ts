@@ -51,6 +51,9 @@ export class CacheManager {
   private static activeSubscriptions = new Map<string, any>()
   private static revalidationQueue = new Map<string, NodeJS.Timeout>()
   
+  // 재검증 콜백 저장소
+  private static revalidationCallbacks = new Map<string, () => Promise<void>>()
+  
   // 백그라운드 복귀 시 캐시 재검증을 위한 콜백 등록
   static {
     if (typeof window !== 'undefined') {
@@ -293,12 +296,27 @@ export class CacheManager {
   }
   
   /**
+   * 재검증 콜백 등록
+   */
+  static registerRevalidationCallback(key: string, callback: () => Promise<void>): void {
+    this.revalidationCallbacks.set(key, callback)
+  }
+  
+  /**
+   * 재검증 콜백 제거
+   */
+  static unregisterRevalidationCallback(key: string): void {
+    this.revalidationCallbacks.delete(key)
+  }
+  
+  /**
    * 성능 메트릭 수집
    */
   static getMetrics() {
     return {
       activeSubscriptions: this.activeSubscriptions.size,
       pendingRevalidations: this.revalidationQueue.size,
+      revalidationCallbacks: this.revalidationCallbacks.size,
       cacheSize: 0 // HybridCache doesn't expose size information
     }
   }
@@ -307,7 +325,29 @@ export class CacheManager {
    * 만료된 캐시 재검증 (백그라운드 복귀 시 호출)
    */
   private static async revalidateExpiredCaches(): Promise<void> {
-    // 현재 활성 구독들에 대해 캐시 재검증
+    console.log('CacheManager: Starting cache revalidation after background recovery')
+    
+    // 모든 등록된 재검증 콜백 실행
+    const revalidationPromises: Promise<void>[] = []
+    
+    for (const [key, callback] of this.revalidationCallbacks) {
+      console.log(`CacheManager: Triggering revalidation for: ${key}`)
+      
+      // 비동기로 재검증 실행 (에러가 나도 다른 재검증은 계속)
+      const promise = callback().catch(error => {
+        console.error(`CacheManager: Revalidation failed for ${key}:`, error)
+      })
+      
+      revalidationPromises.push(promise)
+    }
+    
+    // 모든 재검증이 완료될 때까지 대기
+    if (revalidationPromises.length > 0) {
+      await Promise.allSettled(revalidationPromises)
+      console.log(`CacheManager: Completed ${revalidationPromises.length} revalidations`)
+    }
+    
+    // 추가로 활성 구독들에 대해서도 캐시 확인
     for (const [key, subscription] of this.activeSubscriptions) {
       const [domain, type] = key.split(':')
       const config = CACHE_CONFIGS[`${domain}:${type}`]
@@ -318,8 +358,8 @@ export class CacheManager {
         if (cached) {
           const age = Date.now() - (cached.timestamp || 0)
           if (age > config.ttl) {
-            console.log(`CacheManager: Revalidating expired cache: ${key}`)
-            // 캐시 무효화하여 다음 요청 시 새로 가져오도록
+            console.log(`CacheManager: Cache expired, invalidating: ${key}`)
+            // 캐시 무효화
             this.invalidate(key)
           }
         }
