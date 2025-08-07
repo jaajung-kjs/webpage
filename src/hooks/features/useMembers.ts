@@ -9,13 +9,21 @@ import { supabaseClient } from '@/lib/core/connection-core'
 import { Tables } from '@/lib/database.types'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
+import type { UserMetadata } from '@/lib/types'
 
-// 회원 데이터 타입 (통계 포함)
-export interface MemberWithStats extends Tables<'users'> {
+// 회원 데이터 타입 (통계 포함) - Tables<'users'>를 기반으로 하되 metadata 타입을 재정의
+export interface MemberWithStats extends Omit<Tables<'users'>, 'metadata'> {
+  metadata?: UserMetadata
   posts_count?: number
   comments_count?: number
   likes_received?: number
+  content_count?: number | null
+  comment_count?: number | null
+  like_count?: number | null
   last_active?: string
+  total_views?: number
+  activities_joined?: number
+  resources_shared?: number
 }
 
 /**
@@ -29,17 +37,10 @@ export function useMembers(options?: {
   return useQuery<MemberWithStats[], Error>({
     queryKey: ['members', options],
     queryFn: async () => {
-      // 기본 회원 조회 쿼리
+      // members_with_stats 뷰 사용
       let query = supabaseClient
-        .from('users')
-        .select(`
-          *,
-          user_stats!left (
-            posts_count,
-            comments_count,
-            likes_received
-          )
-        `)
+        .from('members_with_stats')
+        .select('*')
       
       // 역할 필터링
       if (options?.role) {
@@ -55,16 +56,17 @@ export function useMembers(options?: {
       
       if (error) throw error
       
-      // user_stats 데이터 평탄화
-      const members = (data || []).map(user => {
-        const stats = (user as any).user_stats?.[0] || {}
-        return {
-          ...user,
-          posts_count: stats.posts_count || 0,
-          comments_count: stats.comments_count || 0,
-          likes_received: stats.likes_received || 0
-        }
-      })
+      // 데이터 매핑 (뷰에서 이미 통계 포함)
+      const members = (data || []).map(user => ({
+        ...user,
+        activity_score: user.activity_score || 0,
+        posts_count: user.content_count || 0,
+        comments_count: user.comment_count || 0,
+        likes_received: user.like_count || 0,
+        content_count: user.content_count || 0,
+        comment_count: user.comment_count || 0,
+        like_count: user.like_count || 0
+      }) as MemberWithStats)
       
       return members
     },
@@ -74,13 +76,18 @@ export function useMembers(options?: {
 }
 
 /**
- * 회원 역할 변경 Hook
+ * 회원 역할 변경 Hook (옵티미스틱 업데이트 적용)
  */
 export function useUpdateMemberRole() {
   const queryClient = useQueryClient()
   const { user: currentUser, profile } = useAuth()
   
-  return useMutation<Tables<'users'>, Error, { userId: string; newRole: 'admin' | 'moderator' | 'member' | 'leader' | 'vice-leader' | 'guest' | 'pending' }>({
+  return useMutation<
+    Tables<'users'>, 
+    Error, 
+    { userId: string; newRole: 'admin' | 'moderator' | 'member' | 'leader' | 'vice-leader' | 'guest' | 'pending' },
+    { previousMembers?: MemberWithStats[] }
+  >({
     mutationFn: async ({ userId, newRole }) => {
       // 권한 체크
       if (!currentUser || !['admin', 'leader', 'vice-leader'].includes(profile?.role || '')) {
@@ -105,11 +112,36 @@ export function useUpdateMemberRole() {
       if (error) throw error
       return data
     },
-    onSuccess: (data, variables) => {
-      // 캐시 업데이트
-      queryClient.invalidateQueries({ queryKey: ['members'] })
-      queryClient.invalidateQueries({ queryKey: ['profile', variables.userId] })
+    onMutate: async ({ userId, newRole }) => {
+      // 이전 쿼리 취소
+      await queryClient.cancelQueries({ queryKey: ['members'] })
       
+      // 이전 데이터 스냅샷
+      const previousMembers = queryClient.getQueryData<MemberWithStats[]>(['members'])
+      
+      // 옵티미스틱 업데이트
+      if (previousMembers) {
+        queryClient.setQueryData<MemberWithStats[]>(['members'], (old) => {
+          if (!old) return old
+          return old.map(member => 
+            member.id === userId 
+              ? { ...member, role: newRole, updated_at: new Date().toISOString() }
+              : member
+          )
+        })
+      }
+      
+      return { previousMembers }
+    },
+    onError: (error, variables, context) => {
+      // 에러 시 이전 데이터로 롤백
+      if (context?.previousMembers) {
+        queryClient.setQueryData(['members'], context.previousMembers)
+      }
+      console.error('Role update error:', error)
+      toast.error(error.message || '역할 변경에 실패했습니다.')
+    },
+    onSuccess: (data, variables) => {
       const roleLabels: Record<string, string> = {
         'admin': '관리자',
         'leader': '동아리장',
@@ -121,9 +153,10 @@ export function useUpdateMemberRole() {
       
       toast.success(`역할이 ${roleLabels[variables.newRole] || variables.newRole}로 변경되었습니다.`)
     },
-    onError: (error) => {
-      console.error('Role update error:', error)
-      toast.error(error.message || '역할 변경에 실패했습니다.')
+    onSettled: (data, error, variables) => {
+      // 최종적으로 캐시 동기화
+      queryClient.invalidateQueries({ queryKey: ['members'] })
+      queryClient.invalidateQueries({ queryKey: ['profile', variables.userId] })
     }
   })
 }
@@ -245,30 +278,24 @@ export function useSearchMembers(searchQuery: string) {
       }
       
       const { data, error } = await supabaseClient
-        .from('users')
-        .select(`
-          *,
-          user_stats!left (
-            posts_count,
-            comments_count,
-            likes_received
-          )
-        `)
+        .from('members_with_stats')
+        .select('*')
         .or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,department.ilike.%${searchQuery}%`)
         .limit(20)
       
       if (error) throw error
       
-      // user_stats 데이터 평탄화
-      const members = (data || []).map(user => {
-        const stats = (user as any).user_stats?.[0] || {}
-        return {
-          ...user,
-          posts_count: stats.posts_count || 0,
-          comments_count: stats.comments_count || 0,
-          likes_received: stats.likes_received || 0
-        }
-      })
+      // 데이터 매핑 (뷰에서 이미 통계 포함)
+      const members = (data || []).map(user => ({
+        ...user,
+        activity_score: user.activity_score || 0,
+        posts_count: user.content_count || 0,
+        comments_count: user.comment_count || 0,
+        likes_received: user.like_count || 0,
+        content_count: user.content_count || 0,
+        comment_count: user.comment_count || 0,
+        like_count: user.like_count || 0
+      }) as MemberWithStats)
       
       return members
     },

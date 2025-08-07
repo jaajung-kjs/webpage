@@ -9,7 +9,7 @@
 
 import { useState } from 'react'
 import { useAuth } from '@/providers'
-import { useMessageInbox } from '@/hooks/features/useMessages'
+import { useMessageInbox, type MessageInbox as MessageInboxType } from '@/hooks/features/useMessages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -39,7 +39,7 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
     setTimeout(() => setRefreshing(false), 1000)
   }
 
-  const handleConversationClick = (message: any) => {
+  const handleConversationClick = (message: MessageInboxType) => {
     if (onConversationSelect) {
       onConversationSelect(
         message.conversation_id,
@@ -107,7 +107,7 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
             <EmptyInbox />
           ) : (
             <AnimatePresence>
-              {messages?.map((message: any, index: number) => (
+              {messages?.map((message, index) => (
                 <motion.div
                   key={message.conversation_id}
                   initial={{ opacity: 0, y: 20 }}

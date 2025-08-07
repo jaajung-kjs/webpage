@@ -642,8 +642,9 @@ function ActivitiesPage() {
                 {/* Instructor */}
                 <div className="mb-4 flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={(activity.content as any)?.author_avatar_url} />
                     <AvatarFallback>
-                      U
+                      {activity.content?.author_name?.charAt(0) || 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <div>

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -72,16 +72,26 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   const deleteContentMutation = useDeleteContent()
   const incrementViewMutation = useIncrementView()
   
-  const [isLiked, setIsLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  // Derive like state from query data
+  const isLiked = isLikedFromHook || false
+  const likeCount = resourceData?.like_count || 0
+  const downloadCount = useMemo(() => {
+    if (resourceData?.metadata) {
+      const metadata = resourceData.metadata as any
+      return metadata?.downloads || 0
+    }
+    return 0
+  }, [resourceData])
+  
   // Use bookmark hooks
   const { data: isBookmarkedData } = useIsBookmarked(resourceId)
   const toggleBookmarkMutation = useToggleBookmark()
-  const [bookmarkLoading, setBookmarkLoading] = useState(false)
-  const [downloadCount, setDownloadCount] = useState(0)
-  const [likeLoading, setLikeLoading] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
-  const [updateLoading, setUpdateLoading] = useState(false)
+  
+  // Use mutation loading states
+  const likeLoading = toggleLikeMutation.isPending
+  const deleteLoading = deleteContentMutation.isPending
+  const updateLoading = updateContentMutation.isPending
+  const bookmarkLoading = toggleBookmarkMutation.isPending
 
   // Increment view count when resource is loaded
   useEffect(() => {
@@ -91,21 +101,6 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   }, [resourceData?.id])
 
 
-  // Update like count and download count when resource data changes
-  useEffect(() => {
-    if (resourceData?.like_count !== undefined) {
-      setLikeCount(resourceData.like_count || 0)
-    }
-    if (resourceData?.metadata) {
-      const metadata = resourceData.metadata as any
-      setDownloadCount(metadata?.downloads || 0)
-    }
-  }, [resourceData])
-  
-  // Update like state from hook
-  useEffect(() => {
-    setIsLiked(isLikedFromHook || false)
-  }, [isLikedFromHook])
 
   // Handle error state
   useEffect(() => {
@@ -132,19 +127,12 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     // Prevent multiple clicks
     if (likeLoading) return
 
-    setLikeLoading(true)
     try {
       const isNowLiked = await toggleLikeMutation.mutateAsync(resourceId)
-      
-      setIsLiked(isNowLiked)
-      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
-      
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
-    } finally {
-      setLikeLoading(false)
     }
   }
 
@@ -161,7 +149,6 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       return
     }
 
-    setUpdateLoading(true)
     try {
       // Update download count in metadata
       const metadata = resourceData.metadata as any
@@ -176,8 +163,6 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
           metadata: newMetadata
         }
       })
-      
-      setDownloadCount(prev => prev + 1)
 
       // Handle download based on resource type
       if (metadata?.url) {
@@ -195,21 +180,16 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     } catch (error: any) {
       console.error('Error updating download count:', error)
       toast.error(error.message || '다운로드에 실패했습니다.')
-    } finally {
-      setUpdateLoading(false)
     }
   }
 
   const handleBookmark = async () => {
     if (bookmarkLoading) return
     
-    setBookmarkLoading(true)
     try {
       await toggleBookmarkMutation.mutateAsync(resourceId)
     } catch (error) {
       // Error is handled by the mutation hook
-    } finally {
-      setBookmarkLoading(false)
     }
   }
 
@@ -228,7 +208,6 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       return
     }
 
-    setDeleteLoading(true)
     try {
       await deleteContentMutation.mutateAsync({ id: resourceId, contentType: 'resource' })
       
@@ -237,8 +216,6 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     } catch (error: any) {
       console.error('Error deleting resource:', error)
       toast.error(error.message || '학습자료 삭제에 실패했습니다.')
-    } finally {
-      setDeleteLoading(false)
     }
   }
 

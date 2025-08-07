@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -40,7 +40,13 @@ import {
 import { useAuth } from '@/providers'
 import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
-import { useUserProfile, useUserStats, useUserActivities, useUpdateProfile, useUploadAvatar } from '@/hooks/features/useProfile'
+// V1 시스템 (주석 처리 - 롤백용 보관)
+// import { useUserProfile, useUserStats, useUserActivities, useUpdateProfile, useUploadAvatar } from '@/hooks/features/useProfile'
+
+// V2 시스템
+import { useUserProfileComplete, useUpdateProfileV2, useCheckAchievements } from '@/hooks/features/useProfileV2'
+import { useUploadAvatar } from '@/hooks/features/useProfile' // 아바타 업로드는 그대로 사용
+import { ACHIEVEMENTS, getUserAchievements, getTotalAchievementPoints, TIER_COLORS, TIER_ICONS } from '@/lib/achievements'
 import { getRoleConfig, getRoleLabels } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels } from '@/lib/skills'
 import { getActivityLevelInfo } from '@/lib/activityLevels'
@@ -120,75 +126,79 @@ export default function ProfilePage() {
   const { user } = useAuth()
   const [userData, setUserData] = useState<UserData | null>(null)
   const [editData, setEditData] = useState<UserData | null>(null)
-  // Use profile hooks
-  const { data: profileData, isLoading: profileLoading } = useUserProfile(user?.id)
-  const { data: statsData, isLoading: statsLoading } = useUserStats(user?.id)
-  const { data: activitiesData, isLoading: activitiesLoading } = useUserActivities(user?.id, 8)
-  const updateProfileMutation = useUpdateProfile()
+  // V2 시스템 - 단일 Hook으로 모든 데이터 조회 (업적 포함)
+  const { data: profileV2Data, isLoading: loading, refetch } = useUserProfileComplete(user?.id, true, 8, true)
+  
+  // 업적 데이터는 이제 profileV2Data에 포함됨
+  const achievementProgress = profileV2Data?.achievements
+  const checkAchievementsMutation = useCheckAchievements()
+  
+  // V1 시스템 (주석 처리 - 롤백용 보관)
+  // const { data: profileData, isLoading: profileLoading } = useUserProfile(user?.id)
+  // const { data: statsData, isLoading: statsLoading } = useUserStats(user?.id)
+  // const { data: activitiesData, isLoading: activitiesLoading } = useUserActivities(user?.id, 8)
+  
+  const updateProfileMutation = useUpdateProfileV2()
   const uploadAvatarMutation = useUploadAvatar()
   
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('activity')
-  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const saving = updateProfileMutation.isPending
+  const uploadingAvatar = uploadAvatarMutation.isPending
 
-  // 실제 사용자 데이터 로딩
-  // Update userData when hook data changes
+  // V2 시스템 - 간단한 데이터 매핑
   useEffect(() => {
-    if (profileData && statsData) {
-      const metadata = (profileData.metadata || {}) as any
+    if (profileV2Data?.profile && profileV2Data?.stats) {
+      const profile = profileV2Data.profile
+      const stats = profileV2Data.stats
+      const metadata = (profile.metadata || {}) as any
+      
       const formattedData: UserData = {
-        id: profileData.id,
-        name: profileData.name || '',
-        email: profileData.email || '',
+        id: profile.id,
+        name: profile.name || '',
+        email: profile.email || '',
         phone: metadata.phone || '010-0000-0000',
-        department: profileData.department || '미지정',
+        department: profile.department || '미지정',
         job_position: metadata.job_position || '미지정',
-        role: profileData.role || 'member',
-        avatar: profileData.avatar_url || '',
-        joinDate: profileData.created_at || new Date().toISOString(),
-        lastLogin: profileData.last_seen_at || null,
+        role: profile.role || 'member',
+        avatar: profile.avatar_url || '',
+        joinDate: profile.created_at || new Date().toISOString(),
+        lastLogin: profile.last_seen_at || null,
         location: metadata.location || '미지정',
         aiExpertise: metadata.ai_expertise || ['ChatGPT'],
         skillLevel: metadata.skill_level || 'beginner',
-        bio: profileData.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
-        achievements: metadata.achievements || [],
-        activityScore: profileData.activity_score || 0,
+        bio: profile.bio || '안녕하세요! AI 학습동아리에서 함께 성장하고 있습니다.',
+        achievements: [], // V2 시스템에서 직접 관리
+        activityScore: profile.activity_score || 0,
         stats: {
-          totalPosts: statsData.posts_count || 0,
-          totalComments: statsData.comments_count || 0,
-          totalLikes: statsData.likes_received || 0,
-          totalViews: 0,
-          activitiesJoined: 0,
-          resourcesShared: 0
+          totalPosts: stats.posts_count || 0,
+          totalComments: stats.comments_count || 0,
+          totalLikes: stats.total_likes_received || 0,
+          totalViews: stats.total_views || 0,
+          activitiesJoined: stats.activities_joined || 0,
+          resourcesShared: stats.resources_count || 0
         },
         activityStats: {
-          posts: statsData.posts_count || 0,
-          cases: 0,
-          announcements: 0,
-          resources: 0,
-          comments: statsData.comments_count || 0
+          posts: stats.posts_count || 0,
+          cases: stats.cases_count || 0,
+          announcements: stats.announcements_count || 0,
+          resources: stats.resources_count || 0,
+          comments: stats.comments_count || 0
         },
-        recentActivity: (activitiesData || []).map(activity => ({
-          type: activity.activity_type.includes('post') ? 'post' : 
-                activity.activity_type.includes('comment') ? 'comment' : 
-                activity.activity_type.includes('resource') ? 'resource' : 'activity' as any,
-          title: activity.activity_data?.title || getActivityTitle(activity.activity_type),
-          date: activity.created_at,
+        recentActivity: (profileV2Data.recent_activities || []).map(activity => ({
+          type: activity.type as any,
+          title: activity.title,
+          date: activity.date,
           engagement: {
-            likes: 0,
-            comments: 0,
-            views: 0
+            likes: activity.engagement.likes || 0,
+            comments: activity.engagement.comments || 0,
+            views: activity.engagement.views || 0
           }
         }))
       }
       setUserData(formattedData)
       setEditData(formattedData)
-      setLoading(false)
-    } else if (!profileLoading && !statsLoading && !user) {
-      setLoading(false)
     }
-  }, [profileData, statsData, activitiesData, profileLoading, statsLoading, user])
+  }, [profileV2Data])
 
   // Remove the old complex loadUserData function
   /*
@@ -409,8 +419,6 @@ export default function ProfilePage() {
     if (!user || !editData) return
     
     try {
-      setSaving(true)
-      
       // Update user profile using mutation
       await updateProfileMutation.mutateAsync({
         name: editData.name,
@@ -421,8 +429,8 @@ export default function ProfilePage() {
           location: editData.location,
           job_position: editData.job_position,
           ai_expertise: editData.aiExpertise,
-          skill_level: editData.skillLevel,
-          achievements: editData.achievements
+          skill_level: editData.skillLevel
+          // achievements는 V2 시스템에서 자동 관리
         }
       })
       
@@ -447,8 +455,6 @@ export default function ProfilePage() {
     } catch (error) {
       console.error('프로필 업데이트 실패:', error)
       toast.error('프로필 업데이트에 실패했습니다. 다시 시도해주세요.')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -484,8 +490,6 @@ export default function ProfilePage() {
     }
 
     try {
-      setUploadingAvatar(true)
-      
       // Upload avatar to Supabase Storage
       const fileExt = file.name.split('.').pop()
       const fileName = `${user.id}-${Date.now()}.${fileExt}`
@@ -516,7 +520,6 @@ export default function ProfilePage() {
       const errorMessage = error instanceof Error ? error.message : '프로필 사진 업로드에 실패했습니다.'
       toast.error(errorMessage)
     } finally {
-      setUploadingAvatar(false)
       // Reset the input value so the same file can be selected again
       event.target.value = ''
     }
@@ -739,18 +742,59 @@ export default function ProfilePage() {
 
                 {/* Achievements */}
                 <div>
-                  <Label className="text-sm font-medium">성과</Label>
-                  <div className="mt-2 grid grid-cols-2 gap-1">
-                    {userData.achievements.map((achievement) => (
-                      <Badge 
-                        key={achievement} 
-                        variant="secondary" 
-                        className="justify-center bg-yellow-100 text-yellow-800"
-                      >
-                        <Trophy className="mr-1 h-3 w-3" />
-                        {achievement}
-                      </Badge>
-                    ))}
+                  <Label className="text-sm font-medium">
+                    성과 
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      ({userData.achievements.length}개 • {getTotalAchievementPoints(userData.achievements)}점)
+                    </span>
+                  </Label>
+                  <div className="mt-2 space-y-2">
+                    {userData.achievements.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-1">
+                        {userData.achievements.slice(0, 6).map((achievementId) => {
+                          const def = ACHIEVEMENTS[achievementId] || { 
+                            name: achievementId, 
+                            icon: '🏆', 
+                            tier: 'bronze' as const,
+                            description: '',
+                            points: 0
+                          }
+                          return (
+                            <TooltipProvider key={achievementId}>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge 
+                                    variant="secondary" 
+                                    className={`justify-center cursor-help ${TIER_COLORS[def.tier]}`}
+                                  >
+                                    <span className="mr-1">{def.icon}</span>
+                                    <span className="truncate">{def.name}</span>
+                                  </Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <div className="text-xs">
+                                    <p className="font-semibold">{def.name}</p>
+                                    <p className="text-muted-foreground">{def.description}</p>
+                                    <p className="mt-1">
+                                      {TIER_ICONS[def.tier]} {def.tier} • {def.points}점
+                                    </p>
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="text-xs text-muted-foreground text-center py-2">
+                        아직 획득한 업적이 없습니다
+                      </div>
+                    )}
+                    {userData.achievements.length > 6 && (
+                      <div className="text-xs text-center text-muted-foreground">
+                        +{userData.achievements.length - 6}개 더 보기
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -829,6 +873,107 @@ export default function ProfilePage() {
 
               {/* Activity Tab */}
               <TabsContent value="activity" className="space-y-6">
+                {/* Achievement Progress - 통합된 업적 시스템 */}
+                {achievementProgress && achievementProgress.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Trophy className="h-5 w-5" />
+                        <span>다음 업적까지</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* 진행 중인 업적 또는 다음 티어 업적 표시 */}
+                        {(() => {
+                          // 각 카테고리별로 다음 획득 가능한 업적 찾기
+                          const upcomingAchievements: typeof achievementProgress = []
+                          
+                          // 업적 카테고리별 그룹화
+                          const achievementCategories = {
+                            posts: ['first_post', 'post_10', 'post_50', 'post_100'],
+                            comments: ['first_comment', 'comment_master', 'comment_legend'],
+                            activities: ['activity_starter', 'activity_master', 'activity_legend'],
+                            likes: ['popular_10', 'popular_50', 'popular_100', 'viral_content'],
+                            members: ['member_7days', 'member_30days', 'member_90days', 'member_365days', 'founding_member']
+                          }
+                          
+                          // 각 카테고리에서 다음 업적 찾기
+                          Object.entries(achievementCategories).forEach(([category, ids]) => {
+                            const categoryAchievements = achievementProgress
+                              .filter(a => ids.includes(a.achievement_id))
+                              .sort((a, b) => a.requirement_count - b.requirement_count)
+                            
+                            // 완료되지 않은 첫 번째 업적 찾기
+                            const nextAchievement = categoryAchievements.find(a => !a.is_completed)
+                            
+                            // 현재 진행률이 100% 넘은 경우 (예: 2/1) 다음 티어 업적 찾기
+                            if (nextAchievement) {
+                              if (nextAchievement.current_progress >= nextAchievement.requirement_count) {
+                                // 다음 티어 업적 찾기
+                                const currentIndex = categoryAchievements.indexOf(nextAchievement)
+                                const nextTierAchievement = categoryAchievements[currentIndex + 1]
+                                if (nextTierAchievement && !nextTierAchievement.is_completed) {
+                                  upcomingAchievements.push(nextTierAchievement)
+                                }
+                              } else {
+                                upcomingAchievements.push(nextAchievement)
+                              }
+                            }
+                          })
+                          
+                          // 진행률 기준으로 정렬하여 상위 3개 표시
+                          return upcomingAchievements
+                            .filter(a => a.progress_percentage > 0 || a.requirement_count <= 5)
+                            .sort((a, b) => b.progress_percentage - a.progress_percentage)
+                            .slice(0, 3)
+                            .map((achievement) => (
+                              <div key={achievement.achievement_id}>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-sm font-medium">
+                                    {achievement.icon} {achievement.name}
+                                  </span>
+                                  <span className="text-sm text-muted-foreground">
+                                    {Math.min(achievement.current_progress, achievement.requirement_count)}/{achievement.requirement_count}
+                                  </span>
+                                </div>
+                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                      achievement.tier === 'platinum' ? 'bg-gradient-to-r from-purple-500 to-pink-500' :
+                                      achievement.tier === 'gold' ? 'bg-yellow-500' :
+                                      achievement.tier === 'silver' ? 'bg-gray-400' :
+                                      'bg-orange-500'
+                                    }`}
+                                    style={{ width: `${Math.min(achievement.progress_percentage, 100)}%` }}
+                                  />
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {achievement.description}
+                                </p>
+                              </div>
+                            ))
+                        })()}
+                        
+                        {/* 업적 체크 버튼 */}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => checkAchievementsMutation.mutate()}
+                          disabled={checkAchievementsMutation.isPending}
+                          className="w-full"
+                        >
+                          {checkAchievementsMutation.isPending ? (
+                            <>업적 확인 중...</>
+                          ) : (
+                            <>✨ 업적 확인하기</>
+                          )}
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+                
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
@@ -923,11 +1068,11 @@ export default function ProfilePage() {
                       <div className="space-y-3">
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">참여 활동</span>
-                          <span className="font-semibold">{userData.stats.activitiesJoined}</span>
+                          <span className="font-semibold">{profileV2Data?.stats?.activities_joined || userData.stats.activitiesJoined}</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-sm text-muted-foreground">공유 자료</span>
-                          <span className="font-semibold">{userData.activityStats?.resources || userData.stats.resourcesShared}</span>
+                          <span className="font-semibold">{profileV2Data?.stats?.resources_count || userData.stats.resourcesShared}</span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">활동 점수</span>
@@ -946,43 +1091,72 @@ export default function ProfilePage() {
                   </Card>
                 </div>
 
-                {/* Achievement Progress */}
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Trophy className="h-5 w-5" />
-                      <span>성과 진행률</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm">
-                          <span>활동 마스터 (20개 활동 참여)</span>
-                          <span>{userData.stats.activitiesJoined}/20</span>
+                {/* Achievement Progress - 전체 업적 진행률 (통합 데이터) */}
+                {achievementProgress && achievementProgress.length > 0 && (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2">
+                        <Trophy className="h-5 w-5" />
+                        <span>업적 진행률</span>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        {/* 완료된 업적 통계 */}
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div className="text-center p-3 bg-muted rounded-lg">
+                            <div className="text-2xl font-bold text-primary">
+                              {achievementProgress.filter(a => a.is_completed).length}
+                            </div>
+                            <div className="text-xs text-muted-foreground">완료된 업적</div>
+                          </div>
+                          <div className="text-center p-3 bg-muted rounded-lg">
+                            <div className="text-2xl font-bold text-primary">
+                              {achievementProgress
+                                .filter(a => a.is_completed)
+                                .reduce((sum, a) => sum + a.points, 0)}
+                            </div>
+                            <div className="text-xs text-muted-foreground">획득 포인트</div>
+                          </div>
                         </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                          <div 
-                            className="h-full bg-blue-500 transition-all"
-                            style={{ width: `${Math.min(userData.stats.activitiesJoined / 20 * 100, 100)}%` }}
-                          />
-                        </div>
+                        
+                        {/* 주요 업적 카테고리별 진행률 */}
+                        {[
+                          { type: 'posts', label: '콘텐츠 작성', icon: '📝' },
+                          { type: 'activities', label: '활동 참여', icon: '🎭' },
+                          { type: 'likes', label: '인기도', icon: '❤️' },
+                          { type: 'days', label: '가입 기간', icon: '📅' }
+                        ].map(category => {
+                          const categoryAchievements = achievementProgress.filter(
+                            a => a.requirement_type === category.type
+                          )
+                          const completedCount = categoryAchievements.filter(a => a.is_completed).length
+                          const totalCount = categoryAchievements.length
+                          const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+                          
+                          return (
+                            <div key={category.type}>
+                              <div className="flex justify-between text-sm">
+                                <span>
+                                  {category.icon} {category.label}
+                                </span>
+                                <span className="text-muted-foreground">
+                                  {completedCount}/{totalCount} 완료
+                                </span>
+                              </div>
+                              <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
+                                <div 
+                                  className="h-full bg-gradient-to-r from-kepco-blue-400 to-kepco-blue-600 transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                      <div>
-                        <div className="flex justify-between text-sm">
-                          <span>콘텐츠 크리에이터 (50개 게시글)</span>
-                          <span>{userData.stats.totalPosts}/50</span>
-                        </div>
-                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                          <div 
-                            className="h-full bg-green-500 transition-all"
-                            style={{ width: `${Math.min(userData.stats.totalPosts / 50 * 100, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Content Creation Stats */}
                 {userData.activityStats && (

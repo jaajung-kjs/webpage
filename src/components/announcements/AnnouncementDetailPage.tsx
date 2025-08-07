@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,7 @@ import { ReportDialog } from '@/components/ui/report-dialog'
 import PermissionGate from '@/components/shared/PermissionGate'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
+import type { ReportDialogEvent } from '@/lib/types'
 
 interface AnnouncementDetailPageProps {
   announcementId: string
@@ -69,17 +70,23 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const toggleLikeMutation = useToggleLike()
   const deleteContentMutation = useDeleteContent()
   const incrementViewMutation = useIncrementView()
-  const [isLiked, setIsLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  // Derive like state from query data
+  const isLiked = isLikedFromHook || false
+  const likeCount = announcementData?.like_count || 0
+  
   // Use bookmark hooks
   const { data: isBookmarkedData } = useIsBookmarked(announcementId)
   const toggleBookmarkMutation = useToggleBookmark()
-  const [bookmarkLoading, setBookmarkLoading] = useState(false)
+  
+  // UI state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
-  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
+  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment' | 'post' | 'announcement' | 'resource' | 'case' | 'user', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
-  const [likeLoading, setLikeLoading] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+  
+  // Use mutation loading states
+  const likeLoading = toggleLikeMutation.isPending
+  const deleteLoading = deleteContentMutation.isPending
+  const bookmarkLoading = toggleBookmarkMutation.isPending
 
   // Increment view count when announcement is loaded
   useEffect(() => {
@@ -89,32 +96,25 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   }, [announcementData?.id, incrementViewMutation])
 
 
-  // Update like count when data changes
-  useEffect(() => {
-    if (announcementData?.like_count !== undefined) {
-      setLikeCount(announcementData.like_count || 0)
-    }
-  }, [announcementData])
-  
-  // Update like state from hook
-  useEffect(() => {
-    setIsLiked(isLikedFromHook || false)
-  }, [isLikedFromHook])
 
   // Listen for report dialog events
   useEffect(() => {
-    const handleOpenReportDialog = (event: CustomEvent) => {
-      const { targetType, targetId, parentContentId } = event.detail
-      if (targetType && targetId) {
-        setReportTarget({ type: targetType, id: targetId })
-        setParentContentId(parentContentId)
-        setReportDialogOpen(true)
+    const handleOpenReportDialog = (event: Event) => {
+      // Type guard to check if it's a ReportDialogEvent
+      if (event.type === 'openReportDialog' && 'detail' in event) {
+        const customEvent = event as ReportDialogEvent
+        const { contentType, contentId } = customEvent.detail
+        if (contentType && contentId) {
+          setReportTarget({ type: contentType, id: contentId })
+          setParentContentId(contentId)
+          setReportDialogOpen(true)
+        }
       }
     }
 
-    window.addEventListener('openReportDialog', handleOpenReportDialog as any)
+    window.addEventListener('openReportDialog', handleOpenReportDialog)
     return () => {
-      window.removeEventListener('openReportDialog', handleOpenReportDialog as any)
+      window.removeEventListener('openReportDialog', handleOpenReportDialog)
     }
   }, [])
 
@@ -135,32 +135,23 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     // Prevent multiple clicks
     if (likeLoading) return
 
-    setLikeLoading(true)
     try {
-      const isNowLiked = await toggleLikeMutation.mutateAsync(announcementId)
-      
-      setIsLiked(isNowLiked)
-      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
-      
-      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+      await toggleLikeMutation.mutateAsync(announcementId)
+      // The mutation will automatically update the cache and trigger a re-render
+      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
-    } finally {
-      setLikeLoading(false)
     }
   }
 
   const handleBookmark = async () => {
     if (bookmarkLoading) return
     
-    setBookmarkLoading(true)
     try {
       await toggleBookmarkMutation.mutateAsync(announcementId)
     } catch (error) {
       // Error is handled by the mutation hook
-    } finally {
-      setBookmarkLoading(false)
     }
   }
 
@@ -179,7 +170,6 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
       return
     }
 
-    setDeleteLoading(true)
     try {
       await deleteContentMutation.mutateAsync({ id: announcementId, contentType: 'announcement' })
       
@@ -188,8 +178,6 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     } catch (error: any) {
       console.error('Error deleting announcement:', error)
       toast.error(error.message || '공지사항 삭제에 실패했습니다.')
-    } finally {
-      setDeleteLoading(false)
     }
   }
 
@@ -322,7 +310,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
         }}
         postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
         commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
-        targetType={reportTarget?.type}
+        targetType={reportTarget?.type === 'comment' ? 'comment' : 'content'}
         targetId={reportTarget?.id}
         parentContentId={parentContentId}
         postType={reportTarget?.type === 'comment' ? 'comment' : 'announcement'}

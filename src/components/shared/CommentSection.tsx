@@ -87,7 +87,6 @@ export default function CommentSection({
   const updateCommentMutation = useUpdateComment()
   const deleteCommentMutation = useDeleteComment()
   const toggleCommentLikeMutation = useToggleCommentLike()
-  const [likeLoading, setLikeLoading] = useState(false)
   
   const [comments, setComments] = useState<CommentWithReplies[]>([])
   const [newComment, setNewComment] = useState('')
@@ -99,6 +98,7 @@ export default function CommentSection({
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popular'>('newest')
   
   const commentActionLoading = createCommentMutation.isPending || updateCommentMutation.isPending || deleteCommentMutation.isPending
+  const likeLoading = toggleCommentLikeMutation.isPending
 
   // Helper functions for individual comment state management
   const startReply = (commentId: string) => {

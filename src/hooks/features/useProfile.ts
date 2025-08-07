@@ -2,6 +2,16 @@
  * Profile Management Hooks
  * 
  * 사용자 프로필 조회 및 관리를 위한 TanStack Query 기반 hooks
+ * 
+ * 구조:
+ * 1. useUserProfile - 기본 프로필 정보 (users 테이블)
+ * 2. useUserStats - 통계 정보 (get_user_with_stats RPC)
+ * 3. useUserContentStats - 콘텐츠별 통계 (get_user_content_stats RPC)
+ * 4. useUserActivities - 최근 활동 (get_user_activity_logs RPC)
+ * 5. useUpdateProfile - 프로필 업데이트
+ * 6. useUploadAvatar - 아바타 업로드
+ * 
+ * @see PROFILE_SYSTEM.md 자세한 시스템 문서 참조
  */
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -12,6 +22,10 @@ import { toast } from 'sonner'
 
 /**
  * 사용자 프로필 조회 Hook
+ * 
+ * users 테이블에서 기본 프로필 정보 조회
+ * - name, email, department, role, avatar_url, bio, activity_score
+ * - metadata (phone, job_position, location, skill_level, ai_expertise, achievements)
  */
 export function useUserProfile(userId?: string) {
   const { user } = useAuth()
@@ -39,6 +53,10 @@ export function useUserProfile(userId?: string) {
 
 /**
  * 사용자 통계 조회 Hook
+ * 
+ * get_user_with_stats RPC 함수 사용
+ * - posts_count, comments_count, likes_received 직접 반환
+ * - ProfilePage/ProfileDetailPage와 필드명 일치
  */
 export function useUserStats(userId?: string) {
   const { user } = useAuth()
@@ -49,20 +67,29 @@ export function useUserStats(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID is required')
       
-      // RPC 함수를 사용하여 통합 통계 조회
+      // get_user_with_stats RPC 사용 - 필드명이 이미 일치
       const { data, error } = await supabaseClient
-        .rpc('get_user_comprehensive_stats', { p_user_id: targetUserId })
+        .rpc('get_user_with_stats', { target_user_id: targetUserId })
       
-      if (error) throw error
+      if (error) {
+        console.error('Error fetching user stats:', error)
+        // Fallback: user_stats 뷰 직접 조회
+        const { data: viewData, error: viewError } = await supabaseClient
+          .from('user_stats')
+          .select('*')
+          .eq('id', targetUserId)
+          .single()
+        
+        if (viewError) throw viewError
+        return viewData
+      }
       
       // 데이터가 배열로 반환되므로 첫 번째 요소 사용
       return data?.[0] || {
-        total_posts: 0,
-        total_comments: 0,
-        total_likes_received: 0,
-        total_views: 0,
-        recent_posts: [],
-        recent_comments: []
+        posts_count: 0,
+        comments_count: 0,
+        likes_received: 0,
+        activity_score: 0
       }
     },
     enabled: !!targetUserId,
@@ -72,6 +99,10 @@ export function useUserStats(userId?: string) {
 
 /**
  * 사용자 컨텐츠 통계 조회 Hook
+ * 
+ * get_user_content_stats RPC 함수 사용
+ * - 콘텐츠 타입별 통계 (posts, cases, announcements, resources)
+ * - 필요 시 활성화하여 사용
  */
 export function useUserContentStats(userId?: string) {
   const { user } = useAuth()
@@ -95,6 +126,10 @@ export function useUserContentStats(userId?: string) {
 
 /**
  * 사용자 활동 내역 조회 Hook
+ * 
+ * get_user_activity_logs RPC 함수 사용
+ * - 구조화된 활동 로그 반환
+ * - engagement 정보 포함
  */
 export function useUserActivities(userId?: string, limit: number = 10) {
   const { user } = useAuth()
@@ -105,62 +140,88 @@ export function useUserActivities(userId?: string, limit: number = 10) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID is required')
       
-      // 최근 게시글 조회
-      const { data: posts, error: postsError } = await supabaseClient
-        .from('content')
-        .select(`
-          id,
-          title,
-          content_type,
-          created_at,
-          view_count,
-          like_count,
-          comment_count
-        `)
-        .eq('author_id', targetUserId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
+      // get_user_activity_logs RPC 사용
+      const { data, error } = await supabaseClient
+        .rpc('get_user_activity_logs', { 
+          target_user_id: targetUserId,
+          limit_count: limit 
+        })
       
-      if (postsError) throw postsError
+      if (error) {
+        console.error('Error fetching user activities:', error)
+        // Fallback: 기존 방식으로 content와 comments 직접 조회
+        const { data: posts } = await supabaseClient
+          .from('content')
+          .select('id, title, content_type, created_at, view_count, like_count, comment_count')
+          .eq('author_id', targetUserId)
+          .order('created_at', { ascending: false })
+          .limit(limit)
+        
+        const { data: comments } = await supabaseClient
+          .from('comments')
+          .select(`
+            id, comment, created_at,
+            content:content_id (id, title, content_type, view_count, like_count, comment_count)
+          `)
+          .eq('author_id', targetUserId)
+          .order('created_at', { ascending: false })
+          .limit(limit)
+        
+        // 활동 데이터 통합
+        const activities = [
+          ...(posts || []).map((post: any) => ({
+            activity_type: 'post_created',
+            activity_data: {
+              id: post.id,
+              title: post.title,
+              content_type: post.content_type,
+              engagement: {
+                views: post.view_count || 0,
+                likes: post.like_count || 0,
+                comments: post.comment_count || 0
+              }
+            },
+            created_at: post.created_at
+          })),
+          ...(comments || []).map((comment: any) => ({
+            activity_type: 'comment_created',
+            activity_data: {
+              id: comment.id,
+              title: comment.content?.title || comment.comment.substring(0, 50) + '...',
+              content_type: comment.content?.content_type || 'post',
+              engagement: {
+                views: comment.content?.view_count || 0,
+                likes: comment.content?.like_count || 0,
+                comments: comment.content?.comment_count || 0
+              }
+            },
+            created_at: comment.created_at
+          }))
+        ].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        ).slice(0, limit)
+        
+        return activities
+      }
       
-      // 최근 댓글 조회
-      const { data: comments, error: commentsError } = await supabaseClient
-        .from('comments')
-        .select(`
-          id,
-          comment,
-          created_at,
-          content:content_id (
-            id,
-            title,
-            content_type
-          )
-        `)
-        .eq('author_id', targetUserId)
-        .order('created_at', { ascending: false })
-        .limit(limit)
+      // RPC 결과 처리
+      if (!data || !Array.isArray(data)) return []
       
-      if (commentsError) throw commentsError
-      
-      // 활동 데이터 통합 및 정렬
-      const activities = [
-        ...(posts || []).map((post: any) => ({
-          type: 'post' as const,
-          activity_type: 'post_created',
-          activity_data: post,
-          created_at: post.created_at
-        })),
-        ...(comments || []).map((comment: any) => ({
-          type: 'comment' as const,
-          activity_type: 'comment_created',
-          activity_data: comment,
-          created_at: comment.created_at
-        }))
-      ].sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      ).slice(0, limit)
-      
-      return activities
+      // 활동 로그 형식 정규화
+      return data.map((log: any) => ({
+        activity_type: log.activity_type || 'unknown',
+        activity_data: {
+          id: log.id,
+          title: log.title || log.metadata?.title || '',
+          content_type: log.target_type || 'post',
+          engagement: {
+            views: log.metadata?.views || 0,
+            likes: log.metadata?.likes || 0,
+            comments: log.metadata?.comments || 0
+          }
+        },
+        created_at: log.created_at
+      }))
     },
     enabled: !!targetUserId,
     staleTime: 2 * 60 * 1000, // 2분

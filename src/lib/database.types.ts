@@ -1422,6 +1422,10 @@ export type Database = {
         Args: { manager_id: string; target_user_id: string }
         Returns: boolean
       }
+      check_and_update_achievements: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       check_duplicate_report: {
         Args: {
           p_reporter_id: string
@@ -1429,6 +1433,10 @@ export type Database = {
           p_target_id: string
         }
         Returns: boolean
+      }
+      check_user_achievements: {
+        Args: { target_user_id?: string }
+        Returns: Json
       }
       cleanup_unverified_accounts: {
         Args: { age_hours?: number }
@@ -1481,6 +1489,23 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_status?: string }
         Returns: Json
       }
+      get_user_achievement_progress: {
+        Args: { p_user_id: string }
+        Returns: {
+          achievement_id: string
+          name: string
+          description: string
+          tier: string
+          points: number
+          icon: string
+          requirement_type: string
+          requirement_count: number
+          current_progress: number
+          progress_percentage: number
+          is_completed: boolean
+          completed_at: string
+        }[]
+      }
       get_user_activity_logs: {
         Args: { target_user_id: string; limit_count?: number }
         Returns: Json
@@ -1501,6 +1526,15 @@ export type Database = {
       }
       get_user_content_stats: {
         Args: { user_id_param: string }
+        Returns: Json
+      }
+      get_user_profile_complete_v2: {
+        Args: {
+          target_user_id: string
+          include_activities?: boolean
+          activities_limit?: number
+          include_achievements?: boolean
+        }
         Returns: Json
       }
       get_user_role: {

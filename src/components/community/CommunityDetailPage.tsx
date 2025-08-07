@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
 import DetailLayout from '@/components/shared/DetailLayout'
+import type { ReportDialogEvent } from '@/lib/types'
 
 interface CommunityDetailPageProps {
   postId: string
@@ -61,13 +62,18 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   const toggleLikeMutation = useToggleLike()
   const deleteContentMutation = useDeleteContent()
   const incrementViewMutation = useIncrementView()
-  const [isLiked, setIsLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  // Derive like state from query data
+  const isLiked = isLikedFromHook || false
+  const likeCount = postData?.like_count || 0
+  
+  // UI state
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
-  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
-  const [likeLoading, setLikeLoading] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment' | 'post' | 'announcement' | 'resource' | 'case' | 'user', id: string } | null>(null)
+  
+  // Use mutation loading states
+  const likeLoading = toggleLikeMutation.isPending
+  const deleteLoading = deleteContentMutation.isPending
 
 
 
@@ -79,34 +85,27 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   }, [postData?.id])
 
 
-  // Update like count and like state when data changes
-  useEffect(() => {
-    if (postData?.like_count !== undefined) {
-      setLikeCount(postData.like_count || 0)
-    }
-  }, [postData])
-  
-  // Update like state from hook
-  useEffect(() => {
-    setIsLiked(isLikedFromHook || false)
-  }, [isLikedFromHook])
 
   // Listen for report dialog events
   const [parentContentId, setParentContentId] = useState<string | undefined>()
   
   useEffect(() => {
-    const handleOpenReportDialog = (event: CustomEvent) => {
-      const { targetType, targetId, parentContentId } = event.detail
-      if (targetType && targetId) {
-        setReportTarget({ type: targetType, id: targetId })
-        setParentContentId(parentContentId)
-        setReportDialogOpen(true)
+    const handleOpenReportDialog = (event: Event) => {
+      // Type guard to check if it's a ReportDialogEvent
+      if (event.type === 'openReportDialog' && 'detail' in event) {
+        const customEvent = event as ReportDialogEvent
+        const { contentType, contentId } = customEvent.detail
+        if (contentType && contentId) {
+          setReportTarget({ type: contentType, id: contentId })
+          setParentContentId(contentId)
+          setReportDialogOpen(true)
+        }
       }
     }
 
-    window.addEventListener('openReportDialog', handleOpenReportDialog as any)
+    window.addEventListener('openReportDialog', handleOpenReportDialog)
     return () => {
-      window.removeEventListener('openReportDialog', handleOpenReportDialog as any)
+      window.removeEventListener('openReportDialog', handleOpenReportDialog)
     }
   }, [])
 
@@ -124,19 +123,13 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     // Prevent multiple clicks
     if (likeLoading) return
 
-    setLikeLoading(true)
     try {
-      const isNowLiked = await toggleLikeMutation.mutateAsync(postId)
-      
-      setIsLiked(isNowLiked)
-      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
-      
-      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+      await toggleLikeMutation.mutateAsync(postId)
+      // The mutation will automatically update the cache and trigger a re-render
+      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
-    } finally {
-      setLikeLoading(false)
     }
   }
 
@@ -165,7 +158,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       return
     }
 
-    setDeleteLoading(true)
     try {
       await deleteContentMutation.mutateAsync({ id: postId, contentType: 'community' })
       
@@ -174,8 +166,6 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     } catch (error: any) {
       console.error('Error deleting post:', error)
       toast.error(error.message || '게시글 삭제에 실패했습니다.')
-    } finally {
-      setDeleteLoading(false)
     }
   }
 
@@ -271,7 +261,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         }}
         postId={reportTarget?.type === 'content' ? reportTarget.id : undefined}
         commentId={reportTarget?.type === 'comment' ? reportTarget.id : undefined}
-        targetType={reportTarget?.type}
+        targetType={reportTarget?.type === 'comment' ? 'comment' : 'content'}
         targetId={reportTarget?.id}
         parentContentId={parentContentId}
         postType={reportTarget?.type === 'comment' ? 'comment' : 'community'}

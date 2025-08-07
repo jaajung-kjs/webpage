@@ -11,17 +11,11 @@ import { useAuth } from '@/providers/AuthProvider'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRealtimeQuery } from '@/hooks/core/useRealtimeQuery'
 import { supabaseClient } from '@/lib/core/connection-core'
+import { Tables } from '@/lib/database.types'
+import type { MessageMutationContext } from '@/lib/types'
 
 // 메시지 타입
-interface Message {
-  id: string
-  conversation_id: string | null
-  sender_id: string
-  recipient_id: string
-  content: string
-  is_read: boolean
-  read_at: string | null
-  created_at: string
+export interface Message extends Tables<'messages'> {
   sender?: {
     id: string
     name: string
@@ -29,7 +23,7 @@ interface Message {
   }
 }
 
-interface MessageInbox {
+export interface MessageInbox {
   conversation_id: string
   other_user_id: string
   other_user_name: string
@@ -181,6 +175,7 @@ export function useSendMessage() {
         is_read: false,
         read_at: null,
         created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
         sender: {
           id: user!.id,
           name: user!.user_metadata?.name || 'Unknown',
@@ -195,10 +190,11 @@ export function useSendMessage() {
       
       return { previous }
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(['messages', 'conversation', variables.conversationId], context.previous)
+      if (context && typeof context === 'object' && 'previous' in context) {
+        const typedContext = context as MessageMutationContext
+        queryClient.setQueryData(['messages', 'conversation', variables.conversationId], typedContext.previous)
       }
     },
     onSettled: (data, error, variables) => {

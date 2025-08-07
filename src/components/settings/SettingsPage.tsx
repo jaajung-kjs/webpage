@@ -39,8 +39,6 @@ export default function SettingsPage() {
   const queryClient = useQueryClient()
   const updateProfileMutation = useUpdateProfile()
   
-  const [initialLoading, setInitialLoading] = useState(true)
-  
   // 알림 설정
   const [emailNotifications, setEmailNotifications] = useState(true)
   const [pushNotifications, setPushNotifications] = useState(false)
@@ -118,10 +116,6 @@ export default function SettingsPage() {
       if (settingsData.metadata) {
         setUserMetadata(settingsData.metadata)
       }
-      
-      setInitialLoading(false)
-    } else if (!settingsLoading) {
-      setInitialLoading(false)
     }
   }, [settingsData, settingsLoading])
 
@@ -191,7 +185,7 @@ export default function SettingsPage() {
   }
 
   // Show loading state
-  if (initialLoading) {
+  if (settingsLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-center min-h-[400px]">

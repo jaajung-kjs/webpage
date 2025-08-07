@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -89,7 +89,6 @@ export default function MembershipApplicationManager() {
   const { data: applications = [], isLoading: loading, refetch } = useMembershipApplications()
   const updateMembershipMutation = useUpdateMembershipApplication()
   
-  const [filteredApplications, setFilteredApplications] = useState<MembershipApplication[]>([])
   const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null)
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null)
@@ -101,9 +100,9 @@ export default function MembershipApplicationManager() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   
-  // Filter applications when dependencies change
-  useEffect(() => {
-    if (!applications) return
+  // Filter applications using useMemo instead of useEffect
+  const filteredApplications = useMemo(() => {
+    if (!applications) return []
     
     let filtered = [...applications]
     
@@ -121,7 +120,7 @@ export default function MembershipApplicationManager() {
       )
     }
     
-    setFilteredApplications(filtered)
+    return filtered
   }, [applications, statusFilter, searchQuery])
   
   const handleReview = async () => {

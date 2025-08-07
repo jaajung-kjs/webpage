@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -33,11 +33,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, User, Trash2 } from 'lucide-react'
 import { useAuth } from '@/providers'
-import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
-import { useMembers, useUpdateMemberRole, useDeleteMember } from '@/hooks/features/useMembers'
+import { useMembers, useUpdateMemberRole, useDeleteMember, type MemberWithStats } from '@/hooks/features/useMembers'
+import { useDeleteUserCompletely } from '@/hooks/features/useEdgeFunctions'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import type { UserMetadata } from '@/lib/types'
 
 interface MemberData {
   id: string
@@ -49,7 +50,7 @@ interface MemberData {
   activity_score: number
   post_count: number
   comment_count: number
-  metadata?: any
+  metadata?: UserMetadata
 }
 
 const roleLabels = {
@@ -76,34 +77,36 @@ export default function MemberManagement() {
   const { data: membersData = [], isLoading: loading } = useMembers()
   const updateMemberRoleMutation = useUpdateMemberRole()
   const deleteMemberMutation = useDeleteMember()
+  const deleteUserCompletelyMutation = useDeleteUserCompletely()
   
-  const [filteredMembers, setFilteredMembers] = useState<MemberData[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedMember, setSelectedMember] = useState<MemberData | null>(null)
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
 
   // Transform members data to expected format
-  const members: MemberData[] = (membersData || []).map((userData: any) => ({
-    id: userData.id || '',
-    name: userData.name || '',
-    email: userData.email || '',
-    role: userData.role || 'guest',
-    department: userData.department === '미지정' ? null : userData.department,
-    created_at: userData.created_at || '',
-    activity_score: userData.activity_score || 0,
-    post_count: 0,
-    comment_count: 0,
-    metadata: userData.metadata || {}
-  }))
+  const members = useMemo<MemberData[]>(() => {
+    return Array.isArray(membersData) 
+      ? membersData.map((userData: MemberWithStats) => ({
+          id: userData.id || '',
+          name: userData.name || '',
+          email: userData.email || '',
+          role: userData.role || 'guest',
+          department: userData.department === '미지정' ? null : userData.department,
+          created_at: userData.created_at || '',
+          activity_score: userData.activity_score || 0,
+          post_count: userData.posts_count || 0,
+          comment_count: userData.comments_count || 0,
+          metadata: userData.metadata || {}
+        }))
+      : []
+  }, [membersData])
 
-  useEffect(() => {
-    filterMembers()
-  }, [searchTerm, members])
-
-  const filterMembers = () => {
+  // Filter and sort members using useMemo instead of useState + useEffect
+  const filteredMembers = useMemo(() => {
     let filtered = members
 
+    // Apply search filter
     if (searchTerm) {
       filtered = filtered.filter(member =>
         member.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -114,7 +117,7 @@ export default function MemberManagement() {
 
     // Sort by role hierarchy then by activity score
     const roleOrder = ['leader', 'vice-leader', 'admin', 'member', 'pending', 'guest']
-    filtered.sort((a, b) => {
+    const sorted = [...filtered].sort((a, b) => {
       const roleIndexA = roleOrder.indexOf(a.role)
       const roleIndexB = roleOrder.indexOf(b.role)
       if (roleIndexA !== roleIndexB) {
@@ -123,8 +126,8 @@ export default function MemberManagement() {
       return b.activity_score - a.activity_score
     })
 
-    setFilteredMembers(filtered)
-  }
+    return sorted
+  }, [members, searchTerm])
 
   const handleChangeRole = async (memberId: string, newRole: string) => {
     if (!user) return
@@ -140,9 +143,10 @@ export default function MemberManagement() {
       
       // Refresh data
       queryClient.invalidateQueries({ queryKey: ['members'] })
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '역할 변경에 실패했습니다.'
       console.error('Error changing member role:', error)
-      toast.error(error.message || '역할 변경에 실패했습니다.')
+      toast.error(errorMessage)
     }
   }
 
@@ -158,9 +162,10 @@ export default function MemberManagement() {
       toast.success(`${selectedMember.name} 님을 일반 회원에서 게스트로 변경했습니다.`)
       setRemoveDialogOpen(false)
       setSelectedMember(null)
-    } catch (error: any) {
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : '회원 제거에 실패했습니다.'
       console.error('Error removing member:', error)
-      toast.error(error.message || '회원 제거에 실패했습니다.')
+      toast.error(errorMessage)
     }
   }
 
@@ -168,38 +173,16 @@ export default function MemberManagement() {
     if (!selectedMember || !user) return
 
     try {
-      // Get the user's auth token
-      const { data: { session } } = await supabaseClient.auth.getSession()
-      if (!session) {
-        toast.error('인증 세션이 없습니다.')
-        return
-      }
-
-      // Call the Edge Function to delete the user
-      const response = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/delete-user`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ userId: selectedMember.id })
+      await deleteUserCompletelyMutation.mutateAsync({
+        userId: selectedMember.id,
+        userName: selectedMember.name
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || '사용자 삭제에 실패했습니다.')
-      }
-
-      toast.success(`${selectedMember.name} 님의 계정이 완전히 삭제되었습니다.`)
+      
       setDeleteDialogOpen(false)
       setSelectedMember(null)
-      
-      // Refresh data
-      queryClient.invalidateQueries({ queryKey: ['members'] })
-    } catch (error: any) {
-      console.error('Error deleting user:', error)
-      toast.error(error.message || '사용자 삭제에 실패했습니다.')
+    } catch (error) {
+      // 에러는 Hook에서 처리됨
+      console.error('Error in handleDeleteUser:', error)
     }
   }
 

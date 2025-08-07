@@ -12,6 +12,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useRealtimeQuery } from '@/hooks/core/useRealtimeQuery'
 import { supabaseClient } from '@/lib/core/connection-core'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import type { CommentMutationContext } from '@/lib/types'
 
 // 댓글 타입 (author 정보 포함)
 interface CommentWithAuthor extends Tables<'comments'> {
@@ -143,10 +144,11 @@ export function useCreateComment() {
       
       return { previous }
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(['comments', variables.contentId], context.previous)
+      if (context && typeof context === 'object' && 'previous' in context) {
+        const typedContext = context as CommentMutationContext
+        queryClient.setQueryData(['comments', variables.contentId], typedContext.previous)
       }
     },
     onSettled: (data, error, variables) => {
@@ -195,10 +197,11 @@ export function useUpdateComment() {
       
       return { previous }
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(['comments', variables.contentId], context.previous)
+      if (context && typeof context === 'object' && 'previous' in context) {
+        const typedContext = context as CommentMutationContext
+        queryClient.setQueryData(['comments', variables.contentId], typedContext.previous)
       }
     },
     onSettled: (data, error, variables) => {
@@ -235,10 +238,11 @@ export function useDeleteComment() {
       
       return { previous }
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(['comments', variables.contentId], context.previous)
+      if (context && typeof context === 'object' && 'previous' in context) {
+        const typedContext = context as CommentMutationContext
+        queryClient.setQueryData(['comments', variables.contentId], typedContext.previous)
       }
     },
     onSettled: (data, error, variables) => {
@@ -317,10 +321,11 @@ export function useToggleCommentLike() {
       
       return { previous }
     },
-    onError: (err, variables, context: any) => {
+    onError: (err, variables, context) => {
       // Rollback on error
-      if (context?.previous) {
-        queryClient.setQueryData(['comments', variables.contentId], context.previous)
+      if (context && typeof context === 'object' && 'previous' in context) {
+        const typedContext = context as CommentMutationContext
+        queryClient.setQueryData(['comments', variables.contentId], typedContext.previous)
       }
     },
     onSettled: (data, error, variables) => {

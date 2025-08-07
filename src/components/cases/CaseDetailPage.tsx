@@ -56,14 +56,17 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const toggleLikeMutation = useToggleLike()
   const deleteContentMutation = useDeleteContent()
   const incrementViewMutation = useIncrementView()
-  const [isLiked, setIsLiked] = useState(false)
-  const [likeCount, setLikeCount] = useState(0)
+  // Derive state from query data and mutations
+  const isLiked = isLikedFromHook || false
+  const likeCount = caseData?.like_count || 0
+  const likeLoading = toggleLikeMutation.isPending
+  const deleteLoading = deleteContentMutation.isPending
+  
+  // Keep only UI-specific state
   const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
-  const [likeLoading, setLikeLoading] = useState(false)
-  const [deleteLoading, setDeleteLoading] = useState(false)
 
   // Increment view count when case is loaded
   useEffect(() => {
@@ -73,17 +76,6 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   }, [caseData?.id])
 
 
-  // Update like count and like state when data changes
-  useEffect(() => {
-    if (caseData?.like_count !== undefined) {
-      setLikeCount(caseData.like_count || 0)
-    }
-  }, [caseData])
-  
-  // Update like state from hook
-  useEffect(() => {
-    setIsLiked(isLikedFromHook || false)
-  }, [isLikedFromHook])
 
   // Listen for report dialog events
   useEffect(() => {
@@ -116,19 +108,12 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     // Prevent multiple clicks
     if (likeLoading) return
 
-    setLikeLoading(true)
     try {
       const isNowLiked = await toggleLikeMutation.mutateAsync(caseId)
-      
-      setIsLiked(isNowLiked)
-      setLikeCount(prev => isNowLiked ? prev + 1 : prev - 1)
-      
       toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
-    } finally {
-      setLikeLoading(false)
     }
   }
 
@@ -157,7 +142,6 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
       return
     }
 
-    setDeleteLoading(true)
     try {
       await deleteContentMutation.mutateAsync({ id: caseId, contentType: 'case' })
       
@@ -166,8 +150,6 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     } catch (error: any) {
       console.error('Error deleting case:', error)
       toast.error(error.message || '활용사례 삭제에 실패했습니다.')
-    } finally {
-      setDeleteLoading(false)
     }
   }
 

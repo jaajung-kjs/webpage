@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
+import { useMutation } from '@tanstack/react-query'
 
 interface ChangePasswordDialogProps {
   open: boolean
@@ -27,9 +28,32 @@ export function ChangePasswordDialog({
 }: ChangePasswordDialogProps) {
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-  const [loading, setLoading] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  // Use mutation for password change
+  const changePasswordMutation = useMutation({
+    mutationFn: async (password: string) => {
+      const { error } = await supabaseClient.auth.updateUser({
+        password: password
+      })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      toast.success('비밀번호가 성공적으로 변경되었습니다.')
+      // Reset form and close dialog
+      setNewPassword('')
+      setConfirmPassword('')
+      onOpenChange(false)
+    },
+    onError: (error) => {
+      console.error('Error changing password:', error)
+      const message = error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.'
+      toast.error(message)
+    }
+  })
+
+  const loading = changePasswordMutation.isPending
 
   const handleSubmit = async () => {
     // Validation
@@ -48,31 +72,7 @@ export function ChangePasswordDialog({
       return
     }
 
-    try {
-      setLoading(true)
-      
-      // Update password using Supabase Auth
-      const { error } = await supabaseClient.auth.updateUser({
-        password: newPassword
-      })
-
-      if (error) {
-        throw error
-      }
-
-      toast.success('비밀번호가 성공적으로 변경되었습니다.')
-      
-      // Reset form and close dialog
-      setNewPassword('')
-      setConfirmPassword('')
-      onOpenChange(false)
-    } catch (error) {
-      console.error('Error changing password:', error)
-      const message = error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.'
-      toast.error(message)
-    } finally {
-      setLoading(false)
-    }
+    changePasswordMutation.mutate(newPassword)
   }
 
   const handleClose = () => {

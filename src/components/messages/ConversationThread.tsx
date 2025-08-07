@@ -9,7 +9,7 @@
 
 import { useState, useRef, useEffect, memo } from 'react'
 import { useAuth } from '@/providers'
-import { useConversation, useSendMessage, useMarkAsRead } from '@/hooks/features/useMessages'
+import { useConversation, useSendMessage, useMarkAsRead, type Message } from '@/hooks/features/useMessages'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -97,15 +97,15 @@ export function ConversationThread({
   useEffect(() => {
     if (user && conversationId && messages && messages.length > 0) {
       // 읽지 않은 메시지가 있는지 확인 후 읽음 처리
-      const hasUnreadMessages = messages.some((msg: any) => 
+      const hasUnreadMessages = messages.some((msg) => 
         msg.recipient_id === user.id && !msg.is_read
       )
       
       if (hasUnreadMessages) {
         log('📖 Marking messages as read for conversation:', conversationId)
         const unreadMessageIds = messages
-          .filter((msg: any) => msg.recipient_id === user.id && !msg.is_read)
-          .map((msg: any) => msg.id)
+          .filter((msg) => msg.recipient_id === user.id && !msg.is_read)
+          .map((msg) => msg.id)
         if (unreadMessageIds.length > 0) {
           markAsReadMutation.mutate(unreadMessageIds)
         }
@@ -359,7 +359,7 @@ export function ConversationThread({
               )} */}
               
               <AnimatePresence initial={false}>
-                {messages?.map((message: any, index: number) => {
+                {messages?.map((message, index) => {
                   const isOwn = message.sender_id === user?.id
                   const showAvatar = index === 0 || messages[index - 1]?.sender_id !== message.sender_id
                   

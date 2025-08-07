@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, memo } from 'react'
+import { useState, useMemo, memo } from 'react'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -49,42 +49,32 @@ import { useAuth } from '@/providers'
 import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
-import { useMembers, useUpdateMemberRole, useDeleteMember } from '@/hooks/features/useMembers'
+// V2 시스템 사용
+import { useProfileList, useUsersSimpleStats, useUserProfilesComplete } from '@/hooks/features/useProfileV2'
+import { useUpdateMemberRole, useDeleteMember } from '@/hooks/features/useMembers'
+import type { UserMetadata } from '@/lib/types'
 import { MessageButton } from '@/components/messages'
 import { getRoleConfig, getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
 import { getSkillLevelConfig, getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons, calculateSkillLevel } from '@/lib/skills'
 import { getActivityLevelInfo } from '@/lib/activityLevels'
 import { getAIToolConfig } from '@/lib/aiTools'
+import { ACHIEVEMENTS } from '@/lib/achievements'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import StatsCard from '@/components/shared/StatsCard'
 
-interface MemberWithStats {
-  id: string
-  name: string
-  email: string
-  phone: string | null
-  department: string | null
-  job_position: string | null
-  role: string
-  avatar_url: string | null
-  location: string | null
-  skill_level: string
-  bio: string | null
-  activity_score: number
-  ai_expertise: string[]
-  achievements: string[]
-  join_date: string
-  user_stats: {
-    total_posts: number
-    total_comments: number
-    total_likes_received: number
-    total_views: number
-    activities_joined: number
-    resources_shared: number
-  }[] | null
-  metadata?: any
+// V2 시스템에서는 ProfileListItem을 확장한 타입 사용
+import type { ProfileListItem } from '@/types/profile-v2'
+
+type MemberData = ProfileListItem & {
+  phone?: string | null
+  job_position?: string | null
+  location?: string | null
+  skill_level?: string
+  ai_expertise?: string[]
+  join_date?: string
+  // achievements는 별도로 조회
 }
 
 // Get labels and configs from the new modules
@@ -101,49 +91,59 @@ function MembersPage() {
   const [activeRole, setActiveRole] = useState('all')
   const [activeSkill, setActiveSkill] = useState('all')
   
-  // Use new hooks
-  const { data: members = [], isLoading: loading } = useMembers()
+  // V2 Hook 사용 - 페이지네이션과 필터링 지원
+  const { 
+    data: members = [], 
+    isLoading: loading 
+  } = useProfileList({
+    search: searchTerm,
+    role: activeRole === 'all' ? undefined : activeRole,
+    orderBy: 'activity_score',
+    order: 'desc',
+    limit: 100
+  })
+  
   const updateMemberRoleMutation = useUpdateMemberRole()
   const deleteMemberMutation = useDeleteMember()
   
   // Admin functionality state
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false)
-  const [selectedMember, setSelectedMember] = useState<MemberWithStats | null>(null)
+  const [selectedMember, setSelectedMember] = useState<Tables<'users'> | null>(null)
   const [operationLoading, setOperationLoading] = useState(false)
-  const [assignableRoles, setAssignableRoles] = useState<string[]>([])
+  
+  // 회원 ID 목록 추출
+  const memberIds = useMemo(() => {
+    return members.map(m => m.id)
+  }, [members])
+  
+  // 회원들의 통계 데이터 가져오기
+  const { data: memberStats } = useUsersSimpleStats(memberIds)
+  
+  // 회원들의 전체 프로필 데이터 가져오기 (업적 포함)
+  const { data: memberProfiles } = useUserProfilesComplete(memberIds, {
+    includeActivities: false,
+    includeAchievements: true,
+    activitiesLimit: 0
+  })
 
-  // Transform members data to expected format
+  // V2 시스템에서는 변환 불필요 - 직접 사용
   const transformedMembers = useMemo(() => {
-    if (!members) return []
+    if (!members || !Array.isArray(members)) return []
     
-    return members.map((userData: any) => {
-      const metadata = (userData.metadata || {}) as any
+    return members.map((member) => {
+      const metadata = (member.metadata || {}) as UserMetadata
       return {
-        id: userData.id || '',
-        name: userData.name || '익명',
-        email: userData.email || '',
+        ...member,
         phone: metadata.phone || null,
-        department: userData.department || null,
         job_position: metadata.job_position || null,
-        role: userData.role || 'member',
-        avatar_url: userData.avatar_url || null,
         location: metadata.location || null,
         skill_level: metadata.skill_level || 'beginner',
-        bio: userData.bio || null,
-        activity_score: userData.activity_score || 0,
         ai_expertise: metadata.ai_expertise || [],
-        achievements: metadata.achievements || [],
-        join_date: userData.created_at || new Date().toISOString(),
-        user_stats: [{
-          total_posts: 0,
-          total_comments: 0,
-          total_likes_received: 0,
-          total_views: 0,
-          activities_joined: 0,
-          resources_shared: 0
-        }],
-        metadata: userData.metadata
-      } as MemberWithStats
+        join_date: member.created_at || new Date().toISOString(),
+        // V2에서는 stats가 없으므로 기본값 사용
+        user_stats: null,
+        metadata: member.metadata // Json 타입 그대로 사용
+      } as MemberData
     })
   }, [members])
 
@@ -151,43 +151,29 @@ function MembersPage() {
   const filteredMembers = useMemo(() => {
     let filtered = transformedMembers
 
-    if (searchTerm) {
-      filtered = filtered.filter(member =>
-        member.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.job_position?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.ai_expertise?.some(expertise => 
-          expertise.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      )
-    }
-
-    if (activeRole !== 'all') {
-      filtered = filtered.filter(member => member.role === activeRole)
-    }
-
+    // V2 시스템에서는 서버 사이드 필터링이 되므로 추가 필터링만 수행
     if (activeSkill !== 'all') {
       filtered = filtered.filter(member => member.skill_level === activeSkill)
     }
 
-    // Sort by activity score
-    filtered.sort((a, b) => (b.activity_score || 0) - (a.activity_score || 0))
+    // 이미 activity_score로 정렬되어 있음
 
     return filtered
-  }, [transformedMembers, searchTerm, activeRole, activeSkill])
+  }, [transformedMembers, activeSkill])
 
-  // Determine assignable roles based on user's role
-  useEffect(() => {
-    if (profile?.role) {
-      const roleHierarchy: Record<string, string[]> = {
-        'admin': ['leader', 'vice-leader', 'member', 'guest'],
-        'leader': ['vice-leader', 'member', 'guest'],
-        'vice-leader': ['member', 'guest'],
-        'member': [],
-        'guest': []
-      }
-      setAssignableRoles(roleHierarchy[profile.role] || [])
+  // Determine assignable roles based on user's role using useMemo
+  const assignableRoles = useMemo(() => {
+    if (!profile?.role) return []
+    
+    const roleHierarchy: Record<string, string[]> = {
+      'admin': ['leader', 'vice-leader', 'member', 'guest'],
+      'leader': ['vice-leader', 'member', 'guest'],
+      'vice-leader': ['member', 'guest'],
+      'member': [],
+      'guest': []
     }
+    
+    return roleHierarchy[profile.role] || []
   }, [profile?.role])
 
   const handleSearch = (term: string) => {
@@ -245,7 +231,8 @@ function MembersPage() {
   }
 
 
-  const formatJoinDate = (dateString: string) => {
+  const formatJoinDate = (dateString: string | undefined) => {
+    if (!dateString) return '정보 없음'
     const date = new Date(dateString)
     return date.toLocaleDateString('ko-KR', {
       year: 'numeric',
@@ -254,12 +241,24 @@ function MembersPage() {
   }
 
 
-  const getMemberStats = (member: MemberWithStats) => {
-    const stats = member.user_stats?.[0]
+  const getMemberStats = (member: MemberData) => {
+    // 회원별 통계 데이터 조회
+    if (memberStats) {
+      const stats = memberStats.find(s => s.user_id === member.id)
+      if (stats) {
+        return {
+          posts: stats.posts_count || 0,
+          comments: stats.comments_count || 0,
+          participation: stats.activities_joined || 0
+        }
+      }
+    }
+    
+    // 통계 데이터가 없으면 기본값 반환
     return {
-      posts: stats?.total_posts || 0,
-      comments: stats?.total_comments || 0,
-      participation: stats?.activities_joined || 0
+      posts: 0,
+      comments: 0,
+      participation: 0
     }
   }
 
@@ -270,6 +269,7 @@ function MembersPage() {
 
   // Calculate new members this month
   const newMembersThisMonth = transformedMembers.filter(m => {
+    if (!m.join_date) return false
     const joinDate = new Date(m.join_date)
     const now = new Date()
     return joinDate.getMonth() === now.getMonth() && joinDate.getFullYear() === now.getFullYear()
@@ -298,7 +298,7 @@ function MembersPage() {
       />
       <StatsCard
         title="신규 회원"
-        value={transformedMembers.filter(m => new Date(m.join_date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000).length}
+        value={transformedMembers.filter(m => m.join_date && new Date(m.join_date).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000).length}
         icon={UserPlus}
         subtitle="최근 7일"
         loading={loading}
@@ -523,27 +523,44 @@ function MembersPage() {
                     </div>
                   </div>
 
-                  {/* Achievements */}
-                  {member.achievements && member.achievements.length > 0 && (
-                    <div className="mb-4">
-                      <div className="mb-2 flex items-center space-x-1">
-                        <Award className="h-4 w-4 text-yellow-500" />
-                        <span className="text-sm font-medium">성과</span>
+                  {/* Achievements - V2 시스템 사용 */}
+                  {(() => {
+                    const profile = memberProfiles?.find(p => p.profile.id === member.id)
+                    const completedAchievements = profile?.achievement_progress
+                      ?.filter(a => a.is_completed)
+                      ?.map(a => ({
+                        id: a.achievement_id,
+                        ...ACHIEVEMENTS[a.achievement_id]
+                      }))
+                      ?.filter(Boolean) || []
+                    
+                    if (completedAchievements.length === 0) return null
+                    
+                    return (
+                      <div className="mb-4">
+                        <div className="mb-2 flex items-center space-x-1">
+                          <Award className="h-4 w-4 text-yellow-500" />
+                          <span className="text-sm font-medium">업적</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {completedAchievements.slice(0, 2).map((achievement) => (
+                            <Badge 
+                              key={achievement.id} 
+                              variant="secondary" 
+                              className="text-xs bg-yellow-100 text-yellow-800"
+                            >
+                              {achievement.icon} {achievement.name}
+                            </Badge>
+                          ))}
+                          {completedAchievements.length > 2 && (
+                            <Badge variant="secondary" className="text-xs">
+                              +{completedAchievements.length - 2}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {member.achievements.slice(0, 2).map((achievement) => (
-                          <Badge key={achievement} variant="secondary" className="text-xs bg-yellow-100 text-yellow-800">
-                            {achievement}
-                          </Badge>
-                        ))}
-                        {member.achievements.length > 2 && (
-                          <Badge variant="secondary" className="text-xs">
-                            +{member.achievements.length - 2}
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  )}
+                    )
+                  })()}
 
                   {/* Contact Info & Join Date */}
                   <div className="space-y-2 text-sm text-muted-foreground">

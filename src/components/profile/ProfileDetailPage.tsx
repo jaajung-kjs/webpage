@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Progress } from '@/components/ui/progress'
 import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   MapPin,
   Calendar,
@@ -34,72 +35,19 @@ import {
   Star,
   Megaphone,
   Eye,
-  Heart
+  Heart,
+  Trophy
 } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { supabaseClient } from '@/lib/core/connection-core'
+// V2 Hook으로 변경
+import { useUserProfileComplete } from '@/hooks/features/useProfileV2'
 import { Tables } from '@/lib/database.types'
 import { getRoleLabels, getRoleColors, getRoleIcons } from '@/lib/roles'
 import { getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons } from '@/lib/skills'
 import { getActivityLevelInfo, calculateLevelProgress } from '@/lib/activityLevels'
 import { getAIToolConfig } from '@/lib/aiTools'
-
-interface ProfileData {
-  id: string
-  name: string
-  email: string
-  phone: string | null
-  department: string | null
-  job_position: string | null
-  role: string
-  avatar_url: string | null
-  location: string | null
-  skill_level: string
-  bio: string | null
-  activity_score: number
-  ai_expertise: string[]
-  achievements: string[]
-  join_date: string
-  last_login: string | null
-  updated_at: string
-}
-
-interface UserStats {
-  totalPosts: number
-  totalComments: number
-  totalLikes: number
-  totalViews: number
-  activitiesJoined: number
-  resourcesShared: number
-}
-
-// Activity related interfaces for better type safety
-interface ActivityData {
-  activity_type: string
-  title: string
-  created_at: string
-  metadata?: {
-    title?: string
-    views?: number
-    likes?: number
-    comments?: number
-    comment_preview?: string
-    is_reply?: boolean
-  }
-  target_type?: string
-}
-
-interface UserActivityResponse {
-  stats: {
-    posts: number
-    cases: number
-    announcements: number
-    resources: number
-    comments: number
-  }
-  recent_activities: ActivityData[]
-}
+import { ACHIEVEMENTS, Achievement, getAchievementsByTier } from '@/lib/achievements'
 
 
 // Get labels and configs from the modules
@@ -113,170 +61,57 @@ const skillIcons = getSkillLevelIcons()
 export default function ProfileDetailPage({ userId }: { userId: string }) {
   const router = useRouter()
   const { user, profile: userProfile } = useAuth()
-  const [profile, setProfile] = useState<ProfileData | null>(null)
-  const [stats, setStats] = useState<UserStats | null>(null)
-  const [recentActivities, setRecentActivities] = useState<ActivityData[]>([])
-  const [loading, setLoading] = useState(true)
-  const [activityStats, setActivityStats] = useState<UserActivityResponse['stats'] | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
-  const [hasPermission, setHasPermission] = useState(false)
-
-  useEffect(() => {
-    // Check permissions
-    if (user) {
-      const isOwnProfile = user.id === userId
-      const isMember = userProfile && ['member', 'vice-leader', 'leader', 'admin'].includes(userProfile.role)
-      setHasPermission(isOwnProfile || isMember || false)
-    } else {
-      setHasPermission(false)
+  
+  // V2 통합 Hook 사용 - 한 번의 호출로 모든 데이터 가져오기
+  const { 
+    data: profileData, 
+    isLoading: loading, 
+    error 
+  } = useUserProfileComplete(userId, true, 10)
+  
+  // V2 데이터 구조 직접 사용 - 변환 로직 제거
+  const profile = profileData?.profile
+  const stats = profileData?.stats
+  const recentActivities = profileData?.recent_activities || []
+  
+  // metadata 처리
+  const metadata = useMemo(() => {
+    const meta = profile?.metadata as any
+    return {
+      skill_level: meta?.skill_level || 'beginner',
+      ai_expertise: meta?.ai_expertise || [],
+      phone: meta?.phone || null,
+      location: meta?.location || null,
+      job_position: meta?.job_position || null
     }
-    
-    fetchProfileData()
-  }, [userId, user, userProfile])
-
-  const fetchProfileData = async () => {
-    try {
-      setLoading(true)
-      
-      // Fetch profile using direct query
-      const { data: userData, error: userError } = await supabaseClient
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
-      if (userError) throw userError
-      const metadata = (userData?.metadata || {}) as any
-      
-      // Transform profile data
-      const profileData: ProfileData = {
-        id: userData?.id || '',
-        name: userData?.name || '익명',
-        email: userData?.email || '',
-        phone: metadata.phone || null,
-        department: userData?.department || null,
-        job_position: metadata.job_position || null,
-        role: userData?.role || 'member',
-        avatar_url: userData?.avatar_url || null,
-        location: metadata.location || null,
-        skill_level: metadata.skill_level || 'beginner',
-        bio: userData?.bio || null,
-        activity_score: userData?.activity_score || 0,
-        ai_expertise: metadata.ai_expertise || [],
-        achievements: metadata.achievements || [],
-        join_date: userData?.created_at || new Date().toISOString(),
-        last_login: userData?.last_seen_at || null,
-        updated_at: userData?.updated_at || new Date().toISOString()
-      }
-      
-      setProfile(profileData)
-      
-      // Fetch user stats
-      try {
-        const { data: userStatsData, error: statsError } = await supabaseClient
-          .from('user_stats')
-          .select('*')
-          .eq('user_id', userId)
-          .single()
-        
-        if (!statsError && userStatsData) {
-          setStats({
-            totalPosts: userStatsData.posts_count || 0,
-            totalComments: userStatsData.comments_count || 0,
-            totalLikes: userStatsData.likes_received || 0,
-            totalViews: 0, // Not available in user_stats view
-            activitiesJoined: 0, // Not available in user_stats view
-            resourcesShared: 0 // Not available in user_stats view
-          })
-        } else {
-          // Fallback to zeros
-          setStats({
-            totalPosts: 0,
-            totalComments: 0,
-            totalLikes: 0,
-            totalViews: 0,
-            activitiesJoined: 0,
-            resourcesShared: 0
-          })
-        }
-      } catch (error) {
-        console.warn('Failed to fetch user stats:', error)
-        // Fallback to zeros
-        setStats({
-          totalPosts: 0,
-          totalComments: 0,
-          totalLikes: 0,
-          totalViews: 0,
-          activitiesJoined: 0,
-          resourcesShared: 0
-        })
-      }
-      
-      // Fetch comprehensive stats
-      try {
-        const { data: comprehensiveData, error: comprehensiveError } = await supabaseClient
-          .rpc('get_user_comprehensive_stats', { p_user_id: userId })
-        
-        if (!comprehensiveError && comprehensiveData && comprehensiveData.length > 0) {
-          const statsData = comprehensiveData[0]
-          
-          // Update main stats with comprehensive data
-          setStats({
-            totalPosts: statsData.total_posts || 0,
-            totalComments: statsData.total_comments || 0,
-            totalLikes: statsData.total_likes_received || 0,
-            totalViews: statsData.total_views || 0,
-            activitiesJoined: 0, // Not available yet
-            resourcesShared: 0 // Will get from get_user_content_stats
-          })
-        }
-        
-        // Fetch content stats and recent activities
-        const { data: contentData, error: contentError } = await supabaseClient
-          .rpc('get_user_content_stats', { user_id_param: userId })
-        
-        if (!contentError && contentData) {
-          const typedData = contentData as unknown as any
-          
-          // Set activity stats
-          if (typedData.stats) {
-            setActivityStats({
-              posts: typedData.stats.posts || 0,
-              cases: typedData.stats.cases || 0,
-              announcements: typedData.stats.announcements || 0,
-              resources: typedData.stats.resources || 0,
-              comments: typedData.stats.comments || 0
-            })
-            
-            // Update resource count
-            setStats(prev => prev ? {
-              ...prev,
-              resourcesShared: typedData.stats.resources || 0
-            } : null)
-          }
-          
-          // Set recent activities
-          if (typedData.recent_activities) {
-            setRecentActivities(typedData.recent_activities)
-          } else {
-            setRecentActivities([])
-          }
-        } else {
-          console.warn('Failed to fetch user content stats:', contentError)
-          setRecentActivities([])
-        }
-      } catch (error) {
-        console.error('Error fetching user activity:', error)
-        setRecentActivities([])
-      }
-      
-    } catch (error) {
-      console.error('Error fetching profile:', error)
-      toast.error('프로필을 불러오는데 실패했습니다.')
-    } finally {
-      setLoading(false)
+  }, [profile])
+  
+  // 업적 데이터 처리 - V2 시스템 사용
+  const userAchievements = useMemo(() => {
+    // profileData에 achievement_progress가 있다면 사용
+    if (profileData?.achievement_progress) {
+      return profileData.achievement_progress
+        .filter(a => a.is_completed)
+        .map(a => ({
+          id: a.achievement_id,
+          ...ACHIEVEMENTS[a.achievement_id]
+        }))
+        .filter((item: any): item is Achievement & { id: string } => 
+          item && ACHIEVEMENTS[item.id] !== undefined
+        )
     }
-  }
+    return []
+  }, [profileData?.achievement_progress])
+  
+  // 권한 체크
+  const hasPermission = useMemo(() => {
+    if (!user) return false
+    const isOwnProfile = user.id === userId
+    const isMember = userProfile && ['member', 'vice-leader', 'leader', 'admin'].includes(userProfile.role)
+    return isOwnProfile || isMember || false
+  }, [user, userId, userProfile])
+
 
   const getRoleIcon = (role: string) => {
     switch (role) {
@@ -453,9 +288,9 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
     )
   }
 
-  const activityLevel = getActivityLevelInfo(profile.activity_score)
-  const activityProgress = calculateLevelProgress(profile.activity_score)
-  const isOwnProfile = user?.id === profile.id
+  const activityLevel = getActivityLevelInfo(profile?.activity_score || 0)
+  const activityProgress = calculateLevelProgress(profile?.activity_score || 0)
+  const isOwnProfile = user?.id === profile?.id
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -485,39 +320,39 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
             <CardContent className="p-6">
               <div className="flex flex-col items-center space-y-4">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={profile.avatar_url || ''} alt={profile.name} />
+                  <AvatarImage src={profile?.avatar_url || ''} alt={profile?.name || ''} />
                   <AvatarFallback>
-                    {profile.name?.charAt(0) || 'U'}
+                    {profile?.name?.charAt(0) || 'U'}
                   </AvatarFallback>
                 </Avatar>
                 
                 <div className="text-center">
-                  <h2 className="text-2xl font-bold">{profile.name}</h2>
+                  <h2 className="text-2xl font-bold">{profile?.name || '익명'}</h2>
                   <p className="text-muted-foreground">
-                    {profile.department || '미상'} {profile.job_position && `· ${profile.job_position}`}
+                    {profile?.department || '미상'} {metadata.job_position && `· ${metadata.job_position}`}
                   </p>
                 </div>
 
                 <div className="flex items-center justify-center flex-wrap gap-2">
                   <Badge 
                     variant="secondary" 
-                    className={roleColors[profile.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
+                    className={roleColors[profile?.role as keyof typeof roleColors] || 'bg-gray-100 text-gray-800'}
                   >
                     {(() => {
-                      const Icon = getRoleIcon(profile.role)
+                      const Icon = getRoleIcon(profile?.role || 'member')
                       return Icon ? <Icon className="h-3 w-3 mr-1" /> : null
                     })()}
-                    {roleLabels[profile.role as keyof typeof roleLabels] || profile.role}
+                    {roleLabels[profile?.role as keyof typeof roleLabels] || profile?.role || 'member'}
                   </Badge>
                   <Badge 
                     variant="outline" 
-                    className={skillColors[profile.skill_level as keyof typeof skillColors] || 'bg-gray-100 text-gray-800'}
+                    className={skillColors[metadata.skill_level as keyof typeof skillColors] || 'bg-gray-100 text-gray-800'}
                   >
                     {(() => {
-                      const Icon = skillIcons[profile.skill_level as keyof typeof skillIcons]
+                      const Icon = skillIcons[metadata.skill_level as keyof typeof skillIcons]
                       return Icon ? <Icon className="h-3 w-3 mr-1" /> : null
                     })()}
-                    {skillLevels[profile.skill_level as keyof typeof skillLevels] || profile.skill_level}
+                    {skillLevels[metadata.skill_level as keyof typeof skillLevels] || metadata.skill_level}
                   </Badge>
                   <Badge 
                     variant="secondary" 
@@ -532,17 +367,17 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 <div className="w-full space-y-2 text-sm">
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <Mail className="h-4 w-4" />
-                    <span className="truncate">{profile.email}</span>
+                    <span className="truncate">{profile?.email || ''}</span>
                   </div>
-                  {profile.phone && (
+                  {metadata.phone && (
                     <div className="flex items-center space-x-2 text-muted-foreground">
                       <Phone className="h-4 w-4" />
-                      <span>{profile.phone}</span>
+                      <span>{metadata.phone}</span>
                     </div>
                   )}
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{profile.location || '강원도 춘천시'}</span>
+                    <span>{metadata.location || '강원도 춘천시'}</span>
                   </div>
                 </div>
 
@@ -551,7 +386,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium">활동 점수</span>
                     <span className="text-sm font-bold">
-                      {profile.activity_score}점
+                      {profile?.activity_score || 0}점
                     </span>
                   </div>
                   <Progress value={activityProgress} className="h-2" />
@@ -601,7 +436,7 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    {profile.bio || 'AI 학습동아리 회원입니다.'}
+                    {profile?.bio || 'AI 학습동아리 회원입니다.'}
                   </p>
                 </CardContent>
               </Card>
@@ -613,8 +448,8 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 </CardHeader>
                 <CardContent>
                   <div className="flex flex-wrap gap-2">
-                    {profile.ai_expertise.length > 0 ? (
-                      profile.ai_expertise.map((expertise) => {
+                    {metadata.ai_expertise.length > 0 ? (
+                      metadata.ai_expertise.map((expertise: string) => {
                         const toolConfig = getAIToolConfig(expertise)
                         const Icon = toolConfig?.icon
                         return (
@@ -631,23 +466,47 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                 </CardContent>
               </Card>
 
-              {/* Achievements */}
-              {profile.achievements.length > 0 && (
+              {/* Achievements - V2 시스템 사용 */}
+              {userAchievements.length > 0 && (
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2">
-                      <Award className="h-5 w-5 text-yellow-500" />
-                      <span>성과</span>
+                      <Trophy className="h-5 w-5 text-yellow-500" />
+                      <span>업적</span>
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <div className="flex flex-wrap gap-2">
-                      {profile.achievements.map((achievement) => (
-                        <Badge key={achievement} variant="secondary" className="bg-yellow-100 text-yellow-800">
-                          {achievement}
-                        </Badge>
-                      ))}
-                    </div>
+                    <TooltipProvider>
+                      <div className="flex flex-wrap gap-2">
+                        {userAchievements.map((achievement: Achievement & { id: string }) => {
+                          const tierColors = {
+                            bronze: 'bg-orange-100 text-orange-800 hover:bg-orange-200',
+                            silver: 'bg-gray-100 text-gray-800 hover:bg-gray-200',
+                            gold: 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+                            platinum: 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                          }
+                          return (
+                            <Tooltip key={achievement.id}>
+                              <TooltipTrigger>
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`cursor-help transition-colors ${tierColors[achievement.tier]}`}
+                                >
+                                  <span className="mr-1">{achievement.icon}</span>
+                                  {achievement.name}
+                                </Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <div className="text-sm">
+                                  <p className="font-semibold">{achievement.description}</p>
+                                  <p className="text-muted-foreground">포인트: {achievement.points}</p>
+                                </div>
+                              </TooltipContent>
+                            </Tooltip>
+                          )
+                        })}
+                      </div>
+                    </TooltipProvider>
                   </CardContent>
                 </Card>
               )}
@@ -663,21 +522,21 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                       <Calendar className="h-4 w-4" />
                       <span>가입일</span>
                     </div>
-                    <span className="font-medium">{formatDate(profile.join_date)}</span>
+                    <span className="font-medium">{formatDate(profile?.created_at || null)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 text-muted-foreground">
                       <Clock className="h-4 w-4" />
                       <span>마지막 로그인</span>
                     </div>
-                    <span className="font-medium">{formatDate(profile.last_login)}</span>
+                    <span className="font-medium">{formatDate(profile?.last_seen_at || null)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2 text-muted-foreground">
                       <CheckCircle className="h-4 w-4" />
                       <span>프로필 업데이트</span>
                     </div>
-                    <span className="font-medium">{formatDate(profile.updated_at)}</span>
+                    <span className="font-medium">{formatDate(profile?.updated_at || null)}</span>
                   </div>
                 </CardContent>
               </Card>
@@ -694,28 +553,28 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                     <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                       <div className="text-center p-4 bg-muted rounded-lg">
                         <div className="text-2xl font-bold text-primary">
-                          {activityStats?.posts || stats.totalPosts}
+                          {stats?.posts_count || 0}
                         </div>
                         <div className="text-sm text-muted-foreground">게시글</div>
                       </div>
                       <div className="text-center p-4 bg-muted rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.totalComments}</div>
+                        <div className="text-2xl font-bold text-primary">{stats?.comments_count || 0}</div>
                         <div className="text-sm text-muted-foreground">댓글</div>
                       </div>
                       <div className="text-center p-4 bg-muted rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.totalLikes}</div>
+                        <div className="text-2xl font-bold text-primary">{stats?.total_likes_received || 0}</div>
                         <div className="text-sm text-muted-foreground">받은 좋아요</div>
                       </div>
                       <div className="text-center p-4 bg-muted rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.totalViews}</div>
+                        <div className="text-2xl font-bold text-primary">{stats?.total_views || 0}</div>
                         <div className="text-sm text-muted-foreground">조회수</div>
                       </div>
                       <div className="text-center p-4 bg-muted rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.activitiesJoined}</div>
+                        <div className="text-2xl font-bold text-primary">{stats?.activities_joined || 0}</div>
                         <div className="text-sm text-muted-foreground">활동 참여</div>
                       </div>
                       <div className="text-center p-4 bg-muted rounded-lg">
-                        <div className="text-2xl font-bold text-primary">{stats.resourcesShared}</div>
+                        <div className="text-2xl font-bold text-primary">{stats?.resources_count || 0}</div>
                         <div className="text-sm text-muted-foreground">자료 공유</div>
                       </div>
                     </div>
@@ -740,23 +599,23 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm">활동 점수</span>
-                        <span className="text-sm font-medium">{profile.activity_score}점</span>
+                        <span className="text-sm font-medium">{profile?.activity_score || 0}점</span>
                       </div>
-                      <Progress value={Math.min((profile.activity_score / 1000) * 100, 100)} className="h-2" />
+                      <Progress value={Math.min(((profile?.activity_score || 0) / 1000) * 100, 100)} className="h-2" />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm">게시글 활동</span>
-                        <span className="text-sm font-medium">{stats?.totalPosts || 0}개</span>
+                        <span className="text-sm font-medium">{stats?.posts_count || 0}개</span>
                       </div>
-                      <Progress value={Math.min((stats?.totalPosts || 0) * 10, 100)} className="h-2" />
+                      <Progress value={Math.min((stats?.posts_count || 0) * 10, 100)} className="h-2" />
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm">커뮤니티 참여</span>
-                        <span className="text-sm font-medium">{stats?.totalComments || 0}개</span>
+                        <span className="text-sm font-medium">{stats?.comments_count || 0}개</span>
                       </div>
-                      <Progress value={Math.min((stats?.totalComments || 0) * 5, 100)} className="h-2" />
+                      <Progress value={Math.min((stats?.comments_count || 0) * 5, 100)} className="h-2" />
                     </div>
                   </div>
                 </CardContent>
@@ -773,13 +632,12 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                   {recentActivities.length > 0 ? (
                     <div className="space-y-4">
                       {recentActivities.slice(0, 8).map((activity, index) => {
-                        const config = getActivityConfig(activity.activity_type, activity.target_type)
+                        const config = getActivityConfig(activity.type, activity.type)
                         const ActivityIcon = config.icon
-                        const isReply = activity.metadata?.is_reply === true
                         
-                        // Handle special case for comments/replies
-                        const activityLabel = activity.activity_type === 'comment_created' 
-                          ? (isReply ? '답글 작성' : '댓글 작성')
+                        // V2 시스템에 맞게 수정
+                        const activityLabel = activity.type === 'comment' 
+                          ? '댓글 작성'
                           : config.label
                         
                         return (
@@ -801,42 +659,33 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                                 {activity.title && <span className="text-foreground">: {activity.title}</span>}
                               </p>
                               
-                              {/* Comment preview with better styling */}
-                              {activity.metadata?.comment_preview && (
-                                <div className="pl-2 border-l-2 border-muted">
-                                  <p className="text-xs text-muted-foreground italic">
-                                    "{activity.metadata.comment_preview.length > 80 
-                                      ? activity.metadata.comment_preview.substring(0, 80) + '...'
-                                      : activity.metadata.comment_preview}"
-                                  </p>
-                                </div>
-                              )}
+                              {/* V2 시스템에서는 engagement 데이터 사용 */}
                               
                               {/* Metadata with icons */}
                               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="flex items-center gap-1">
                                   <Clock className="h-3 w-3" />
-                                  {formatRelativeTime(activity.created_at)}
+                                  {formatRelativeTime(activity.date)}
                                 </span>
                                 
-                                {activity.metadata?.views !== undefined && activity.metadata.views > 0 && (
+                                {activity.engagement?.views > 0 && (
                                   <span className="flex items-center gap-1">
                                     <Eye className="h-3 w-3" />
-                                    {activity.metadata.views}
+                                    {activity.engagement.views}
                                   </span>
                                 )}
                                 
-                                {activity.metadata?.likes !== undefined && activity.metadata.likes > 0 && (
+                                {activity.engagement?.likes > 0 && (
                                   <span className="flex items-center gap-1">
                                     <Heart className="h-3 w-3" />
-                                    {activity.metadata.likes}
+                                    {activity.engagement.likes}
                                   </span>
                                 )}
                                 
-                                {activity.metadata?.comments !== undefined && activity.metadata.comments > 0 && (
+                                {activity.engagement?.comments > 0 && (
                                   <span className="flex items-center gap-1">
                                     <MessageSquare className="h-3 w-3" />
-                                    {activity.metadata.comments}
+                                    {activity.engagement.comments}
                                   </span>
                                 )}
                               </div>
@@ -875,19 +724,19 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                       <div className="grid grid-cols-2 gap-2">
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">게시글</span>
-                          <span className="text-xs font-medium">{activityStats?.posts || 0}개</span>
+                          <span className="text-xs font-medium">{stats?.posts_count || 0}개</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">사례</span>
-                          <span className="text-xs font-medium">{activityStats?.cases || 0}개</span>
+                          <span className="text-xs font-medium">{stats?.cases_count || 0}개</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">공지사항</span>
-                          <span className="text-xs font-medium">{activityStats?.announcements || 0}개</span>
+                          <span className="text-xs font-medium">{stats?.announcements_count || 0}개</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-xs text-muted-foreground">자료</span>
-                          <span className="text-xs font-medium">{activityStats?.resources || 0}개</span>
+                          <span className="text-xs font-medium">{stats?.resources_count || 0}개</span>
                         </div>
                       </div>
                     </div>
@@ -898,15 +747,15 @@ export default function ProfileDetailPage({ userId }: { userId: string }) {
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">총 댓글</span>
-                          <span className="text-sm font-medium">{activityStats?.comments || stats?.totalComments || 0}개</span>
+                          <span className="text-sm font-medium">{stats?.comments_count || 0}개</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">받은 좋아요</span>
-                          <span className="text-sm font-medium">{stats?.totalLikes || 0}개</span>
+                          <span className="text-sm font-medium">{stats?.total_likes_received || 0}개</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">활동 참여</span>
-                          <span className="text-sm font-medium">{stats?.activitiesJoined || 0}회</span>
+                          <span className="text-sm font-medium">{stats?.activities_joined || 0}회</span>
                         </div>
                       </div>
                     </div>
