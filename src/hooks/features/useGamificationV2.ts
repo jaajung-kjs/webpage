@@ -361,16 +361,16 @@ export function useGamificationV2(userId?: string) {
     levelProgress: userGameData ? getLevelProgress(userGameData.activity_score, userGameData.skill_level) : null,
     
     // 통계 요약
-    totalAchievements: userStats?.achievements.total_count || 0,
-    totalAchievementPoints: userStats?.achievements.total_points || 0,
-    recentAchievements: userStats?.achievements.recent_achievements || [],
+    totalAchievements: userStats?.achievements?.total_count || 0,
+    totalAchievementPoints: userStats?.achievements?.total_points || 0,
+    recentAchievements: userStats?.achievements?.recent_achievements || [],
     
-    // 사용자 활동 통계
-    postsCount: userStats?.stats.posts_count || 0,
-    commentsCount: userStats?.stats.comments_count || 0,
-    totalLikesReceived: userStats?.stats.total_likes_received || 0,
-    activitiesJoined: userStats?.stats.activities_joined || 0,
-    activitiesAttended: userStats?.stats.activities_attended || 0,
+    // 사용자 활동 통계  
+    postsCount: userStats?.stats?.posts_count || 0,
+    commentsCount: userStats?.stats?.comments_count || 0,
+    totalLikesReceived: userStats?.stats?.total_likes_received || 0,
+    activitiesJoined: userStats?.stats?.activities_joined || 0,
+    activitiesAttended: userStats?.stats?.activities_attended || 0,
   }
 }
 

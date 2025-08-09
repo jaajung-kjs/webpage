@@ -74,7 +74,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   
   // Derive interaction states
   const isLiked = (userInteractions as any)?.user_liked || false
-  const likeCount = (interactionStats as any)?.like_count || 0
+  const likeCount = (interactionStats as any)?.likes || 0
   const isBookmarked = (userInteractions as any)?.user_bookmarked || false
   
   const downloadCount = useMemo(() => {
@@ -262,7 +262,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
         department: resourceData.author?.department || undefined
       }}
       createdAt={resourceData.created_at || new Date().toISOString()}
-      viewCount={resourceData.view_count || 0}
+      viewCount={resourceData.interaction_counts?.views || 0}
       category={{
         label: categoryLabels['reference' as keyof typeof categoryLabels] || '자료',
         value: 'resource',

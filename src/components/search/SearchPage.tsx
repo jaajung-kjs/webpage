@@ -288,16 +288,16 @@ export default function SearchPage() {
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-1">
                     <Eye className="h-3 w-3" />
-                    <span>{item.view_count || 0}</span>
+                    <span>{item.interaction_counts?.views || 0}</span>
                   </div>
                   <div className="flex items-center space-x-1">
                     <MessageCircle className="h-3 w-3" />
                     <span>{item.comment_count || 0}</span>
                   </div>
-                  {item.like_count !== undefined && (
+                  {item.interaction_counts?.likes !== undefined && (
                     <div className="flex items-center space-x-1">
                       <Heart className="h-3 w-3" />
-                      <span>{item.like_count}</span>
+                      <span>{item.interaction_counts?.likes}</span>
                     </div>
                   )}
                 </div>

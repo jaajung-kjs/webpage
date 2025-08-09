@@ -215,23 +215,23 @@ export default function ContentCard({
           {/* Author Info */}
           <div className="flex items-center gap-2 min-w-0">
             <Avatar className="h-6 w-6 flex-shrink-0">
-              <AvatarImage src={content.author_avatar_url || undefined} />
-              <AvatarFallback>{content.author_name?.charAt(0) || 'U'}</AvatarFallback>
+              <AvatarImage src={content.author?.avatar_url || undefined} />
+              <AvatarFallback>{content.author?.name?.charAt(0) || 'U'}</AvatarFallback>
             </Avatar>
             <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-medium truncate">{content.author_name || '익명'}</span>
+              <span className="font-medium truncate">{content.author?.name || '익명'}</span>
               {/* 게임화 V2 레벨 뱃지 */}
               <UserLevelBadges 
-                userId={content.author_id} 
+                userId={content.author?.id} 
                 variant="minimal" 
                 size="sm" 
                 className="flex-shrink-0"
               />
             </div>
-            {viewMode === 'list' && content.author_department && (
+            {viewMode === 'list' && content.author?.department && (
               <>
                 <span className="flex-shrink-0">·</span>
-                <span className="truncate">{content.author_department}</span>
+                <span className="truncate">{content.author.department}</span>
               </>
             )}
             <span className="flex-shrink-0">·</span>
@@ -242,11 +242,11 @@ export default function ContentCard({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
               <Eye className="h-3.5 w-3.5" />
-              <span>{content.view_count || 0}</span>
+              <span>{content.interaction_counts?.views || 0}</span>
             </div>
             <div className="flex items-center gap-1">
               <ThumbsUp className="h-3.5 w-3.5" />
-              <span>{content.like_count || 0}</span>
+              <span>{content.interaction_counts?.likes || 0}</span>
             </div>
             <div className="flex items-center gap-1">
               <MessageCircle className="h-3.5 w-3.5" />

@@ -150,11 +150,24 @@ export function useContentV2() {
         // 조회수 증가 (비동기 - RPC 함수 사용)
         if (user) {
           // 조회수 증가 (백그라운드에서 처리)
-          supabase.rpc('toggle_interaction_v2', {
-            p_user_id: user.id,
-            p_target_type: 'content',
-            p_target_id: contentId,
-            p_interaction_type: 'view'
+          supabase.rpc('increment_view_count_v2', {
+            p_content_id: contentId,
+            p_user_id: user.id
+          }).then(() => {
+            // 성공 시 로컬 캐시 업데이트
+            queryClient.setQueryData(['content-v2', contentId], (old: ContentWithRelations) => {
+              if (!old) return old
+              return {
+                ...old,
+                view_count: (old.view_count || 0) + 1,
+                interaction_counts: {
+                  ...old.interaction_counts,
+                  views: (old.interaction_counts?.views || 0) + 1
+                }
+              }
+            })
+          }).catch(err => {
+            console.error('View count increment failed:', err)
           }) // 에러가 나도 메인 쿼리에 영향 없음
         }
         

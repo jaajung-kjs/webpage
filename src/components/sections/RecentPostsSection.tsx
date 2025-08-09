@@ -187,26 +187,30 @@ export default function RecentPostsSection() {
           ) : (
             <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
               {recentPosts.map((postItem, index) => {
-                // Transform postItem to match Views<'content_with_author'> format
+                // Transform postItem to match V2 ContentWithRelations format
                 const transformedPost = {
                   id: postItem.id,
                   title: postItem.title,
                   content: postItem.content,
                   excerpt: getDescription(postItem.content),
                   category: postItem.category,
-                  view_count: postItem.view_count,
-                  like_count: postItem.like_count,
                   comment_count: postItem.comment_count,
                   created_at: postItem.created_at,
-                  author_id: postItem.author_id,
-                  author_name: postItem.author_name,
-                  author_avatar_url: postItem.author_avatar_url,
-                  author_department: postItem.author_department,
-                  author_email: null,
-                  author_role: null,
+                  author: {
+                    id: postItem.author_id,
+                    name: postItem.author_name,
+                    avatar_url: postItem.author_avatar_url,
+                    department: postItem.author_department
+                  },
+                  interaction_counts: {
+                    views: postItem.view_count,
+                    likes: postItem.like_count,
+                    bookmarks: 0,
+                    reports: 0
+                  },
                   metadata: postItem.metadata,
                   tags: postItem.tags,
-                  type: 'case',
+                  content_type: 'case',
                   status: 'published',
                   updated_at: null,
                   is_pinned: false

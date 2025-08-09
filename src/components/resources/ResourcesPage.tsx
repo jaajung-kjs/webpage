@@ -86,9 +86,9 @@ export default function ResourcesPage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'popular':
-          return (b.like_count || 0) - (a.like_count || 0)
+          return (b.interaction_counts?.likes || 0) - (a.interaction_counts?.likes || 0)
         case 'views':
-          return (b.view_count || 0) - (a.view_count || 0)
+          return (b.interaction_counts?.views || 0) - (a.interaction_counts?.views || 0)
         case 'downloads':
           return ((b as any)?.interaction_counts?.downloads || 0) - ((a as any)?.interaction_counts?.downloads || 0)
         case 'latest':
@@ -107,7 +107,7 @@ export default function ResourcesPage() {
       const today = new Date()
       return resourceDate.toDateString() === today.toDateString()
     }).length || 0,
-    totalViews: resources?.reduce((sum, r) => sum + (r.view_count || 0), 0) || 0,
+    totalViews: resources?.reduce((sum, r) => sum + (r.interaction_counts?.views || 0), 0) || 0,
     totalDownloads: resources?.reduce((sum, r) => sum + ((r as any)?.interaction_counts?.downloads || 0), 0) || 0
   }
 
@@ -163,7 +163,7 @@ export default function ResourcesPage() {
       />
       <StatsCard
         title="인기 자료"
-        value={loading ? 0 : resources?.filter(r => (r.like_count || 0) > 5).length || 0}
+        value={loading ? 0 : resources?.filter(r => (r.interaction_counts?.likes || 0) > 5).length || 0}
         icon={FileText}
         loading={loading}
       />

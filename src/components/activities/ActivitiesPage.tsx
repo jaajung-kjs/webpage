@@ -612,7 +612,7 @@ function ActivitiesPage() {
               </CardHeader>
               <CardContent>
                 <CardDescription className="mb-4 line-clamp-3 text-base leading-relaxed">
-                  {activity.content?.content || '설명 없음'}
+                  {activity.content?.summary || activity.content?.content?.substring(0, 200) || '설명 없음'}
                 </CardDescription>
                 
                 {/* Activity Details */}
@@ -634,20 +634,21 @@ function ActivitiesPage() {
                   <div className="flex items-center space-x-2">
                     <Users className="h-4 w-4" />
                     <span>
-                      {0}/{activity.max_participants || '∞'}명
+                      {activity.current_participants || 0}/{activity.max_participants || '∞'}명
                     </span>
                   </div>
                 </div>
 
-                {/* Instructor - simplified for V2 */}
+                {/* Instructor - V2 with actual author */}
                 <div className="mb-4 flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
+                    <AvatarImage src={activity.content?.author?.avatar_url} />
                     <AvatarFallback>
-                      운영진
+                      {activity.content?.author?.name?.charAt(0) || '?'}
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="font-medium text-sm">운영진</div>
+                    <div className="font-medium text-sm">{activity.content?.author?.name || '알 수 없음'}</div>
                     <div className="text-xs text-muted-foreground">진행자</div>
                   </div>
                 </div>

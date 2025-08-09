@@ -196,6 +196,7 @@ export function useActivitiesV2() {
               id,
               title,
               summary,
+              content,
               author_id,
               status,
               created_at,

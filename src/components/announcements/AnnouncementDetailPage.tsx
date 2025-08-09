@@ -74,7 +74,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   
   // Derive interaction states
   const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
-  const likeCount = (interactionStats as any)?.like_count || 0
+  const likeCount = (interactionStats as any)?.likes || 0
   const isBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
   
   // UI state
@@ -242,7 +242,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
           department: announcementData.author?.department || undefined
         }}
         createdAt={announcementData.created_at || new Date().toISOString()}
-        viewCount={announcementData.view_count || 0}
+        viewCount={announcementData.interaction_counts?.views || 0}
         category={{
           label: categoryLabels[primaryCategory as keyof typeof categoryLabels] || '공지사항',
           value: primaryCategory,
