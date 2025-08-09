@@ -283,6 +283,7 @@ export function useMembershipV2() {
         .from('membership_applications_v2')
         .insert({
           user_id: user.id,
+          application_reason: formData.motivation, // motivation을 application_reason으로 사용
           motivation: formData.motivation,
           experience: formData.experience,
           goals: formData.goals,

@@ -399,13 +399,13 @@ export function useAuditLogsV2() {
         const privilegeChanges = logs.filter(log => 
           log.table_name === 'users_v2' && 
           log.action.toLowerCase().includes('update') &&
-          log.new_data &&
-          (log.new_data as any).role
+          log.new_values &&
+          (log.new_values as any).role
         )
 
         privilegeChanges.forEach(log => {
-          const oldRole = (log.old_data as any)?.role
-          const newRole = (log.new_data as any)?.role
+          const oldRole = (log.old_values as any)?.role
+          const newRole = (log.new_values as any)?.role
           
           if (oldRole !== newRole && ['admin', 'leader', 'vice-leader'].includes(newRole)) {
             alerts.push({
@@ -480,7 +480,7 @@ export function useAuditLogsV2() {
             privilege_escalations: logs.filter(log => 
               log.table_name === 'users_v2' && 
               log.action.includes('update') &&
-              (log.new_data as any)?.role !== (log.old_data as any)?.role
+              (log.new_values as any)?.role !== (log.old_values as any)?.role
             ).length,
             mass_deletions: [] as { user: string; count: number }[]
           },

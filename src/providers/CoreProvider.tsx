@@ -23,19 +23,27 @@ const CoreContext = createContext<CoreProviderState>({
   isInitialized: false
 })
 
-// TanStack Query Client 설정
+// TanStack Query Client 설정 (성능 최적화)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000, // 5분
-      gcTime: 10 * 60 * 1000, // 10분 (이전 cacheTime)
-      retry: 3,
-      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      staleTime: 2 * 60 * 1000, // 2분 (더 자주 갱신)
+      gcTime: 5 * 60 * 1000, // 5분 (메모리 효율성)
+      retry: (failureCount, error: any) => {
+        // DB 스키마 에러나 존재하지 않는 컬럼 에러는 재시도하지 않음
+        if (error?.code === 'PGRST116' || error?.message?.includes('does not exist')) {
+          return false
+        }
+        // 일반적인 네트워크 에러만 최대 1번 재시도 (기존 3번에서 감소)
+        return failureCount < 1
+      },
+      retryDelay: 1000, // 1초 고정 (exponential backoff 제거)
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
+      throwOnError: false, // 에러를 조용히 처리하여 UI에 빈 상태 표시
     },
     mutations: {
-      retry: 2,
+      retry: 1, // 기존 2에서 1로 감소
       retryDelay: 1000,
     },
   },

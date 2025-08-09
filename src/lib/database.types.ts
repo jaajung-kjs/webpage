@@ -90,6 +90,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "activities_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: true
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: true
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_v2_instructor_id_fkey"
+            columns: ["instructor_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "activities_v2_instructor_id_fkey"
             columns: ["instructor_id"]
             isOneToOne: false
@@ -153,6 +174,13 @@ export type Database = {
             foreignKeyName: "activity_participants_v2_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_participants_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -188,6 +216,13 @@ export type Database = {
             foreignKeyName: "application_history_v2_actor_id_fkey"
             columns: ["actor_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "application_history_v2_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -196,6 +231,218 @@ export type Database = {
             columns: ["application_id"]
             isOneToOne: false
             referencedRelation: "membership_applications_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs_v2: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_logs_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_logs_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      audit_logs_v2_y2025m01: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_logs_v2_y2025m02: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      audit_logs_v2_y2025m03: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: unknown | null
+          new_values: Json | null
+          old_values: Json | null
+          record_id: string | null
+          table_name: string
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: unknown | null
+          new_values?: Json | null
+          old_values?: Json | null
+          record_id?: string | null
+          table_name?: string
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      categories_v2: {
+        Row: {
+          category_type: string
+          created_at: string
+          display_order: number
+          id: string
+          is_active: boolean
+          name: string
+          parent_id: string | null
+          slug: string
+        }
+        Insert: {
+          category_type: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          parent_id?: string | null
+          slug: string
+        }
+        Update: {
+          category_type?: string
+          created_at?: string
+          display_order?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          parent_id?: string | null
+          slug?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_v2_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "categories_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -245,6 +492,13 @@ export type Database = {
             foreignKeyName: "comments_v2_author_id_fkey"
             columns: ["author_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -253,6 +507,20 @@ export type Database = {
             columns: ["content_id"]
             isOneToOne: false
             referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
             referencedColumns: ["id"]
           },
           {
@@ -304,6 +572,148 @@ export type Database = {
             columns: ["content_id"]
             isOneToOne: false
             referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_attachments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_attachments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_categories_v2: {
+        Row: {
+          category_id: string
+          content_id: string
+        }
+        Insert: {
+          category_id: string
+          content_id: string
+        }
+        Update: {
+          category_id?: string
+          content_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_categories_v2_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_categories_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_categories_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_categories_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_metadata_v2: {
+        Row: {
+          content_id: string
+          key: string
+          value: Json
+        }
+        Insert: {
+          content_id: string
+          key: string
+          value: Json
+        }
+        Update: {
+          content_id?: string
+          key?: string
+          value?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_metadata_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_metadata_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_metadata_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_tags_v2: {
+        Row: {
+          content_id: string
+          tag_id: string
+        }
+        Insert: {
+          content_id: string
+          tag_id: string
+        }
+        Update: {
+          content_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_tags_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tags_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tags_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tags_v2_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -374,6 +784,13 @@ export type Database = {
             foreignKeyName: "content_v2_author_id_fkey"
             columns: ["author_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -437,7 +854,21 @@ export type Database = {
             foreignKeyName: "conversations_v2_user1_id_fkey"
             columns: ["user1_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_v2_user1_id_fkey"
+            columns: ["user1_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "conversations_v2_user2_id_fkey"
+            columns: ["user2_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
             referencedColumns: ["id"]
           },
           {
@@ -509,6 +940,13 @@ export type Database = {
             foreignKeyName: "interactions_v2_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interactions_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -561,6 +999,27 @@ export type Database = {
             columns: ["content_id"]
             isOneToOne: false
             referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_v2_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
             referencedColumns: ["id"]
           },
           {
@@ -629,7 +1088,21 @@ export type Database = {
             foreignKeyName: "membership_applications_v2_reviewer_id_fkey"
             columns: ["reviewer_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_applications_v2_reviewer_id_fkey"
+            columns: ["reviewer_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "membership_applications_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_stats_summary_v2"
             referencedColumns: ["id"]
           },
           {
@@ -675,6 +1148,13 @@ export type Database = {
             columns: ["message_id"]
             isOneToOne: false
             referencedRelation: "messages_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_read_status_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
             referencedColumns: ["id"]
           },
           {
@@ -754,6 +1234,13 @@ export type Database = {
             foreignKeyName: "messages_v2_sender_id_fkey"
             columns: ["sender_id"]
             isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_v2_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -794,6 +1281,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_v2_user_id_fkey"
             columns: ["user_id"]
@@ -895,6 +1389,27 @@ export type Database = {
           },
         ]
       }
+      tags_v2: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          usage_count: number
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          usage_count?: number
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          usage_count?: number
+        }
+        Relationships: []
+      }
       user_achievements_v2: {
         Row: {
           achievement_id: string
@@ -924,6 +1439,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_achievements_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_achievements_v2_user_id_fkey"
             columns: ["user_id"]
@@ -965,6 +1487,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "user_activity_logs_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_activity_logs_v2_user_id_fkey"
             columns: ["user_id"]
@@ -1070,6 +1599,13 @@ export type Database = {
             foreignKeyName: "user_message_stats_v2_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_message_stats_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -1095,6 +1631,13 @@ export type Database = {
           value?: Json
         }
         Relationships: [
+          {
+            foreignKeyName: "user_metadata_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_metadata_v2_user_id_fkey"
             columns: ["user_id"]
@@ -1154,6 +1697,13 @@ export type Database = {
           weekly_digest?: boolean
         }
         Relationships: [
+          {
+            foreignKeyName: "user_settings_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "user_settings_v2_user_id_fkey"
             columns: ["user_id"]
@@ -1228,24 +1778,120 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      content_with_metadata_v2: {
+        Row: {
+          author_avatar: string | null
+          author_id: string | null
+          author_name: string | null
+          category: string | null
+          comment_count: number | null
+          content: string | null
+          content_type: string | null
+          created_at: string | null
+          deleted_at: string | null
+          id: string | null
+          is_pinned: boolean | null
+          like_count: number | null
+          metadata: Json | null
+          published_at: string | null
+          status: string | null
+          summary: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+          view_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      trending_content_v2: {
+        Row: {
+          author_id: string | null
+          author_name: string | null
+          comment_count: number | null
+          content_type: string | null
+          created_at: string | null
+          id: string | null
+          like_count: number | null
+          title: string | null
+          trending_score: number | null
+          view_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_stats_summary_v2: {
+        Row: {
+          activity_score: number | null
+          comments_count: number | null
+          created_at: string | null
+          email: string | null
+          id: string | null
+          last_seen_at: string | null
+          likes_received: number | null
+          name: string | null
+          posts_count: number | null
+          role: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
-      _ltree_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      _ltree_gist_options: {
-        Args: { "": unknown }
-        Returns: undefined
-      }
       calculate_activity_score: {
         Args: { p_user_id: string }
         Returns: number
       }
+      calculate_user_activity_score: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      calculate_user_level_v2: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      can_access_content: {
+        Args: { user_id: string; content_id: string }
+        Returns: boolean
+      }
       can_manage_user: {
         Args: { manager_id: string; target_user_id: string }
         Returns: boolean
+      }
+      cancel_activity_registration_v2: {
+        Args: { p_activity_id: string; p_user_id: string }
+        Returns: Json
+      }
+      check_and_grant_achievements: {
+        Args: { p_user_id: string }
+        Returns: Json
       }
       check_duplicate_report: {
         Args: {
@@ -1256,12 +1902,52 @@ export type Database = {
         Returns: boolean
       }
       check_user_achievements: {
-        Args: { target_user_id?: string }
+        Args: { p_user_id: string }
         Returns: Json
       }
       cleanup_unverified_accounts: {
         Args: { age_hours?: number }
         Returns: number
+      }
+      confirm_activity_attendance_v2: {
+        Args: { p_activity_id: string; p_user_id: string; p_attended?: boolean }
+        Returns: Json
+      }
+      create_audit_log_v2: {
+        Args: {
+          p_user_id: string
+          p_action: string
+          p_table_name: string
+          p_record_id?: string
+          p_old_values?: Json
+          p_new_values?: Json
+          p_ip_address?: unknown
+          p_user_agent?: string
+        }
+        Returns: string
+      }
+      create_comment_v2: {
+        Args: {
+          p_content_id: string
+          p_author_id: string
+          p_comment_text: string
+          p_parent_id?: string
+        }
+        Returns: Json
+      }
+      create_monthly_partition_for_activity_logs: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      create_notification_v2: {
+        Args: {
+          p_user_id: string
+          p_type: string
+          p_title: string
+          p_message?: string
+          p_data?: Json
+        }
+        Returns: string
       }
       create_report: {
         Args: {
@@ -1277,7 +1963,56 @@ export type Database = {
         Args: { comment_id: string }
         Returns: undefined
       }
+      get_activity_stats_v2: {
+        Args: { p_activity_id: string }
+        Returns: Json
+      }
       get_admin_report_dashboard: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
+      get_comment_children_count_v2: {
+        Args: { p_comment_id: string }
+        Returns: number
+      }
+      get_comment_thread: {
+        Args: { root_comment_id: string }
+        Returns: {
+          id: string
+          content_id: string
+          parent_id: string
+          author_id: string
+          comment_text: string
+          depth: number
+          path: unknown
+          created_at: string
+        }[]
+      }
+      get_comment_tree_v2: {
+        Args: { p_content_id: string; p_max_depth?: number }
+        Returns: {
+          id: string
+          parent_id: string
+          author_id: string
+          author_name: string
+          author_avatar: string
+          comment_text: string
+          depth: number
+          path: string
+          like_count: number
+          created_at: string
+          updated_at: string
+        }[]
+      }
+      get_content_stats_v2: {
+        Args: { p_content_id: string }
+        Returns: Json
+      }
+      get_content_with_relations_v2: {
+        Args: { p_content_id: string; p_user_id?: string }
+        Returns: Json
+      }
+      get_dashboard_stats_v2: {
         Args: Record<PropertyKey, never>
         Returns: Json
       }
@@ -1298,10 +2033,6 @@ export type Database = {
           unread_count: number
         }[]
       }
-      get_or_create_conversation: {
-        Args: { p_user1_id: string; p_user2_id: string }
-        Returns: string
-      }
       get_or_create_conversation_v2: {
         Args: { p_user1_id: string; p_user2_id: string }
         Returns: string
@@ -1310,9 +2041,32 @@ export type Database = {
         Args: { p_limit?: number; p_offset?: number; p_status?: string }
         Returns: Json
       }
+      get_trending_content_v2: {
+        Args: { p_limit?: number; p_days?: number; p_content_type?: string }
+        Returns: Json
+      }
+      get_unread_count_per_conversation_v2: {
+        Args: { p_user_id: string }
+        Returns: {
+          conversation_id: string
+          unread_count: number
+        }[]
+      }
       get_unread_message_count_v2: {
         Args: { p_user_id: string }
         Returns: number
+      }
+      get_unread_notification_count_v2: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      get_upcoming_activities_v2: {
+        Args: { p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
+      get_user_activity_history_v2: {
+        Args: { p_user_id: string; p_include_past?: boolean }
+        Returns: Json
       }
       get_user_activity_logs: {
         Args: { target_user_id: string; limit_count?: number }
@@ -1333,7 +2087,7 @@ export type Database = {
         }[]
       }
       get_user_content_stats: {
-        Args: { user_id_param: string }
+        Args: { p_user_id: string }
         Returns: Json
       }
       get_user_interaction_stats_v2: {
@@ -1344,25 +2098,31 @@ export type Database = {
           view_count: number
         }[]
       }
-      get_user_profile_complete_v2: {
+      get_user_interactions_v2: {
         Args: {
-          target_user_id: string
-          include_activities?: boolean
-          activities_limit?: number
-          include_achievements?: boolean
+          p_user_id: string
+          p_target_type?: string
+          p_interaction_type?: string
         }
         Returns: Json
       }
-      get_user_role: {
-        Args: { user_id?: string }
-        Returns: string
+      get_user_profile_complete_v2: {
+        Args:
+          | { p_user_id: string }
+          | {
+              target_user_id: string
+              include_activities?: boolean
+              activities_limit?: number
+              include_achievements?: boolean
+            }
+        Returns: Json
       }
       get_user_role_v2: {
         Args: { user_id: string }
         Returns: string
       }
-      get_user_stats: {
-        Args: { user_id_param: string }
+      get_user_stats_v2: {
+        Args: { p_user_id: string }
         Returns: Json
       }
       get_user_with_stats: {
@@ -1381,7 +2141,7 @@ export type Database = {
         }[]
       }
       get_users_interaction_stats_v2: {
-        Args: { p_user_ids: string[] }
+        Args: Record<PropertyKey, never> | { p_user_ids: string[] }
         Returns: {
           user_id: string
           like_received_count: number
@@ -1390,24 +2150,30 @@ export type Database = {
         }[]
       }
       get_users_simple_stats: {
-        Args: { p_user_ids: string[] }
+        Args: Record<PropertyKey, never> | { p_user_ids: string[] }
         Returns: {
-          user_id: string
-          posts_count: number
-          comments_count: number
-          activities_joined: number
+          total_users: number
+          active_users: number
+          member_users: number
+          pending_users: number
+          guest_users: number
         }[]
+      }
+      grant_achievement: {
+        Args: {
+          p_user_id: string
+          p_achievement_id: string
+          p_points?: number
+          p_metadata?: Json
+        }
+        Returns: Json
       }
       has_permission: {
         Args: { user_id: string; permission_name: string }
         Returns: boolean
       }
-      hash_ltree: {
-        Args: { "": unknown }
-        Returns: number
-      }
       increment_activity_score_v2: {
-        Args: { p_user_id: string; p_points?: number; p_reason?: string }
+        Args: { p_user_id: string; p_action_type: string; p_points?: number }
         Returns: undefined
       }
       increment_comment_likes: {
@@ -1418,9 +2184,9 @@ export type Database = {
         Args: { resource_id: string }
         Returns: undefined
       }
-      increment_view_count: {
-        Args: { content_id: string; content_type?: string }
-        Returns: undefined
+      increment_view_count_v2: {
+        Args: { p_content_id: string; p_user_id?: string }
+        Returns: boolean
       }
       is_admin: {
         Args: { user_id?: string }
@@ -1442,117 +2208,103 @@ export type Database = {
         Args: { user_id?: string }
         Returns: boolean
       }
-      lca: {
-        Args: { "": unknown[] }
-        Returns: unknown
-      }
-      lquery_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      lquery_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      lquery_recv: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      lquery_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      ltree_compress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_decompress: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_gist_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_gist_options: {
-        Args: { "": unknown }
+      log_activity_v2: {
+        Args: {
+          p_user_id: string
+          p_action: string
+          p_table_name: string
+          p_record_id?: string
+          p_metadata?: Json
+        }
         Returns: undefined
       }
-      ltree_gist_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_recv: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltree_send: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      ltree2text: {
-        Args: { "": unknown }
-        Returns: string
-      }
-      ltxtq_in: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltxtq_out: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltxtq_recv: {
-        Args: { "": unknown }
-        Returns: unknown
-      }
-      ltxtq_send: {
-        Args: { "": unknown }
-        Returns: string
+      log_user_activity: {
+        Args: {
+          p_user_id: string
+          p_action_type: string
+          p_target_type?: string
+          p_target_id?: string
+          p_points?: number
+          p_metadata?: Json
+        }
+        Returns: undefined
       }
       mark_conversation_messages_as_read: {
         Args: { p_conversation_id: string; p_user_id: string }
-        Returns: number
-      }
-      mark_messages_as_read: {
-        Args: { p_user_id: string }
         Returns: number
       }
       mark_messages_as_read_v2: {
         Args: { p_user_id: string; p_conversation_id: string }
         Returns: number
       }
-      nlevel: {
-        Args: { "": unknown }
+      mark_notifications_read_v2: {
+        Args: { p_user_id: string; p_notification_ids?: string[] }
         Returns: number
+      }
+      mark_specific_messages_as_read_v2: {
+        Args: { p_user_id: string; p_message_ids: string[] }
+        Returns: number
+      }
+      process_membership_application_v2: {
+        Args: {
+          p_application_id: string
+          p_reviewer_id: string
+          p_action: string
+          p_comment?: string
+        }
+        Returns: Json
+      }
+      register_for_activity_v2: {
+        Args: { p_activity_id: string; p_user_id: string; p_note?: string }
+        Returns: Json
+      }
+      search_content_v2: {
+        Args: {
+          p_query: string
+          p_content_type?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          content_type: string
+          title: string
+          summary: string
+          author_name: string
+          relevance: number
+          created_at: string
+        }[]
+      }
+      search_messages_v2: {
+        Args: {
+          p_user_id: string
+          p_query: string
+          p_conversation_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          message_id: string
+          conversation_id: string
+          sender_id: string
+          sender_name: string
+          content: string
+          created_at: string
+          rank: number
+        }[]
       }
       send_message: {
         Args: { p_sender_id: string; p_recipient_id: string; p_message: string }
         Returns: Json
       }
-      text2ltree: {
-        Args: { "": string }
-        Returns: unknown
-      }
       toggle_interaction_v2: {
         Args: {
           p_user_id: string
-          p_target_id: string
           p_target_type: string
+          p_target_id: string
           p_interaction_type: string
         }
-        Returns: {
-          action: string
-          new_count: number
-        }[]
+        Returns: Json
       }
       update_activity_score: {
         Args: { user_id: string }
@@ -1574,6 +2326,18 @@ export type Database = {
         }
         Returns: undefined
       }
+      update_user_achievements_v2: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
+      update_user_levels: {
+        Args: { p_user_id: string }
+        Returns: undefined
+      }
+      update_user_metadata: {
+        Args: { p_user_id: string; p_key: string; p_value: Json }
+        Returns: undefined
+      }
       update_user_stats: {
         Args: { target_user_id: string }
         Returns: undefined
@@ -1586,6 +2350,10 @@ export type Database = {
           p_content_type?: string
         }
         Returns: string
+      }
+      upsert_content_metadata_v2: {
+        Args: { p_content_id: string; p_key: string; p_value: Json }
+        Returns: undefined
       }
     }
     Enums: {

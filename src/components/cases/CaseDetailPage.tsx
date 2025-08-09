@@ -223,7 +223,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
           color: categoryColors[caseData.categories?.[0]?.slug as keyof typeof categoryColors],
           icon: categoryIcons[caseData.categories?.[0]?.slug as keyof typeof categoryIcons] || Lightbulb
         }}
-        tags={caseData.tags?.map(tag => tag.name) || []}
+        tags={caseData.tags || []}
         likeCount={likeCount}
         commentCount={caseData.comment_count || 0}
         isLiked={isLiked}

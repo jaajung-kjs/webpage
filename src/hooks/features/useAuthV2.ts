@@ -108,12 +108,13 @@ export function useAuthV2() {
 
   // 활동 점수 증가 (RPC 함수 활용)
   const incrementActivityScore = useMutation({
-    mutationFn: async (points: number = 1) => {
+    mutationFn: async ({ points = 1, action_type = 'general' }: { points?: number, action_type?: string } = {}) => {
       if (!user?.id) throw new Error('User not authenticated')
       
       const { data, error } = await supabase
         .rpc('increment_activity_score_v2', {
           p_user_id: user.id,
+          p_action_type: action_type,
           p_points: points
         })
       

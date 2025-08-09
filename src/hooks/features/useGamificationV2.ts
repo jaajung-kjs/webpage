@@ -76,7 +76,7 @@ export function useGamificationV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
       
-      const { data, error } = await supabaseClient.rpc('get_user_stats', {
+      const { data, error } = await supabaseClient.rpc('get_user_stats_v2', {
         p_user_id: targetUserId
       })
       

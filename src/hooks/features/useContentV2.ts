@@ -33,7 +33,7 @@ export type ContentStatus = 'draft' | 'published' | 'archived'
 export interface ContentWithRelations extends ContentV2 {
   author: UserV2
   categories?: CategoryV2[]
-  tags?: TagV2[]
+  tag_objects?: TagV2[] // tags는 이미 string[]로 존재하므로 별도 프로퍼티 사용
   interaction_counts?: {
     likes: number
     bookmarks: number
@@ -61,6 +61,18 @@ export interface ContentFilter {
 // 정렬 옵션
 export type ContentSortBy = 'created_at' | 'updated_at' | 'view_count' | 'like_count' | 'comment_count'
 export type SortOrder = 'asc' | 'desc'
+
+// 프론트엔드 정렬 키를 DB 컬럼명으로 매핑하는 함수
+const mapSortBy = (sortBy: string): ContentSortBy => {
+  switch (sortBy) {
+    case 'latest': return 'created_at'
+    case 'updated': return 'updated_at'
+    case 'popular': return 'like_count'
+    case 'views': return 'view_count'
+    case 'comments': return 'comment_count'
+    default: return 'created_at'
+  }
+}
 
 export function useContentV2() {
   const supabase = supabaseClient
@@ -149,26 +161,39 @@ export function useContentV2() {
         return {
           ...content,
           categories: categories?.map(c => c.category).filter(Boolean) || [],
-          tags: tags?.map(t => t.tag).filter(Boolean) || [],
+          tag_objects: tags?.map(t => t.tag).filter(Boolean) || [],
           interaction_counts: interactionCounts,
           user_interactions: userInteractions,
         } as ContentWithRelations
       },
       staleTime: 2 * 60 * 1000, // 2분
       gcTime: 5 * 60 * 1000, // 5분
+      retry: (failureCount, error: any) => {
+        // DB 스키마 에러나 컬럼 존재하지 않음 에러는 재시도하지 않음
+        if (error?.code === 'PGRST116' || error?.message?.includes('does not exist')) {
+          return false
+        }
+        // 일반적인 네트워크 에러만 최대 1번 재시도
+        return failureCount < 1
+      },
+      retryDelay: 1000, // 1초 고정 지연
+      throwOnError: false
     })
   }
 
   // 콘텐츠 목록 조회 (무한 스크롤)
   const useInfiniteContents = (
     filter: ContentFilter = {},
-    sortBy: ContentSortBy = 'created_at',
+    sortBy: string | ContentSortBy = 'created_at',
     sortOrder: SortOrder = 'desc',
     pageSize = 20
   ) => {
     return useInfiniteQuery({
       queryKey: ['contents-v2', filter, sortBy, sortOrder],
       queryFn: async ({ pageParam = 0 }) => {
+        // 매핑된 정렬 키 사용
+        const mappedSortBy = mapSortBy(sortBy as string)
+        
         let query = supabase
           .from('content_v2')
           .select(`
@@ -178,7 +203,7 @@ export function useContentV2() {
           .is('deleted_at', null)
           .eq('status', 'published')
           .range(pageParam, pageParam + pageSize - 1)
-          .order(sortBy, { ascending: sortOrder === 'asc' })
+          .order(mappedSortBy, { ascending: sortOrder === 'asc' })
         
         // 필터 적용
         if (filter.type) query = query.eq('content_type', filter.type)
@@ -290,6 +315,16 @@ export function useContentV2() {
       initialPageParam: 0,
       staleTime: 1 * 60 * 1000, // 1분
       gcTime: 5 * 60 * 1000, // 5분 (대신 cacheTime)
+      retry: (failureCount, error: any) => {
+        // DB 스키마 에러나 컬럼 존재하지 않음 에러는 재시도하지 않음
+        if (error?.code === 'PGRST116' || error?.message?.includes('does not exist')) {
+          return false
+        }
+        // 일반적인 네트워크 에러만 최대 1번 재시도
+        return failureCount < 1
+      },
+      retryDelay: 1000, // 1초 고정 지연
+      throwOnError: false, // 에러를 조용히 처리하여 UI에 빈 상태 표시
     })
   }
 

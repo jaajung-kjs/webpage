@@ -190,7 +190,7 @@ export function useActivityLogsV2() {
           action: log.action as ActivityType,
           table_name: log.table_name,
           record_id: log.record_id || undefined,
-          metadata: log.new_data,
+          metadata: log.new_values,
           created_at: log.created_at,
           user: log.user
         }))
@@ -231,7 +231,7 @@ export function useActivityLogsV2() {
             action,
             table_name,
             record_id,
-            new_data,
+            new_values,
             created_at
           `)
           .eq('user_id', user.id)
@@ -260,7 +260,7 @@ export function useActivityLogsV2() {
               last_activity: log.created_at,
               target_info: {
                 type: log.table_name,
-                title: (log.new_data as any)?.title || (log.new_data as any)?.name
+                title: (log.new_values as any)?.title || (log.new_values as any)?.name
               }
             })
           }

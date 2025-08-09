@@ -249,7 +249,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
           color: categoryColors[primaryCategory as keyof typeof categoryColors],
           icon: CategoryIcon
         }}
-        tags={announcementData.tags?.map(tag => tag.name) || []}
+        tags={announcementData.tags || []}
         likeCount={likeCount}
         commentCount={announcementData.comment_count || 0}
         isLiked={isLiked}

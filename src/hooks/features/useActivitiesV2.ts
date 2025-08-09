@@ -36,7 +36,6 @@ export type EventType = ActivityEventType
 export interface ActivityWithRelations extends ActivityV2 {
   content: Pick<ContentV2, 'id' | 'title' | 'summary' | 'content' | 'author_id' | 'status'>
   author?: Pick<UserV2, 'id' | 'name' | 'avatar_url'>
-  current_participants?: number
   available_spots?: number
 }
 

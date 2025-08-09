@@ -142,7 +142,7 @@ export default function ProfileEditDialog({
       await updateProfileMutation.mutateAsync({
         name: formData.name,
         department: formData.department,
-        bio: formData.bio || null,
+        bio: formData.bio || undefined,
         skill_level: updatedMetadata.skill_level || 'beginner'
       })
       

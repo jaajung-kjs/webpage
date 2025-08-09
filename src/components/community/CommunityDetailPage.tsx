@@ -240,7 +240,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
           color: categoryColors[postData.categories?.[0]?.slug as keyof typeof categoryColors],
           icon: CategoryIcon
         }}
-        tags={postData.tags?.map(tag => tag.name) || []}
+        tags={postData.tags || []}
         likeCount={likeCount}
         commentCount={postData.comment_count || 0}
         isLiked={isLiked}

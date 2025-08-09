@@ -214,7 +214,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     
     // users_v2 프로필 상태
-    profile,
+    profile: profile ?? null,
     
     // 통합 상태
     loading: loading || profileLoading,

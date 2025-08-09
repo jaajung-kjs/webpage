@@ -417,6 +417,8 @@ function useSendMessageV2() {
         message_type: variables.message_type || 'text',
         attachments: variables.attachments as any,
         reply_to_id: variables.reply_to_id || null,
+        is_read: true, // 송신자는 읽은 상태로 시작
+        read_at: new Date().toISOString(),
         is_edited: false,
         edited_at: null,
         created_at: new Date().toISOString(),
@@ -429,7 +431,7 @@ function useSendMessageV2() {
           role: 'member'
         },
         read_status: { is_read: true, read_at: new Date().toISOString() }
-      }
+      } as MessageV2
       
       queryClient.setQueryData(
         ['conversation-messages-v2', variables.conversation_id, user?.id],

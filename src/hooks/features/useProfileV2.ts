@@ -224,13 +224,14 @@ export function useIncrementActivityScore() {
   const queryClient = useQueryClient()
   const { user } = useAuth()
 
-  return useMutation<any, Error, { points?: number }>({
-    mutationFn: async ({ points = 1 }) => {
+  return useMutation<any, Error, { points?: number; action_type?: string }>({
+    mutationFn: async ({ points = 1, action_type = 'generic' }) => {
       if (!user) throw new Error('User is not authenticated')
 
       const { data, error } = await supabaseClient
         .rpc('increment_activity_score_v2', {
           p_user_id: user.id,
+          p_action_type: action_type,
           p_points: points
         })
 

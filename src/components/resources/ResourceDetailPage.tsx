@@ -269,7 +269,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
         color: categoryColors['reference' as keyof typeof categoryColors],
         icon: BookOpen
       }}
-      tags={resourceData.tags?.map(tag => tag.name || tag.slug) || []}
+      tags={resourceData.tags || []}
       likeCount={likeCount}
       commentCount={resourceData.comment_count || 0}
       isLiked={isLiked}

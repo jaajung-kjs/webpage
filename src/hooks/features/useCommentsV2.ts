@@ -278,6 +278,7 @@ export function useCreateCommentV2() {
           avatar_url: null,
           role: 'member'
         },
+        like_count: 0,
         interaction_counts: { likes: 0 },
         user_interactions: { is_liked: false },
         children: []
@@ -323,6 +324,7 @@ export function useCreateCommentV2() {
       // 댓글 생성 성공 시 활동 점수 업데이트
       supabaseClient.rpc('increment_activity_score_v2', {
         p_user_id: user!.id,
+        p_action_type: 'comment_create',
         p_points: 5 // 댓글 작성 시 5점
       })
     },
@@ -542,6 +544,7 @@ export function useToggleCommentLikeV2() {
         // 활동 점수 업데이트
         supabaseClient.rpc('increment_activity_score_v2', {
           p_user_id: user.id,
+          p_action_type: 'comment_like',
           p_points: 1
         })
 
