@@ -34,6 +34,9 @@ dev.log
 
 # env files (can opt-in for committing if needed)
 .env*
+# But keep environment templates
+!.env.example
+!.env.local.example
 
 # vercel
 .vercel
@@ -64,3 +67,8 @@ __pycache__/
 # Temporary files
 *.tmp
 *.temp
+
+# Supabase Local Development
+supabase/.branches
+supabase/.temp
+.supabase/

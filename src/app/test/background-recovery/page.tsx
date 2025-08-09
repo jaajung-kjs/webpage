@@ -6,12 +6,14 @@
 
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/providers'
-import { useConnection } from '@/hooks/core/useConnection'
+import { useConnectionV2 } from '@/hooks/core/useConnectionV2'
 import { useQuery } from '@tanstack/react-query'
 import { connectionCore } from '@/lib/core/connection-core'
 import { supabaseClient } from '@/lib/core/connection-core'
@@ -19,7 +21,7 @@ import { CheckCircle, XCircle, RefreshCw, Wifi, WifiOff, Monitor, Eye, EyeOff } 
 
 export default function BackgroundRecoveryTestPage() {
   const { user, profile } = useAuth()
-  const connection = useConnection()
+  const connection = useConnectionV2()
   const status = {
     state: connection.connectionState,
     reconnectAttempts: connection.reconnectAttempts,
@@ -103,7 +105,7 @@ export default function BackgroundRecoveryTestPage() {
     queryKey: ['test', 'timestamp'],
     queryFn: async () => {
       const { data, error } = await supabaseClient
-        .from('users')
+        .from('users_v2')
         .select('id, created_at')
         .eq('id', user?.id || '')
         .single()

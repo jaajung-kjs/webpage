@@ -1,12 +1,16 @@
-import dynamic from 'next/dynamic'
+'use client'
+
+import dynamicImport from 'next/dynamic'
+
+export const dynamic = 'force-dynamic'
 import MainLayout from '@/components/layout/MainLayout'
 import { PageLoadingFallback } from '@/components/ui/lazy-loader'
 
-const AnnouncementsPage = dynamic(
+const AnnouncementsPage = dynamicImport(
   () => import('@/components/announcements/AnnouncementsPage'),
   {
     loading: () => <PageLoadingFallback />,
-    ssr: true
+    ssr: false
   }
 )
 

@@ -12,7 +12,7 @@ import { connectionCore } from './connection-core'
 import type { Tables } from '../database.types'
 
 // 사용자 프로필 타입
-export type UserProfile = Tables<'users'>
+export type UserProfile = Tables<'users_v2'>
 
 // 인증 상태
 export interface AuthState {
@@ -204,7 +204,7 @@ export class AuthManager {
     try {
       const client = connectionCore.getClient()
       const { data, error } = await client
-        .from('users')
+        .from('users_v2')
         .select('*')
         .eq('id', userId)
         .single()
@@ -397,7 +397,7 @@ export class AuthManager {
     try {
       const client = connectionCore.getClient()
       const { error } = await client
-        .from('users')
+        .from('users_v2')
         .update(updates)
         .eq('id', this.state.user.id)
       

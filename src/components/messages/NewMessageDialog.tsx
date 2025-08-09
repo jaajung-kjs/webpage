@@ -8,9 +8,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuth } from '@/providers'
-import { useStartConversation, useSendMessage } from '@/hooks/features/useMessages'
-import { useSearchUsers } from '@/hooks/features/useSearch'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
+import { useProfileList } from '@/hooks/features/useProfileV2'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,42 +50,28 @@ export function NewMessageDialog({
   onOpenChange,
   onConversationStart
 }: NewMessageDialogProps) {
-  const { user } = useAuth()
+  const { user } = useAuthV2()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRecipient, setSelectedRecipient] = useState<Member | null>(null)
   const [message, setMessage] = useState('')
   
-  const startConversation = useStartConversation()
-  const sendMessage = useSendMessage()
-  const sending = sendMessage.isPending
+  // Use V2 hooks
+  const createConversation = useCreateConversationV2()
+  const sendMessage = useSendMessageV2()
+  const sending = createConversation.isPending || sendMessage.isPending
   
-  // 사용자 검색 hook 사용
-  const { data: searchResults, isLoading: loading } = useSearchUsers(searchQuery, {
-    excludeCurrentUser: true,
-    onlyMembers: true,
+  // 사용자 검색 V2 hook 사용 - useProfileList로 검색
+  const { data: searchResults, isLoading: loading } = useProfileList({
+    search: searchQuery,
+    orderBy: 'name',
+    order: 'asc',
     limit: 20
   })
   
-  // 검색 결과를 Member 타입으로 변환
-  const filteredMembers = (searchResults || []).map(user => ({
-    id: user.id,
-    name: user.name || '',
-    email: user.email || '',
-    department: user.department,
-    avatar_url: user.avatar_url,
-    role: user.role || 'member'
-  }))
-
-  // 초기 회원 목록 로드 (검색어 없을 때)
-  const { data: allMembers } = useSearchUsers('', {
-    excludeCurrentUser: true,
-    onlyMembers: true,
-    limit: 50
-  })
-  
-  // 검색어가 없을 때는 모든 회원 표시
-  const displayMembers = searchQuery.length >= 2 ? filteredMembers : 
-    (allMembers || []).map(user => ({
+  // 검색 결과를 Member 타입으로 변환 (본인 제외)
+  const filteredMembers = (searchResults || [])
+    .filter(u => u.id !== (user as any)?.id) // 본인 제외
+    .map(user => ({
       id: user.id,
       name: user.name || '',
       email: user.email || '',
@@ -93,6 +79,9 @@ export function NewMessageDialog({
       avatar_url: user.avatar_url,
       role: user.role || 'member'
     }))
+
+  // 검색어가 있을 때만 결과 표시 (최소 2글자)
+  const displayMembers = searchQuery.length >= 2 ? filteredMembers : []
 
   const handleRecipientSelect = (member: Member) => {
     setSelectedRecipient(member)
@@ -103,20 +92,16 @@ export function NewMessageDialog({
     if (!user || !selectedRecipient || !message.trim()) return
 
     try {
-      // 대화방 찾기 또는 생성
-      const conversationId = await startConversation.mutateAsync(selectedRecipient.id)
-
-      // 메시지 전송
-      await sendMessage.mutateAsync({
-        conversationId,
-        recipientId: selectedRecipient.id,
-        content: message.trim()
+      // V2 시스템에서는 대화 생성과 메시지 전송을 한번에 처리
+      const result = await createConversation.mutateAsync({
+        participant_id: selectedRecipient.id,
+        initial_message: message.trim()
       })
 
       // 성공 시 대화방으로 이동
-      if (onConversationStart) {
+      if (onConversationStart && result) {
         onConversationStart(
-          conversationId,
+          result,
           selectedRecipient.id,
           selectedRecipient.name,
           selectedRecipient.avatar_url
@@ -127,6 +112,9 @@ export function NewMessageDialog({
       setSelectedRecipient(null)
       setMessage('')
       setSearchQuery('')
+      
+      toast.success('메시지를 전송했습니다.')
+      onOpenChange(false)
 
     } catch (error) {
       console.error('Failed to send message:', error)

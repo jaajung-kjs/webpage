@@ -1,15 +1,16 @@
 /**
- * Conversation Thread Component
+ * Conversation Thread Component - V2 Migration
  * 
- * Real-time chat interface for 1:1 conversations
- * Handles message sending, reading status, and auto-scroll
+ * Real-time chat interface for 1:1 conversations using V2 messaging system
+ * Uses dedicated conversations_v2 and messages_v2 tables with optimistic updates
+ * Migration: useConversationMessagesV2, useSendMessageV2, useMarkAsReadV2
  */
 
 'use client'
 
 import { useState, useRef, useEffect, memo } from 'react'
-import { useAuth } from '@/providers'
-import { useConversation, useSendMessage, useMarkAsRead, type Message } from '@/hooks/features/useMessages'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useConversationMessagesV2, useSendMessageV2, useMarkAsReadV2, type MessageV2 } from '@/hooks/features/useMessagesV2'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,10 +53,10 @@ export function ConversationThread({
   onBack,
   className
 }: ConversationThreadProps) {
-  const { user, profile } = useAuth()
-  const { data: messages, isLoading: loading, error, refetch } = useConversation(conversationId)
-  const sendMessageMutation = useSendMessage()
-  const markAsReadMutation = useMarkAsRead()
+  const { user } = useAuthV2()
+  const { data: messages, isLoading: loading, error, refetch } = useConversationMessagesV2(conversationId)
+  const sendMessageMutation = useSendMessageV2()
+  const markAsReadMutation = useMarkAsReadV2()
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [optimisticId, setOptimisticId] = useState<string | null>(null)
@@ -93,25 +94,20 @@ export function ConversationThread({
     }
   }, [messages?.length])
 
-  // 대화방 진입 시 메시지 읽음 처리 (중복 방지)
+  // 대화방 진입 시 메시지 읽음 처리 (V2 시스템 사용)
   useEffect(() => {
     if (user && conversationId && messages && messages.length > 0) {
-      // 읽지 않은 메시지가 있는지 확인 후 읽음 처리
+      // V2에서는 read_status 기반으로 확인
       const hasUnreadMessages = messages.some((msg) => 
-        msg.recipient_id === user.id && !msg.is_read
+        msg.sender_id !== (user as any)?.id && (!msg.read_status?.is_read)
       )
       
       if (hasUnreadMessages) {
         log('📖 Marking messages as read for conversation:', conversationId)
-        const unreadMessageIds = messages
-          .filter((msg) => msg.recipient_id === user.id && !msg.is_read)
-          .map((msg) => msg.id)
-        if (unreadMessageIds.length > 0) {
-          markAsReadMutation.mutate(unreadMessageIds)
-        }
+        markAsReadMutation.mutate({ conversation_id: conversationId })
       }
     }
-  }, [user, conversationId, messages?.length])
+  }, [user, conversationId, messages?.length, markAsReadMutation])
 
   // 메시지 재전송
   const handleRetryMessage = async (messageId: string) => {
@@ -182,7 +178,7 @@ export function ConversationThread({
     if (!user || !newMessage.trim() || sending) return
 
     // 자기 자신에게 메시지 보내기 방지
-    if (user.id === recipientId) {
+    if ((user as any)?.id === recipientId) {
       toast.error('자기 자신에게는 메시지를 보낼 수 없습니다.')
       return
     }
@@ -193,12 +189,11 @@ export function ConversationThread({
 
     try {
       await sendMessageMutation.mutateAsync({
-        conversationId,
-        recipientId,
+        conversation_id: conversationId,
         content: messageContent
       })
       
-      // Success - message will be added via realtime subscription
+      // Success - message will be added via realtime subscription and optimistic updates
       log('✅ Message sent successfully')
     } catch (error) {
       logError('❌ Failed to send message:', error)
@@ -360,7 +355,7 @@ export function ConversationThread({
               
               <AnimatePresence initial={false}>
                 {messages?.map((message, index) => {
-                  const isOwn = message.sender_id === user?.id
+                  const isOwn = message.sender_id === (user as any)?.id
                   const showAvatar = index === 0 || messages[index - 1]?.sender_id !== message.sender_id
                   
                   // 시간 표시 여부 결정: 다음 메시지와 1분 이상 차이나거나 마지막 메시지인 경우
@@ -452,7 +447,7 @@ export function ConversationThread({
  * Individual message bubble
  */
 interface MessageBubbleProps {
-  message: any // Use any for now until proper type is defined
+  message: MessageV2
   isOwn: boolean
   showAvatar: boolean
   showTime: boolean
@@ -531,56 +526,26 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
             {/* 상태 아이콘 (내가 보낸 메시지만) */}
             {isOwn && (
               <div className="flex items-center gap-1 ml-1">
-                {/* 전송 상태에 따른 아이콘 */}
-                {message.status === 'sending' ? (
-                  <motion.div
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  >
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                  </motion.div>
-                ) : message.status === 'failed' ? (
-                  <div className="flex items-center gap-1">
-                    <AlertCircle className="h-4 w-4 text-destructive" />
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                          <MoreVertical className="h-3 w-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={onRetry}>
-                          <RotateCw className="h-4 w-4 mr-2" />
-                          재전송
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={onDelete} className="text-destructive">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          삭제
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                ) : (
-                  <motion.div 
-                    className="flex items-center"
-                    initial={{ scale: 0.8, opacity: 0.5 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {message.is_read ? (
-                      <motion.div
-                        initial={{ scale: 0.8 }}
-                        animate={{ scale: 1 }}
-                        transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
-                        title="읽음"
-                      >
-                        <CheckCheck className="h-4 w-4 text-blue-500" />
-                      </motion.div>
-                    ) : (
-                      <Check className="h-4 w-4 text-muted-foreground" />
-                    )}
-                  </motion.div>
-                )}
+                {/* V2에서는 optimistic updates 처리가 내장되어 있음 */}
+                <motion.div 
+                  className="flex items-center"
+                  initial={{ scale: 0.8, opacity: 0.5 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  {message.read_status?.is_read ? (
+                    <motion.div
+                      initial={{ scale: 0.8 }}
+                      animate={{ scale: 1 }}
+                      transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
+                      title="읽음"
+                    >
+                      <CheckCheck className="h-4 w-4 text-blue-500" />
+                    </motion.div>
+                  ) : (
+                    <Check className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </motion.div>
               </div>
             )}
           </div>
@@ -589,11 +554,11 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
     </div>
   )
 }, (prevProps, nextProps) => {
-  // 메시지 내용이나 읽음 상태, 전송 상태가 변경될 때만 리렌더링
+  // V2에서는 메시지 내용이나 읽음 상태가 변경될 때만 리렌더링
   return (
     prevProps.message.id === nextProps.message.id &&
-    prevProps.message.is_read === nextProps.message.is_read &&
-    prevProps.message.status === nextProps.message.status &&
+    prevProps.message.read_status?.is_read === nextProps.message.read_status?.is_read &&
+    prevProps.message.content === nextProps.message.content &&
     prevProps.isOwn === nextProps.isOwn &&
     prevProps.showAvatar === nextProps.showAvatar &&
     prevProps.showTime === nextProps.showTime &&

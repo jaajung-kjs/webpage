@@ -29,7 +29,7 @@ import {
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import { Tables } from '@/lib/database.types'
-import { useUserProfile, useUpdateProfile } from '@/hooks/features/useProfile'
+import { useUserProfileComplete, useUpdateProfileV2 } from '@/hooks/features/useProfileV2'
 import { ChangePasswordDialog } from './ChangePasswordDialog'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -37,7 +37,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 export default function SettingsPage() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const updateProfileMutation = useUpdateProfile()
+  const updateProfileMutation = useUpdateProfileV2()
   
   // 알림 설정
   const [emailNotifications, setEmailNotifications] = useState(true)
@@ -74,8 +74,8 @@ export default function SettingsPage() {
       
       // Load settings and user data in parallel
       const [settingsResult, userResult] = await Promise.allSettled([
-        supabaseClient.from('user_settings').select('*').eq('user_id', user.id).single(),
-        supabaseClient.from('users').select('*').eq('id', user.id).single()
+        Promise.resolve({ data: null, error: null }), // TODO: Implement user_metadata_v2 key-value structure
+        supabaseClient.from('users_v2').select('*').eq('id', user.id).single()
       ])
       
       const data: any = {}
@@ -87,7 +87,7 @@ export default function SettingsPage() {
       if (userResult.status === 'fulfilled' && !userResult.value.error && userResult.value.data) {
         data.metadata = {
           joinDate: userResult.value.data.created_at || null,
-          lastLogin: userResult.value.data.last_seen_at || null
+          lastLogin: userResult.value.data.last_login_at || null
         }
       }
       
@@ -138,29 +138,9 @@ export default function SettingsPage() {
         updated_at: new Date().toISOString()
       }
 
-      // Check if settings exist
-      const { data: existingSettings } = await supabaseClient
-        .from('user_settings')
-        .select('id')
-        .eq('user_id', user.id)
-        .single()
-      
-      if (existingSettings) {
-        // Update existing settings
-        const { error } = await supabaseClient
-          .from('user_settings')
-          .update(settingsUpdate)
-          .eq('user_id', user.id)
-        
-        if (error) throw error
-      } else {
-        // Create new settings
-        const { error } = await supabaseClient
-          .from('user_settings')
-          .insert(settingsUpdate)
-        
-        if (error) throw error
-      }
+      // TODO: Implement settings save with user_metadata_v2 key-value structure
+      console.log('Settings to save:', settingsUpdate)
+      // For now, settings save is disabled until proper key-value implementation
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-settings', user?.id] })

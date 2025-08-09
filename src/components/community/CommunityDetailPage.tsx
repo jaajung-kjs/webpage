@@ -11,7 +11,8 @@ import {
   BookOpen,
   Flag
 } from 'lucide-react'
-import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
+import { useContentV2 } from '@/hooks/features/useContentV2'
+import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
 
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { useAuth } from '@/providers'
@@ -56,33 +57,37 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use hooks
-  const { data: postData, isLoading: loading } = useContent(postId)
-  const { data: isLikedFromHook } = useIsLiked(postId)
-  const toggleLikeMutation = useToggleLike()
-  const deleteContentMutation = useDeleteContent()
-  const incrementViewMutation = useIncrementView()
-  // Derive like state from query data
-  const isLiked = isLikedFromHook || false
-  const likeCount = postData?.like_count || 0
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  const interactionsV2 = useInteractionsV2()
+  
+  const { data: postData, isPending: loading } = contentV2.useContent(postId)
+  const { data: interactionStats } = interactionsV2.useInteractionStats(postId, 'content')
+  const { data: userInteractions } = interactionsV2.useUserInteractions(postId, 'content')
+  
+  // Derive interaction states
+  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const likeCount = (interactionStats as any)?.likes || 0
+  const bookmarkCount = (interactionStats as any)?.bookmarks || 0
+  const userBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
   
   // UI state
-  const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment' | 'post' | 'announcement' | 'resource' | 'case' | 'user', id: string } | null>(null)
   
-  // Use mutation loading states
-  const likeLoading = toggleLikeMutation.isPending
-  const deleteLoading = deleteContentMutation.isPending
+  // Use mutation loading states from V2 hooks
+  const likeLoading = interactionsV2.isToggling
+  const bookmarkLoading = interactionsV2.isToggling  
+  const deleteLoading = contentV2.isDeleting
 
 
 
   // Increment view count when post is loaded
   useEffect(() => {
     if (postData?.id) {
-      incrementViewMutation.mutate(postData.id)
+      contentV2.toggleInteraction({ targetId: postData.id, targetType: 'content', interactionType: 'view' })
     }
-  }, [postData?.id])
+  }, [postData?.id, contentV2.toggleInteraction])
 
 
 
@@ -124,7 +129,11 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     if (likeLoading) return
 
     try {
-      await toggleLikeMutation.mutateAsync(postId)
+      await interactionsV2.toggleInteractionAsync({
+        targetId: postId,
+        targetType: 'content',
+        interactionType: 'like'
+      })
       // The mutation will automatically update the cache and trigger a re-render
       toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
@@ -139,8 +148,25 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
       return
     }
     
-    setIsBookmarked(!isBookmarked)
-    toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    if (!isMember) {
+      toast.error('동아리 회원만 북마크를 사용할 수 있습니다.')
+      return
+    }
+
+    // Prevent multiple clicks
+    if (bookmarkLoading) return
+
+    try {
+      await interactionsV2.toggleInteractionAsync({
+        targetId: postId,
+        targetType: 'content',
+        interactionType: 'bookmark'
+      })
+      toast.success(userBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling bookmark:', error)
+      toast.error(error.message || '북마크 처리에 실패했습니다.')
+    }
   }
 
   const handleShare = () => {
@@ -159,7 +185,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     }
 
     try {
-      await deleteContentMutation.mutateAsync({ id: postId, contentType: 'community' })
+      await contentV2.deleteContentAsync(postId)
       
       toast.success('게시글이 삭제되었습니다.')
       router.push('/community')
@@ -193,7 +219,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     )
   }
 
-  const CategoryIcon = categoryIcons[postData.category as keyof typeof categoryIcons] || MessageCircle
+  const CategoryIcon = categoryIcons[postData.categories?.[0]?.slug as keyof typeof categoryIcons] || MessageCircle
 
   return (
     <>
@@ -202,23 +228,23 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         content={postData.content || ''}
         author={{
           id: postData.author_id || '',
-          name: postData.author_name || '익명',
-          avatar: postData.author_avatar_url || undefined,
-          department: postData.author_department || undefined
+          name: postData.author?.name || '익명',
+          avatar: postData.author?.avatar_url || undefined,
+          department: postData.author?.department || undefined
         }}
         createdAt={postData.created_at || new Date().toISOString()}
-        viewCount={postData.view_count || 0}
+        viewCount={postData.interaction_counts?.views || 0}
         category={{
-          label: categoryLabels[postData.category as keyof typeof categoryLabels] || '토론',
-          value: postData.category || 'discussion',
-          color: categoryColors[postData.category as keyof typeof categoryColors],
+          label: categoryLabels[postData.categories?.[0]?.slug as keyof typeof categoryLabels] || '토론',
+          value: postData.categories?.[0]?.slug || 'discussion',
+          color: categoryColors[postData.categories?.[0]?.slug as keyof typeof categoryColors],
           icon: CategoryIcon
         }}
-        tags={postData.tags || []}
+        tags={postData.tags?.map(tag => tag.name) || []}
         likeCount={likeCount}
         commentCount={postData.comment_count || 0}
         isLiked={isLiked}
-        isBookmarked={isBookmarked}
+        isBookmarked={userBookmarked}
         canEdit={!!(user && user.id === postData.author_id)}
         canDelete={!!(user && (user.id === postData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
         onLike={handleLike}

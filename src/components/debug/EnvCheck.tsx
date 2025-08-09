@@ -50,7 +50,7 @@ export function EnvCheck() {
   const testSupabaseConnection = async () => {
     try {
       const { data, error } = await supabaseClient
-        .from('users')
+        .from('users_v2')
         .select('count')
         .limit(1)
         .single()

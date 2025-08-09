@@ -10,11 +10,11 @@ import {
 import MembershipApplicationManager from './MembershipApplicationManager'
 import MemberManagement from './MemberManagement'
 import ReportManagement from './ReportManagement'
-import { useAuth } from '@/providers'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import PermissionGate from '@/components/shared/PermissionGate'
 
 export default function AdminDashboard() {
-  const { user } = useAuth()
+  const { user } = useAuthV2()
   const [activeTab, setActiveTab] = useState('applications')
   
   return (

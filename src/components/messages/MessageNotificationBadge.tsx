@@ -7,8 +7,8 @@
 
 'use client'
 
-import { useAuth } from '@/providers'
-import { useUnreadCount } from '@/hooks/features/useMessages'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useUnreadCountV2 } from '@/hooks/features/useMessagesV2'
 import { cn } from '@/lib/utils'
 import { motion, AnimatePresence } from 'framer-motion'
 
@@ -21,8 +21,8 @@ export function MessageNotificationBadge({
   className,
   showCount = true 
 }: MessageNotificationBadgeProps) {
-  const { user, isMember } = useAuth()
-  const { data: unreadCount = 0, isLoading: loading } = useUnreadCount()
+  const { user, isMember } = useAuthV2()
+  const { data: unreadCount = 0, isPending: loading } = useUnreadCountV2()
 
   // 로딩 중이거나, 미인증 사용자, 또는 멤버가 아닌 경우 표시하지 않음
   if (loading || !user || !isMember || unreadCount === 0) {

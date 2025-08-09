@@ -54,27 +54,29 @@ function useRecentPosts() {
   return useQuery<PostWithAuthor[]>({
     queryKey: ['recent-posts'],
     queryFn: async () => {
-      // Fetch recent cases from DB with all necessary fields
+      // Fetch recent posts from content_v2 with author relationship
       const { data, error } = await supabaseClient
-        .from('content_with_author')
+        .from('content_v2')
         .select(`
           id,
           title,
           content,
-          category,
+          content_type,
           view_count,
           like_count,
           comment_count,
           created_at,
           author_id,
-          author_name,
-          author_avatar_url,
-          author_department,
-          tags,
-          metadata
+          author:users_v2!author_id(
+            id,
+            name,
+            avatar_url,
+            department
+          )
         `)
-        .eq('type', 'case')
+        .eq('content_type', 'case')
         .eq('status', 'published')
+        .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(3)
       
@@ -91,17 +93,17 @@ function useRecentPosts() {
           id: caseItem.id,
           title: caseItem.title,
           content: caseItem.content || '',
-          category: caseItem.category,
+          category: 'case', // V2에서는 content_type으로 관리
           view_count: caseItem.view_count || 0,
           like_count: caseItem.like_count || 0,
           comment_count: caseItem.comment_count || 0,
           created_at: caseItem.created_at,
           author_id: caseItem.author_id,
-          author_name: caseItem.author_name,
-          author_avatar_url: caseItem.author_avatar_url,
-          author_department: caseItem.author_department,
-          tags: caseItem.tags || [],
-          metadata: (caseItem.metadata || {}) as Record<string, any>
+          author_name: caseItem.author?.name || '익명',
+          author_avatar_url: caseItem.author?.avatar_url || null,
+          author_department: caseItem.author?.department || null,
+          tags: [], // V2에서는 별도 관계 테이블로 관리
+          metadata: {} // V2에서는 메타데이터 별도 관리
         }))
       
       return transformedData

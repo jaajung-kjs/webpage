@@ -38,17 +38,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useAuth } from '@/providers'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
-import { useComments, useCreateComment, useUpdateComment, useDeleteComment, useToggleCommentLike } from '@/hooks/features/useComments'
+import { 
+  useCommentsV2, 
+  useCreateCommentV2, 
+  useUpdateCommentV2, 
+  useDeleteCommentV2, 
+  useToggleCommentLikeV2 
+} from '@/hooks/features/useCommentsV2'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { LoadingDots, EmptyState } from '@/components/shared/LoadingStates'
 import { Skeleton, SkeletonList } from '@/components/ui/skeleton'
+import UserLevelBadges from './UserLevelBadges'
 
 interface CommentSectionProps {
   contentId: string
@@ -58,8 +65,31 @@ interface CommentSectionProps {
   autoCollapseDepth?: number // 자동 접기 깊이
 }
 
-type CommentWithReplies = any & {
-  replies?: CommentWithReplies[]
+// Import the proper type from V2 hooks
+type CommentWithReplies = {
+  id: string
+  content_id: string
+  author_id: string
+  comment_text: string
+  created_at: string
+  updated_at: string
+  deleted_at?: string | null
+  parent_id?: string | null
+  path?: string | null
+  depth: number
+  author: {
+    id: string
+    name: string
+    avatar_url?: string | null
+    role: string
+  }
+  interaction_counts: {
+    likes: number
+  }
+  user_interactions: {
+    is_liked: boolean
+  }
+  children?: CommentWithReplies[]
 }
 
 // Helper function for role labels
@@ -80,22 +110,23 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, profile, isMember } = useAuth()
+  const { user, isMember } = useAuthV2()
   
-  const { data: commentsData, isLoading: loading, refetch } = useComments(contentId)
-  const createCommentMutation = useCreateComment()
-  const updateCommentMutation = useUpdateComment()
-  const deleteCommentMutation = useDeleteComment()
-  const toggleCommentLikeMutation = useToggleCommentLike()
+  const { data: commentsData, isLoading: loading, refetch } = useCommentsV2(contentId)
+  const createCommentMutation = useCreateCommentV2()
+  const updateCommentMutation = useUpdateCommentV2()
+  const deleteCommentMutation = useDeleteCommentV2()
+  const toggleCommentLikeMutation = useToggleCommentLikeV2()
   
-  const [comments, setComments] = useState<CommentWithReplies[]>([])
   const [newComment, setNewComment] = useState('')
-  const [commentLikes, setCommentLikes] = useState<{ [key: string]: boolean }>({})
   const [replyingToComments, setReplyingToComments] = useState<{ [key: string]: boolean }>({})
   const [editingComments, setEditingComments] = useState<{ [key: string]: boolean }>({})
   const [replyContents, setReplyContents] = useState<{ [key: string]: string }>({})
   const [editContents, setEditContents] = useState<{ [key: string]: string }>({})
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'popular'>('newest')
+  
+  // Comments are already in the correct format from V2 hooks
+  const comments = commentsData || []
   
   const commentActionLoading = createCommentMutation.isPending || updateCommentMutation.isPending || deleteCommentMutation.isPending
   const likeLoading = toggleCommentLikeMutation.isPending
@@ -121,166 +152,45 @@ export default function CommentSection({
     setEditContents(prev => ({ ...prev, [commentId]: '' }))
   }
 
-  // Sort and organize comments
-  useEffect(() => {
-    if (commentsData) {
-      // Organize comments into tree structure
-      const commentMap = new Map<string, typeof commentsData[0][]>()
-      const rootComments: typeof commentsData[0][] = []
-      
-      // First pass: separate root comments and create map for replies
-      commentsData.forEach(comment => {
-        if (!comment.parent_id) {
-          rootComments.push(comment)
-        } else {
-          if (!commentMap.has(comment.parent_id)) {
-            commentMap.set(comment.parent_id, [])
-          }
-          commentMap.get(comment.parent_id)!.push(comment)
-        }
-      })
-      
-      // Sort root comments
-      const sorted = rootComments.sort((a, b) => {
-        switch (sortBy) {
-          case 'newest':
-            return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
-          case 'oldest':
-            return new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()
-          case 'popular':
-            return (b.like_count || 0) - (a.like_count || 0)
-          default:
-            return 0
-        }
-      })
-      
-      // Attach replies to comments (flat structure - only one level deep)
-      const attachReplies = (comments: typeof rootComments): CommentWithReplies[] => {
-        return comments.map(comment => ({
-          ...comment,
-          replies: comment.id ? (commentMap.get(comment.id) || []).map(reply => ({
-            ...reply,
-            replies: [] // Always flat - no nested replies
-          })) : []
-        }))
-      }
-      
-      const commentsWithReplies = attachReplies(sorted)
-      setComments(commentsWithReplies)
-      
-      // Check like status for all comments
-      if (user) {
-        checkCommentLikeStatus(commentsWithReplies)
-      }
-    }
-  }, [commentsData, sortBy, user])
+  // V2 hooks already handle comment organization and user interactions
+  // No need for complex processing - the data comes pre-structured
 
-  const getAllCommentIds = (comments: CommentWithReplies[]): string[] => {
-    const ids: string[] = []
-    
-    const collectIds = (commentList: CommentWithReplies[]) => {
-      commentList.forEach(comment => {
-        if (comment.id) {
-          ids.push(comment.id)
-        }
-        if (comment.replies && comment.replies.length > 0) {
-          collectIds(comment.replies)
-        }
-      })
-    }
-    
-    collectIds(comments)
-    return ids
-  }
-
-  // Helper function to find the root parent comment ID
-  const findRootParentId = (commentId: string): string => {
-    const findInComments = (commentList: CommentWithReplies[]): string | null => {
-      for (const comment of commentList) {
-        if (comment.id === commentId) {
-          return comment.id // This is a root comment
-        }
-        if (comment.replies) {
-          for (const reply of comment.replies) {
-            if (reply.id === commentId) {
-              return comment.id // This reply's parent is the root
-            }
-          }
-        }
-      }
-      return null
-    }
-    
-    const rootId = findInComments(comments)
-    return rootId || commentId // Fallback to the original ID
-  }
-
-  const checkCommentLikeStatus = async (comments: CommentWithReplies[]) => {
-    if (!user) return
-
-    try {
-      const allCommentIds = getAllCommentIds(comments)
-      
-      if (allCommentIds.length === 0) return
-      
-      const { data: likes } = await supabaseClient
-        .from('interactions')
-        .select('comment_id')
-        .eq('user_id', user.id)
-        .eq('type', 'like')
-        .in('comment_id', allCommentIds)
-      
-      const likedCommentIds = new Set(likes?.map(l => l.comment_id).filter(Boolean) || [])
-      const newLikeStatus: { [key: string]: boolean } = {}
-      
-      allCommentIds.forEach(commentId => {
-        newLikeStatus[commentId] = likedCommentIds.has(commentId)
-      })
-      
-      setCommentLikes(newLikeStatus)
-    } catch (error) {
-      console.error('Error checking comment like status:', error)
-    }
-  }
+  // V2 hooks handle all like status checking automatically
 
 
   const handleSubmit = async () => {
-    if (!user || !newComment.trim() || !isMember) return
+    if (!user || !newComment.trim() || !isMember()) return
 
     try {
       await createCommentMutation.mutateAsync({
         contentId: contentId,
-        content: newComment.trim(),
+        comment: newComment.trim(),
         parentId: undefined
       })
       
       setNewComment('')
-      await refetch()
       toast.success('댓글이 작성되었습니다.')
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating comment:', error)
-      toast.error('댓글 작성에 실패했습니다.')
+      const errorMessage = error?.message || error?.error || '댓글 작성에 실패했습니다.'
+      toast.error(errorMessage)
     }
   }
 
   const handleReply = async (parentId: string) => {
-    if (!user || !isMember) return
+    if (!user || !isMember()) return
     
     const content = replyContents[parentId]?.trim()
     if (!content) return
 
     try {
-      // For flat structure: always use the root parent ID
-      const rootParentId = findRootParentId(parentId)
-      
       await createCommentMutation.mutateAsync({
         contentId: contentId,
-        content: content,
-        parentId: rootParentId
+        comment: content,
+        parentId: parentId
       })
       
       cancelReply(parentId)
-      await refetch()
       toast.success('답글이 작성되었습니다.')
     } catch (error) {
       console.error('Error creating reply:', error)
@@ -294,75 +204,18 @@ export default function CommentSection({
       return
     }
     
-    if (!isMember) {
+    if (!isMember()) {
       toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
       return
     }
 
-    const wasLiked = commentLikes[commentId] || false
-
     try {
-      // Optimistically update UI
-      setCommentLikes(prev => ({
-        ...prev,
-        [commentId]: !wasLiked
-      }))
-      
-      setComments(prev => prev.map((comment: any) => {
-        if (comment.id === commentId) {
-          return { 
-            ...comment, 
-            like_count: (comment.like_count || 0) + (wasLiked ? -1 : 1) 
-          }
-        }
-        // Check nested replies
-        if (comment.replies) {
-          const updatedReplies = comment.replies.map((reply: any) => {
-            if (reply.id === commentId) {
-              return {
-                ...reply,
-                like_count: (reply.like_count || 0) + (wasLiked ? -1 : 1)
-              }
-            }
-            return reply
-          })
-          return { ...comment, replies: updatedReplies }
-        }
-        return comment
-      }))
-      
-      await toggleCommentLikeMutation.mutateAsync({ commentId: commentId, contentId: contentId })
-      
+      // V2 hook handles optimistic updates automatically
+      await toggleCommentLikeMutation.mutateAsync({ 
+        commentId: commentId, 
+        contentId: contentId 
+      })
     } catch (error) {
-      // Revert on error
-      setCommentLikes(prev => ({
-        ...prev,
-        [commentId]: wasLiked
-      }))
-      
-      setComments(prev => prev.map((comment: any) => {
-        if (comment.id === commentId) {
-          return { 
-            ...comment, 
-            like_count: (comment.like_count || 0) + (wasLiked ? 1 : -1) 
-          }
-        }
-        // Check nested replies
-        if (comment.replies) {
-          const updatedReplies = comment.replies.map((reply: any) => {
-            if (reply.id === commentId) {
-              return {
-                ...reply,
-                like_count: (reply.like_count || 0) + (wasLiked ? 1 : -1)
-              }
-            }
-            return reply
-          })
-          return { ...comment, replies: updatedReplies }
-        }
-        return comment
-      }))
-      
       console.error('Error toggling comment like:', error)
       toast.error('좋아요 처리에 실패했습니다.')
     }
@@ -376,13 +229,12 @@ export default function CommentSection({
 
     try {
       await updateCommentMutation.mutateAsync({ 
-        id: commentId, 
-        content: content,
+        commentId: commentId, 
+        comment: content,
         contentId: contentId 
       })
       
       cancelEdit(commentId)
-      await refetch()
       toast.success('댓글이 수정되었습니다.')
     } catch (error) {
       console.error('Error editing comment:', error)
@@ -396,9 +248,11 @@ export default function CommentSection({
     if (!confirm('정말로 이 댓글을 삭제하시겠습니까?')) return
 
     try {
-      await deleteCommentMutation.mutateAsync({ id: commentId, contentId: contentId })
+      await deleteCommentMutation.mutateAsync({ 
+        commentId: commentId, 
+        contentId: contentId 
+      })
       
-      await refetch()
       toast.success('댓글이 삭제되었습니다.')
     } catch (error) {
       console.error('Error deleting comment:', error)
@@ -436,13 +290,13 @@ export default function CommentSection({
         
         <CardContent>
           {/* Comment Input */}
-          {user && isMember ? (
+          {user && isMember() ? (
             <div className="space-y-4 mb-6">
               <div className="flex gap-3">
                 <Avatar>
-                  <AvatarImage src={user.user_metadata?.avatar_url || profile?.avatar_url} />
+                  <AvatarImage src={(user as any)?.avatar_url || (user as any)?.user_metadata?.avatar_url} />
                   <AvatarFallback>
-                    {(profile?.name || user.email)?.charAt(0).toUpperCase()}
+                    {((user as any)?.name || (user as any)?.email)?.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
                 
@@ -502,11 +356,11 @@ export default function CommentSection({
               {comments.map((comment) => (
                 <motion.div key={comment.id} variants={staggerItem}>
                   <CommentItem
-                    comment={comment}
+                    comment={comment as any}
                     depth={0}
                     maxDepth={maxDepth}
                     enableThreading={enableThreading}
-                    isLiked={comment.id ? (commentLikes[comment.id] || false) : false}
+                    isLiked={comment.user_interactions.is_liked}
                     onLike={handleCommentLike}
                     onReply={startReply}
                     onEdit={startEdit}
@@ -523,7 +377,7 @@ export default function CommentSection({
                       }
                     }))
                   }}
-                    isAuthor={comment.author_id === user?.id}
+                    isAuthor={comment.author_id === (user as any)?.id}
                     canModerate={false}
                     isReplying={comment.id ? (replyingToComments[comment.id] || false) : false}
                     isEditing={comment.id ? (editingComments[comment.id] || false) : false}
@@ -542,8 +396,7 @@ export default function CommentSection({
                     }}
                     cancelReply={cancelReply}
                     user={user}
-                    profile={profile}
-                    commentLikes={commentLikes}
+                    profile={user}
                     replyingToComments={replyingToComments}
                     editingComments={editingComments}
                     editContents={editContents}
@@ -586,7 +439,6 @@ interface CommentItemProps {
   cancelReply: (commentId: string) => void
   user: any
   profile: any
-  commentLikes: { [key: string]: boolean }
   // Add state objects for nested access
   replyingToComments: { [key: string]: boolean }
   editingComments: { [key: string]: boolean }
@@ -621,7 +473,6 @@ function CommentItem({
   cancelReply,
   user,
   profile,
-  commentLikes,
   replyingToComments,
   editingComments,
   editContents,
@@ -660,20 +511,29 @@ function CommentItem({
               "transition-all",
               visualDepth === 0 ? "h-10 w-10" : "h-8 w-8"
             )}>
-              <AvatarImage src={comment.author_avatar_url || undefined} />
+              <AvatarImage src={comment.author.avatar_url || undefined} />
               <AvatarFallback>
-                {comment.author_name?.charAt(0) || 'U'}
+                {comment.author.name?.charAt(0) || 'U'}
               </AvatarFallback>
             </Avatar>
             
             <div className="space-y-1">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">
-                  {comment.author_name || '익명'}
+                  {comment.author.name || '익명'}
                 </span>
-                {comment.author_role && (
+                
+                {/* 게임화 V2 레벨 뱃지 */}
+                <UserLevelBadges 
+                  userId={comment.author_id} 
+                  variant="minimal" 
+                  size="sm" 
+                  className="flex-shrink-0"
+                />
+                
+                {comment.author.role && (
                   <Badge variant="outline" className="text-xs">
-                    {getRoleLabel(comment.author_role)}
+                    {getRoleLabel(comment.author.role)}
                   </Badge>
                 )}
                 {isAuthor && (
@@ -714,7 +574,7 @@ function CommentItem({
             <DropdownMenuContent align="end">
               {isAuthor && (
                 <>
-                  <DropdownMenuItem onClick={() => comment.id && onEdit(comment.id, comment.comment || '')}>
+                  <DropdownMenuItem onClick={() => comment.id && onEdit(comment.id, comment.comment_text || '')}>
                     <Edit2 className="mr-2 h-4 w-4" />
                     수정
                   </DropdownMenuItem>
@@ -769,7 +629,7 @@ function CommentItem({
         ) : (
           <div className="prose prose-sm dark:prose-invert max-w-none min-w-0">
             <p className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere word-break-break-word min-w-0">
-              {comment.comment}
+              {comment.comment_text}
             </p>
           </div>
         )}
@@ -790,7 +650,7 @@ function CommentItem({
               isLiked && "fill-current"
             )} />
             <span className="text-xs font-medium">
-              {comment.like_count || 0}
+              {comment.interaction_counts.likes || 0}
             </span>
           </Button>
 
@@ -806,7 +666,7 @@ function CommentItem({
             </Button>
           )}
 
-          {comment.replies && comment.replies.length > 0 && (
+          {comment.children && comment.children.length > 0 && (
             <Button
               variant="ghost"
               size="sm"
@@ -816,7 +676,7 @@ function CommentItem({
               {isCollapsed ? (
                 <>
                   <ChevronDown className="h-3.5 w-3.5" />
-                  <span className="text-xs">답글 {comment.replies?.length || 0}개</span>
+                  <span className="text-xs">답글 {comment.children?.length || 0}개</span>
                 </>
               ) : (
                 <>
@@ -838,14 +698,14 @@ function CommentItem({
         >
           <div className="flex gap-3">
             <Avatar className="h-8 w-8">
-              <AvatarImage src={user?.user_metadata?.avatar_url || profile?.avatar_url} />
+              <AvatarImage src={(user as any)?.avatar_url || (user as any)?.user_metadata?.avatar_url} />
               <AvatarFallback>
-                {(profile?.name || user?.email)?.charAt(0).toUpperCase() || 'U'}
+                {((user as any)?.name || (user as any)?.email)?.charAt(0).toUpperCase() || 'U'}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 space-y-3 min-w-0">
               <Textarea
-                placeholder={`${comment.author_name || '익명'}님에게 답글 작성...`}
+                placeholder={`${comment.author.name || '익명'}님에게 답글 작성...`}
                 value={replyContent}
                 onChange={(e) => setReplyContent(e.target.value)}
                 className="min-h-[80px] resize-none w-full"
@@ -873,16 +733,16 @@ function CommentItem({
       )}
       
       {/* Nested replies */}
-      {comment.replies && comment.replies.length > 0 && !isCollapsed && (
+      {comment.children && comment.children.length > 0 && !isCollapsed && (
         <div className="mt-4 space-y-4">
-          {comment.replies.map((reply: any) => (
+          {comment.children.map((reply: any) => (
             <CommentItem
               key={reply.id}
               comment={reply}
               depth={1}
               maxDepth={maxDepth}
               enableThreading={enableThreading}
-              isLiked={reply.id ? (commentLikes[reply.id] || false) : false}
+              isLiked={reply.user_interactions.is_liked}
               onLike={onLike}
               onReply={onReply}
               onEdit={onEdit}
@@ -909,8 +769,7 @@ function CommentItem({
               }}
               cancelReply={cancelReply}
               user={user}
-              profile={profile}
-              commentLikes={commentLikes}
+              profile={user}
               replyingToComments={replyingToComments}
               editingComments={editingComments}
               editContents={editContents}

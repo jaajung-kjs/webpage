@@ -4,9 +4,15 @@ import React from 'react'
 import { Download, FileText, Image as ImageIcon, File, Video, Music } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Tables } from '@/lib/database.types'
-
-type Attachment = Tables<'content_attachments'>
+// V2에서는 attachments가 JSON 필드로 저장됨
+interface Attachment {
+  id: string
+  file_name: string
+  file_url: string
+  file_type: string
+  file_size: number
+  attachment_type: 'image' | 'file'
+}
 
 interface AttachmentsListProps {
   attachments: Attachment[]

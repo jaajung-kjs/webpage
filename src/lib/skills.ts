@@ -152,3 +152,8 @@ export function calculateLevelProgress(activityScore: number): number {
   
   return Math.min(Math.max(progress, 0), 100)
 }
+
+/**
+ * Legacy export for backward compatibility
+ */
+export const SKILL_LEVELS = SKILL_LEVEL_CONFIGS

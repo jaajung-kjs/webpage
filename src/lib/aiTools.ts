@@ -242,3 +242,8 @@ export function getAIToolLabel(tool: string): string {
 export function getAIToolIcon(tool: string): React.ElementType {
   return AI_TOOL_CONFIGS[tool as AIToolType]?.icon || FileText
 }
+
+/**
+ * Legacy export for backward compatibility
+ */
+export const AI_TOOLS = AI_TOOL_CONFIGS

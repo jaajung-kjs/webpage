@@ -1,12 +1,16 @@
-import dynamic from 'next/dynamic'
+'use client'
+
+import dynamicImport from 'next/dynamic'
 import MainLayout from '@/components/layout/MainLayout'
 import { PageLoadingFallback } from '@/components/ui/lazy-loader'
 
-const ActivitiesPage = dynamic(
+export const dynamic = 'force-dynamic'
+
+const ActivitiesPage = dynamicImport(
   () => import('@/components/activities/ActivitiesPage'),
   {
     loading: () => <PageLoadingFallback />,
-    ssr: true
+    ssr: false
   }
 )
 

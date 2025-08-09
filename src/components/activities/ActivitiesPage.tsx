@@ -48,16 +48,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
-import { 
-  useActivities, 
-  useCreateActivity, 
-  useUpdateActivity, 
-  useDeleteActivity,
-  useJoinActivity,
-  useLeaveActivity,
-  useActivityParticipants,
-  type ActivityWithContent
-} from '@/hooks/features/useActivities'
+import { useActivitiesV2 } from '@/hooks/features/useActivitiesV2'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
@@ -90,25 +81,28 @@ function ActivitiesPage() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [activeStatus, setActiveStatus] = useState('all')
   
-  // Use Supabase hooks
-  const { data: activities, isLoading: loading, refetch } = useActivities()
-  const createActivityMutation = useCreateActivity()
-  const updateActivityMutation = useUpdateActivity()
-  const deleteActivityMutation = useDeleteActivity()
-  const joinActivityMutation = useJoinActivity()
-  const leaveActivityMutation = useLeaveActivity()
+  // Use V2 activities hooks
+  const activitiesV2 = useActivitiesV2()
+  
+  const { data: activities, isPending: loading, refetch } = activitiesV2.useActivities()
+  
+  const createActivityMutation = activitiesV2.createActivity
+  const updateActivityMutation = activitiesV2.updateActivity
+  const deleteActivityMutation = activitiesV2.deleteActivity
+  const joinActivityMutation = activitiesV2.registerForActivity
+  const leaveActivityMutation = activitiesV2.cancelRegistration
   
   const operationLoading = 
-    createActivityMutation.isPending || 
-    updateActivityMutation.isPending || 
-    deleteActivityMutation.isPending || 
-    joinActivityMutation.isPending || 
-    leaveActivityMutation.isPending
+    activitiesV2.isCreating || 
+    activitiesV2.isUpdating || 
+    activitiesV2.isDeleting || 
+    activitiesV2.isRegistering || 
+    activitiesV2.isCancelling
 
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [selectedActivity, setSelectedActivity] = useState<Tables<'activities'> | null>(null)
+  const [selectedActivity, setSelectedActivity] = useState<Tables<'activities_v2'> | null>(null)
   const [participationStatus, setParticipationStatus] = useState<{ [key: string]: boolean }>({})
   
   // Form state
@@ -127,46 +121,75 @@ function ActivitiesPage() {
 
   // Filter activities based on search and filters
   const filteredActivities = useMemo(() => {
-    if (!activities) return []
+    if (!activities?.pages) return []
     
-    let filtered = [...activities]
+    // Flatten all pages into a single array
+    const allActivities = activities.pages.flatMap(page => page.activities || [])
+    let filtered = [...allActivities]
 
     if (searchTerm) {
       filtered = filtered.filter(activity =>
+        activity.content?.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         activity.location?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        activity.status?.toLowerCase().includes(searchTerm.toLowerCase())
+        activity.content?.summary?.toLowerCase().includes(searchTerm.toLowerCase())
       )
     }
 
-    // Note: activities don't have a category field directly
-    // We'd need to join with content table to filter by category
-
-    if (activeStatus !== 'all') {
-      filtered = filtered.filter(activity => activity.status === activeStatus)
+    // Filter by event type if category filter is used
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(activity => activity.event_type === activeCategory)
     }
 
-    // Sort by scheduled_at (upcoming first)
-    filtered.sort((a, b) => new Date(a.scheduled_at || '').getTime() - new Date(b.scheduled_at || '').getTime())
+    // Filter by status if needed (this would need to be implemented in the data structure)
+    if (activeStatus !== 'all') {
+      // For now, we'll filter based on event date
+      const now = new Date()
+      filtered = filtered.filter(activity => {
+        const eventDate = new Date(activity.event_date)
+        switch (activeStatus) {
+          case 'upcoming':
+            return eventDate > now
+          case 'ongoing':
+            // If there's an end_date, check if we're between start and end
+            if (activity.end_date) {
+              const endDate = new Date(activity.end_date)
+              return eventDate <= now && endDate >= now
+            }
+            return eventDate.toDateString() === now.toDateString()
+          case 'completed':
+            const endDate = activity.end_date ? new Date(activity.end_date) : eventDate
+            return endDate < now
+          default:
+            return true
+        }
+      })
+    }
+
+    // Sort by event_date (upcoming first)
+    filtered.sort((a, b) => new Date(a.event_date).getTime() - new Date(b.event_date).getTime())
 
     return filtered
   }, [activities, searchTerm, activeCategory, activeStatus])
   
   // Check participation status for all activities
   useEffect(() => {
-    if (user && activities && activities.length > 0) {
+    if (user && activities?.pages && activities.pages.length > 0) {
       checkAllParticipationStatus()
     }
   }, [user, activities])
 
   const checkAllParticipationStatus = async () => {
-    if (!user || !activities) return
+    if (!user || !activities?.pages) return
     
     const status: { [key: string]: boolean } = {}
     
-    for (const activity of activities) {
+    // Flatten all activities from all pages
+    const allActivities = activities.pages.flatMap(page => page.activities || [])
+    
+    for (const activity of allActivities) {
       if (activity.id) {
         const { data } = await supabaseClient
-          .from('activity_participants')
+          .from('activity_participants_v2')
           .select('id')
           .eq('activity_id', activity.id)
           .eq('user_id', user.id)
@@ -251,34 +274,20 @@ function ActivitiesPage() {
     }
 
     try {
-      // First create content
-      const { data: contentData, error: contentError } = await supabaseClient
-        .from('content')
-        .insert({
-          title: formData.title,
-          content: formData.description,
-          category: formData.category,
-          type: 'activity' as const,
-          author_id: user.id,
-          tags: formData.tags || []
-        })
-        .select()
-        .single()
-      
-      if (contentError) throw contentError
-      
-      // Then create activity with content_id
-      const activityData: TablesInsert<'activities'> = {
-        content_id: contentData.id,
-        scheduled_at: `${formData.date}T${formData.time}:00`,
-        duration_minutes: formData.duration || 60,
+      // Use the V2 create activity function which handles both content and activity creation
+      const activityFormData = {
+        title: formData.title,
+        content: formData.description,
+        summary: formData.description.substring(0, 200),
+        event_type: formData.category as any,
+        event_date: formData.date,
+        event_time: formData.time,
         location: formData.location,
-        max_participants: formData.max_participants,
-        status: (formData.status || 'upcoming') as 'upcoming' | 'ongoing' | 'completed' | 'cancelled',
-        instructor_id: user.id
+        is_online: false,
+        max_participants: formData.max_participants
       }
       
-      await createActivityMutation.mutateAsync(activityData)
+      await createActivityMutation(activityFormData)
 
       toast.success('활동이 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
@@ -297,32 +306,20 @@ function ActivitiesPage() {
     }
 
     try {
-      // Update content first if it exists
-      if (selectedActivity.content_id) {
-        const { error: contentError } = await supabaseClient
-          .from('content')
-          .update({
-            title: formData.title,
-            content: formData.description,
-            category: formData.category,
-            tags: formData.tags || []
-          })
-          .eq('id', selectedActivity.content_id)
-        
-        if (contentError) throw contentError
-      }
-      
-      // Then update activity
-      const activityUpdates: TablesUpdate<'activities'> = {
-        scheduled_at: `${formData.date}T${formData.time}:00`,
-        duration_minutes: formData.duration || 60,
+      // Use the V2 update activity function which handles both content and activity updates
+      const activityUpdates = {
+        title: formData.title,
+        content: formData.description,
+        summary: formData.description.substring(0, 200),
+        event_type: formData.category as any,
+        event_date: formData.date,
+        event_time: formData.time,
         location: formData.location,
-        max_participants: formData.max_participants,
-        status: formData.status as 'upcoming' | 'ongoing' | 'completed' | 'cancelled'
+        max_participants: formData.max_participants
       }
       
-      await updateActivityMutation.mutateAsync({
-        id: selectedActivity.id,
+      await updateActivityMutation({
+        activityId: selectedActivity.id,
         updates: activityUpdates
       })
       
@@ -341,23 +338,8 @@ function ActivitiesPage() {
     if (!user) return
 
     try {
-      // First get the activity to find content_id
-      const { data: activity } = await supabaseClient
-        .from('activities')
-        .select('content_id')
-        .eq('id', activityId)
-        .single()
-      
-      // Delete activity first
-      await deleteActivityMutation.mutateAsync(activityId)
-      
-      // Then delete content if it exists
-      if (activity?.content_id) {
-        await supabaseClient
-          .from('content')
-          .delete()
-          .eq('id', activity.content_id)
-      }
+      // Use the V2 delete function which handles both activity and content deletion
+      await deleteActivityMutation(activityId)
       
       toast.success('활동이 성공적으로 삭제되었습니다.')
       refetch()
@@ -367,25 +349,24 @@ function ActivitiesPage() {
     }
   }
 
-  const openEditDialog = (activity: ActivityWithContent) => {
+  const openEditDialog = (activity: Tables<'activities_v2'>) => {
     setSelectedActivity(activity)
     
-    // Extract date and time from scheduled_at
-    const scheduledDate = activity.scheduled_at ? new Date(activity.scheduled_at) : new Date()
-    const dateStr = scheduledDate.toISOString().split('T')[0]
-    const timeStr = scheduledDate.toTimeString().substring(0, 5)
+    // Extract date and time from event_date and event_time
+    const dateStr = activity.event_date
+    const timeStr = activity.event_time || '10:00'
     
     setFormData({
-      title: activity.content?.title || '',
-      description: activity.content?.content || '',
+      title: '', // Will need to fetch from content_v2
+      description: '', // Will need to fetch from content_v2
       date: dateStr,
       time: timeStr,
-      duration: activity.duration_minutes || 60,
+      duration: 60, // Not in V2 schema
       location: activity.location || '',
       max_participants: activity.max_participants || 20,
-      category: (activity.content?.category || 'regular') as 'regular' | 'study' | 'dinner' | 'lecture',
-      status: activity.status as 'upcoming' | 'ongoing' | 'completed' | 'cancelled' || 'upcoming',
-      tags: activity.content?.tags || []
+      category: activity.event_type as 'regular' | 'study' | 'dinner' | 'lecture',
+      status: 'upcoming', // Status logic is different in V2
+      tags: []
     })
     setEditDialogOpen(true)
   }
@@ -408,12 +389,12 @@ function ActivitiesPage() {
       
       if (isCurrentlyParticipating) {
         // Leave activity
-        await leaveActivityMutation.mutateAsync(activityId)
+        await leaveActivityMutation(activityId)
         
         toast.success('활동에서 탈퇴하였습니다.')
       } else {
         // Join activity
-        await joinActivityMutation.mutateAsync(activityId)
+        await joinActivityMutation({ activityId })
         
         toast.success('활동에 참가하였습니다.')
       }
@@ -430,52 +411,63 @@ function ActivitiesPage() {
   const categories = Object.entries(categoryLabels).map(([value, label]) => ({ value, label }))
 
   // Calculate today's activities
-  const todayActivities = activities?.filter(a => {
-    if (!a.scheduled_at) return false
-    const today = new Date().toISOString().split('T')[0]
-    const activityDate = new Date(a.scheduled_at).toISOString().split('T')[0]
-    return activityDate === today
-  }).length || 0
+  const todayActivitiesCount = useMemo(() => {
+    if (!activities?.pages) return 0
+    const allActivities = activities.pages.flatMap(page => page.activities || [])
+    return allActivities.filter(a => {
+      if (!a.event_date) return false
+      const today = new Date().toISOString().split('T')[0]
+      return a.event_date === today
+    }).length
+  }, [activities])
 
   // Calculate this week's activities
-  const thisWeekActivities = activities?.filter(a => {
-    if (!a.scheduled_at) return false
-    const activityDate = new Date(a.scheduled_at)
-    const now = new Date()
-    const weekStart = new Date(now)
-    weekStart.setDate(now.getDate() - now.getDay())
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 6)
-    return activityDate >= weekStart && activityDate <= weekEnd
-  }).length || 0
+  const thisWeekActivitiesCount = useMemo(() => {
+    if (!activities?.pages) return 0
+    const allActivities = activities.pages.flatMap(page => page.activities || [])
+    return allActivities.filter(a => {
+      if (!a.event_date) return false
+      const activityDate = new Date(a.event_date)
+      const now = new Date()
+      const weekStart = new Date(now)
+      weekStart.setDate(now.getDate() - now.getDay())
+      const weekEnd = new Date(weekStart)
+      weekEnd.setDate(weekStart.getDate() + 6)
+      return activityDate >= weekStart && activityDate <= weekEnd
+    }).length
+  }, [activities])
 
   // Stats Section
   const statsSection = (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       <StatsCard
         title="예정된 활동"
-        value={activities?.filter(a => a.status === 'upcoming').length || 0}
+        value={filteredActivities?.filter(a => new Date(a.event_date) > new Date()).length || 0}
         icon={Calendar}
-        subtitle={`오늘 ${todayActivities}개`}
+        subtitle={`오늘 ${todayActivitiesCount}개`}
         loading={loading}
       />
       <StatsCard
         title="진행 중"
-        value={activities?.filter(a => a.status === 'ongoing').length || 0}
+        value={filteredActivities?.filter(a => {
+          const eventDate = new Date(a.event_date)
+          const today = new Date()
+          return eventDate.toDateString() === today.toDateString()
+        }).length || 0}
         icon={Activity}
         subtitle="현재 진행 중"
         loading={loading}
       />
       <StatsCard
         title="총 참여자"
-        value={activities?.reduce((total, a) => total + (a.current_participants || 0), 0) || 0}
+        value={filteredActivities?.reduce((total, a) => total + (a.current_participants || 0), 0) || 0}
         icon={Users}
-        subtitle={`이번 주 ${thisWeekActivities}개 활동`}
+        subtitle={`이번 주 ${thisWeekActivitiesCount}개 활동`}
         loading={loading}
       />
       <StatsCard
         title="완료된 활동"
-        value={activities?.filter(a => a.status === 'completed').length || 0}
+        value={filteredActivities?.filter(a => new Date(a.event_date) < new Date()).length || 0}
         icon={CheckCircle}
         subtitle="누적 완료"
         loading={loading}
@@ -583,28 +575,36 @@ function ActivitiesPage() {
             <Card className="h-full transition-all hover:shadow-lg hover:-translate-y-1">
               <CardHeader>
                 <div className="mb-2 flex items-center justify-between">
-                  {activity.content?.category && (
+                  {activity.event_type && (
                     <Badge 
                       variant="secondary" 
-                      className={categoryColors[activity.content.category as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'}
+                      className={categoryColors[activity.event_type as keyof typeof categoryColors] || 'bg-gray-100 text-gray-800'}
                     >
                       {(() => {
-                        const CategoryIcon = categoryIcons[activity.content.category as keyof typeof categoryIcons]
+                        const CategoryIcon = categoryIcons[activity.event_type as keyof typeof categoryIcons]
                         return (
                           <>
                             {CategoryIcon && <CategoryIcon className="h-3 w-3 mr-1" />}
-                            {categoryLabels[activity.content.category as keyof typeof categoryLabels] || activity.content.category}
+                            {categoryLabels[activity.event_type as keyof typeof categoryLabels] || activity.event_type}
                           </>
                         )
                       })()}
                     </Badge>
                   )}
-                  <Badge 
-                    variant="outline"
-                    className={statusColors[activity.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}
-                  >
-                    {statusLabels[activity.status as keyof typeof statusLabels] || activity.status}
-                  </Badge>
+                  {(() => {
+                    const eventDate = new Date(activity.event_date)
+                    const now = new Date()
+                    const status = eventDate > now ? 'upcoming' : 
+                                   eventDate.toDateString() === now.toDateString() ? 'ongoing' : 'completed'
+                    return (
+                      <Badge 
+                        variant="outline"
+                        className={statusColors[status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}
+                      >
+                        {statusLabels[status as keyof typeof statusLabels] || status}
+                      </Badge>
+                    )
+                  })()}
                 </div>
                 <CardTitle className="line-clamp-2 text-xl leading-tight">
                   {activity.content?.title || '제목 없음'}
@@ -619,12 +619,12 @@ function ActivitiesPage() {
                 <div className="mb-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{activity.scheduled_at ? new Date(activity.scheduled_at).toLocaleString('ko-KR') : '시간 미정'}</span>
+                    <span>{activity.event_date ? `${activity.event_date} ${activity.event_time || ''}`.trim() : '시간 미정'}</span>
                   </div>
-                  {activity.duration_minutes && (
+                  {activity.end_time && (
                     <div className="flex items-center space-x-2">
                       <Clock className="h-4 w-4" />
-                      <span>약 {activity.duration_minutes}분</span>
+                      <span>종료: {activity.end_time}</span>
                     </div>
                   )}
                   <div className="flex items-center space-x-2">
@@ -639,23 +639,22 @@ function ActivitiesPage() {
                   </div>
                 </div>
 
-                {/* Instructor */}
+                {/* Instructor - simplified for V2 */}
                 <div className="mb-4 flex items-center space-x-2">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={(activity.content as any)?.author_avatar_url} />
                     <AvatarFallback>
-                      {activity.content?.author_name?.charAt(0) || 'U'}
+                      운영진
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="font-medium text-sm">{activity.content?.author_name || '익명'}</div>
+                    <div className="font-medium text-sm">운영진</div>
                     <div className="text-xs text-muted-foreground">진행자</div>
                   </div>
                 </div>
 
                 {/* Admin Controls and Action Button */}
                 <div className="flex items-center gap-2">
-                  {activity.status === 'upcoming' && profile && 
+                  {new Date(activity.event_date) > new Date() && profile && 
                    ['member', 'vice-leader', 'leader', 'admin'].includes(profile.role) ? (
                     <Button 
                       className="flex-1 kepco-gradient"
@@ -679,7 +678,7 @@ function ActivitiesPage() {
                         </>
                       )}
                     </Button>
-                  ) : activity.status === 'upcoming' && (!profile || profile.role === 'guest' || profile.role === 'pending') ? (
+                  ) : new Date(activity.event_date) > new Date() && (!profile || profile.role === 'guest' || profile.role === 'pending') ? (
                     <Button className="flex-1" variant="outline" disabled>
                       <UserCheck className="mr-2 h-4 w-4" />
                       회원만 참가 가능
@@ -687,8 +686,13 @@ function ActivitiesPage() {
                   ) : (
                     <Button className="flex-1" variant="outline">
                       <UserCheck className="mr-2 h-4 w-4" />
-                      {activity.status === 'ongoing' ? '진행 중' : 
-                       activity.status === 'completed' ? '완료됨' : '취소됨'}
+                      {(() => {
+                        const eventDate = new Date(activity.event_date)
+                        const now = new Date()
+                        if (eventDate > now) return '예정됨'
+                        if (eventDate.toDateString() === now.toDateString()) return '진행 중'
+                        return '완료됨'
+                      })()}
                     </Button>
                   )}
                   

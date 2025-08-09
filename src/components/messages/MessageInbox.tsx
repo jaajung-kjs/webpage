@@ -1,15 +1,16 @@
 /**
- * Message Inbox Component
+ * Message Inbox Component - V2 Migration
  * 
- * Displays received messages with sender info
- * Real-time updates and navigation to conversations
+ * Displays conversations with participant info and unread counts
+ * Uses V2 messaging system with dedicated tables and real-time updates
+ * Migration: useConversationsV2 with proper participant data structure
  */
 
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/providers'
-import { useMessageInbox, type MessageInbox as MessageInboxType } from '@/hooks/features/useMessages'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useConversationsV2, type ConversationV2 } from '@/hooks/features/useMessagesV2'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -29,8 +30,8 @@ interface MessageInboxProps {
 }
 
 export function MessageInbox({ onConversationSelect, className }: MessageInboxProps) {
-  const { user, isMember } = useAuth()
-  const { data: messages, isLoading: loading, error, refetch } = useMessageInbox()
+  const { user, isMember } = useAuthV2()
+  const { data: conversations, isLoading: loading, error, refetch } = useConversationsV2()
   const [refreshing, setRefreshing] = useState(false)
 
   const handleRefresh = async () => {
@@ -39,13 +40,13 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
     setTimeout(() => setRefreshing(false), 1000)
   }
 
-  const handleConversationClick = (message: MessageInboxType) => {
+  const handleConversationClick = (conversation: ConversationV2) => {
     if (onConversationSelect) {
       onConversationSelect(
-        message.conversation_id,
-        message.other_user_id,
-        message.other_user_name,
-        message.other_user_avatar
+        conversation.id,
+        conversation.participant.id,
+        conversation.participant.name,
+        conversation.participant.avatar_url
       )
     }
   }
@@ -103,21 +104,21 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
         <ScrollArea className="h-[400px]">
           {loading ? (
             <InboxSkeleton />
-          ) : messages && messages.length === 0 ? (
+          ) : conversations && conversations.length === 0 ? (
             <EmptyInbox />
           ) : (
             <AnimatePresence>
-              {messages?.map((message, index) => (
+              {conversations?.map((conversation, index) => (
                 <motion.div
-                  key={message.conversation_id}
+                  key={conversation.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
                   transition={{ delay: index * 0.05 }}
                 >
-                  <InboxMessageItem
-                    message={message}
-                    onClick={() => handleConversationClick(message)}
+                  <InboxConversationItem
+                    conversation={conversation}
+                    onClick={() => handleConversationClick(conversation)}
                   />
                 </motion.div>
               ))}
@@ -130,15 +131,15 @@ export function MessageInbox({ onConversationSelect, className }: MessageInboxPr
 }
 
 /**
- * Individual message item in inbox
+ * Individual conversation item in inbox
  */
-interface InboxMessageItemProps {
-  message: any // Use any for now until proper type is defined
+interface InboxConversationItemProps {
+  conversation: ConversationV2
   onClick: () => void
 }
 
-function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
-  const isUnread = message.unread_count > 0
+function InboxConversationItem({ conversation, onClick }: InboxConversationItemProps) {
+  const isUnread = conversation.unread_count > 0
 
   return (
     <motion.div
@@ -150,10 +151,10 @@ function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
       whileHover={{ scale: 1.01 }}
       whileTap={{ scale: 0.95 }}
     >
-      {/* 발신자 아바타 */}
+      {/* 상대방 아바타 */}
       <div className="relative">
         <Avatar className="h-10 w-10">
-          <AvatarImage src={message.other_user_avatar || undefined} />
+          <AvatarImage src={conversation.participant.avatar_url || undefined} />
           <AvatarFallback>
             <User className="h-4 w-4" />
           </AvatarFallback>
@@ -163,27 +164,29 @@ function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
         )}
       </div>
 
-      {/* 메시지 내용 */}
+      {/* 대화 내용 */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <h4 className={cn(
             "text-sm font-medium truncate",
             isUnread && "font-semibold"
           )}>
-            {message.other_user_name}
+            {conversation.participant.name}
           </h4>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {message.unread_count > 0 && (
+            {conversation.unread_count > 0 && (
               <Badge variant="destructive" className="text-xs px-1.5 py-0.5">
-                {message.unread_count > 99 ? '99+' : message.unread_count}
+                {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
               </Badge>
             )}
-            <span className="text-xs text-muted-foreground">
-              {formatDistanceToNow(new Date(message.last_message_time), {
-                addSuffix: true,
-                locale: ko
-              })}
-            </span>
+            {conversation.last_message_at && (
+              <span className="text-xs text-muted-foreground">
+                {formatDistanceToNow(new Date(conversation.last_message_at), {
+                  addSuffix: true,
+                  locale: ko
+                })}
+              </span>
+            )}
           </div>
         </div>
         
@@ -191,7 +194,7 @@ function InboxMessageItem({ message, onClick }: InboxMessageItemProps) {
           "text-sm text-muted-foreground truncate",
           isUnread && "text-foreground font-medium"
         )}>
-          {message.last_message}
+          {conversation.last_message?.content || '새 대화를 시작해보세요'}
         </p>
       </div>
     </motion.div>

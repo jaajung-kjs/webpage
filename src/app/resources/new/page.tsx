@@ -1,6 +1,9 @@
+'use client'
 import MainLayout from '@/components/layout/MainLayout'
 import ContentEditorPage from '@/components/shared/ContentEditorPage'
 import { getCategoriesForSelect } from '@/lib/categories'
+
+export const dynamic = 'force-dynamic'
 
 const categories = getCategoriesForSelect('resources')
 

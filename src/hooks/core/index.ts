@@ -1,12 +1,11 @@
 /**
  * Core Hooks 통합 export
+ * V1 hooks have been moved to backup-v1/ directory
  */
 
-// 연결 관련
-export * from './useConnection'
+// V2 Hooks (Active)
+export * from './useConnectionV2'
+export * from './useRealtimeQueryV2'
+export * from './useCacheStrategyV2'
 
-// 인증 관련
-export * from './useAuth'
-
-// 실시간 쿼리 관련
-export * from './useRealtimeQuery'
+// Note: useAuthV2 is exported from features/ directory

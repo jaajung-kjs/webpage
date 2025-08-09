@@ -1,3 +1,4 @@
+'use client'
 import MainLayout from '@/components/layout/MainLayout'
 import AnnouncementDetailPage from '@/components/announcements/AnnouncementDetailPage'
 import PermissionGate from '@/components/shared/PermissionGate'

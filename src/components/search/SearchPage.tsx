@@ -33,7 +33,7 @@ import {
   Loader2
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { useSearch, usePopularSearches, useRecentSearches, saveSearchHistory } from '@/hooks/features/useSearch'
+import { useSearchV2 } from '@/hooks/features/useSearchV2'
 
 const contentTypeLabels = {
   all: '전체',
@@ -74,12 +74,17 @@ export default function SearchPage() {
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
   
-  // Use new hooks
-  const { data: searchResults = [], isLoading: loading } = useSearch(debouncedQuery, {
-    type: activeTab === 'community' ? 'post' : activeTab
+  // Use V2 hooks
+  const searchV2 = useSearchV2()
+  
+  const { data: searchData, isPending: loading } = searchV2.useContentSearch(debouncedQuery, {
+    contentType: activeTab === 'community' ? 'community' : activeTab
   })
-  const { data: popularSearches = [] } = usePopularSearches()
-  const { data: recentSearches = [] } = useRecentSearches()
+  
+  // Extract results from infinite query structure
+  const searchResults = searchData?.pages.flatMap(page => page.results) || []
+  const { data: popularSearches = [] } = searchV2.usePopularSearches()
+  const recentSearches = searchV2.searchHistory.slice(0, 10) || []
 
   // URL 업데이트
   const updateURL = useCallback((query: string) => {
@@ -139,8 +144,9 @@ export default function SearchPage() {
   useEffect(() => {
     if (searchQuery.length >= 2 && recentSearches.length > 0) {
       const filtered = recentSearches
-        .filter(s => s.toLowerCase().includes(searchQuery.toLowerCase()))
+        .filter(s => s.query.toLowerCase().includes(searchQuery.toLowerCase()))
         .slice(0, 5)
+        .map(s => s.query)
       setSuggestions(filtered)
     } else {
       setSuggestions([])
@@ -156,7 +162,7 @@ export default function SearchPage() {
     setDebouncedQuery(query)
     setShowSuggestions(false)
     updateURL(query)
-    saveSearchHistory(query) // Save to recent searches
+    // Search history is automatically managed by useSearchV2
   }
 
   const handleSuggestionClick = (suggestion: string) => {
@@ -407,11 +413,11 @@ export default function SearchPage() {
                     key={index}
                     variant="outline"
                     size="sm"
-                    onClick={() => handleSearch(search)}
+                    onClick={() => handleSearch(search.query)}
                     className="text-sm"
                   >
                     <span className="mr-2 text-primary font-semibold">{index + 1}</span>
-                    {search}
+                    {search.query}
                   </Button>
                 ))}
               </div>

@@ -1,3 +1,4 @@
+'use client'
 import MainLayout from '@/components/layout/MainLayout'
 import ResourceDetailPage from '@/components/resources/ResourceDetailPage'
 import PermissionGate from '@/components/shared/PermissionGate'

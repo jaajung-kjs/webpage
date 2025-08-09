@@ -29,8 +29,8 @@ export function useContentPrefetch() {
       queryKey: cacheKeys.content.detail(contentId),
       queryFn: async () => {
         const { data, error } = await supabaseClient
-          .from('content_with_author')
-          .select('*')
+          .from('content_v2')
+          .select('*, author:users_v2!author_id(id, name, email)')
           .eq('id', contentId)
           .single()
         
@@ -151,7 +151,7 @@ export function useProfilePrefetch() {
       queryKey: cacheKeys.profile.detail(userId),
       queryFn: async () => {
         const { data, error } = await supabaseClient
-          .from('users')
+          .from('users_v2')
           .select('*')
           .eq('id', userId)
           .single()
@@ -199,8 +199,8 @@ export function useRoutePrefetch() {
           queryKey: cacheKeys.content.list({ content_type: 'community', page: 1 }),
           queryFn: async () => {
             const { data } = await supabaseClient
-              .from('content_with_author')
-              .select('*')
+              .from('content_v2')
+              .select('*, author:users_v2!author_id(id, name, email)')
               .eq('content_type', 'community')
               .order('created_at', { ascending: false })
               .limit(10)
@@ -216,7 +216,7 @@ export function useRoutePrefetch() {
           queryKey: cacheKeys.members.list(),
           queryFn: async () => {
             const { data } = await supabaseClient
-              .from('users')
+              .from('users_v2')
               .select('*')
               .in('role', ['member', 'leader', 'vice-leader', 'admin'])
               .order('created_at', { ascending: false })
@@ -227,19 +227,15 @@ export function useRoutePrefetch() {
         break
         
       case '/messages':
-        // 메시지 페이지: 최근 대화
-        await queryClient.prefetchQuery({
-          queryKey: ['conversations'],
-          queryFn: async () => {
-            const { data } = await supabaseClient
-              .from('conversations')
-              .select('*')
-              .order('last_message_at', { ascending: false })
-              .limit(20)
-            return data
-          },
-          staleTime: getStaleTime('messages'),
-        })
+        // 메시지 페이지: 최근 대화 (V2에서는 아직 구현되지 않음)
+        // await queryClient.prefetchQuery({
+        //   queryKey: ['conversations'],
+        //   queryFn: async () => {
+        //     // TODO: V2 메시징 시스템 구현 후 활성화
+        //     return []
+        //   },
+        //   staleTime: getStaleTime('messages'),
+        // })
         break
     }
   }, [queryClient])
@@ -269,8 +265,8 @@ export function useSearchPrefetch() {
       queryKey: searchKey,
       queryFn: async () => {
         const { data } = await supabaseClient
-          .from('content_with_author')
-          .select('*')
+          .from('content_v2')
+          .select('*, author:users_v2!author_id(id, name, email)')
           .textSearch('title', query)
           .limit(20)
         return data

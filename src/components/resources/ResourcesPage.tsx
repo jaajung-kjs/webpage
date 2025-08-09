@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/providers'
-import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useContentV2 } from '@/hooks/features/useContentV2'
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
@@ -35,14 +35,28 @@ const sortOptions = [
 
 export default function ResourcesPage() {
   const router = useRouter()
-  const { user, profile } = useAuth()
+  const { user, isMember } = useAuthV2()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
   
-  // Use new architecture Hooks
-  const { data: resources, isLoading: loading, refetch } = useContentList('resource')
-  const deleteContentMutation = useDeleteContent()
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  
+  const { 
+    data: resourcesData, 
+    isPending: loading,
+    refetch
+  } = contentV2.useInfiniteContents(
+    { type: 'resource' },
+    sortBy === 'latest' ? 'created_at' : 
+    sortBy === 'popular' ? 'like_count' : 
+    sortBy === 'views' ? 'view_count' : 'created_at',
+    'desc',
+    50
+  )
+  
+  const resources = resourcesData?.pages.flatMap(page => page.contents) || []
 
   // Filter and sort resources
   const filteredResources = useMemo(() => {
@@ -50,9 +64,11 @@ export default function ResourcesPage() {
     
     let filtered = [...resources]
     
-    // Category filter
+    // Category filter - V2에서는 categories 관계 사용
     if (activeCategory !== 'all') {
-      filtered = filtered.filter(resource => resource.category === activeCategory)
+      filtered = filtered.filter(resource => 
+        (resource as any)?.categories?.some((cat: any) => cat.slug === activeCategory)
+      )
     }
     
     // Search filter
@@ -61,8 +77,8 @@ export default function ResourcesPage() {
       filtered = filtered.filter(resource => 
         resource.title?.toLowerCase().includes(searchLower) ||
         resource.content?.toLowerCase().includes(searchLower) ||
-        resource.author_name?.toLowerCase().includes(searchLower) ||
-        resource.tags?.some((tag: string) => tag.toLowerCase().includes(searchLower))
+        resource.author?.name?.toLowerCase().includes(searchLower) ||
+        resource.tags?.some((tag: any) => tag.name?.toLowerCase().includes(searchLower) || tag.slug?.toLowerCase().includes(searchLower))
       )
     }
     
@@ -74,7 +90,7 @@ export default function ResourcesPage() {
         case 'views':
           return (b.view_count || 0) - (a.view_count || 0)
         case 'downloads':
-          return ((b.metadata as any)?.downloads || 0) - ((a.metadata as any)?.downloads || 0)
+          return ((b as any)?.interaction_counts?.downloads || 0) - ((a as any)?.interaction_counts?.downloads || 0)
         case 'latest':
         default:
           return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
@@ -92,7 +108,7 @@ export default function ResourcesPage() {
       return resourceDate.toDateString() === today.toDateString()
     }).length || 0,
     totalViews: resources?.reduce((sum, r) => sum + (r.view_count || 0), 0) || 0,
-    totalDownloads: resources?.reduce((sum, r) => sum + ((r.metadata as any)?.downloads || 0), 0) || 0
+    totalDownloads: resources?.reduce((sum, r) => sum + ((r as any)?.interaction_counts?.downloads || 0), 0) || 0
   }
 
   // Handle delete
@@ -102,7 +118,7 @@ export default function ResourcesPage() {
     }
     
     try {
-      await deleteContentMutation.mutateAsync({ id: id, contentType: 'resource' })
+      await contentV2.deleteContentAsync(id)
       toast.success('자료가 삭제되었습니다.')
       refetch()
     } catch (error: any) {
@@ -111,18 +127,13 @@ export default function ResourcesPage() {
     }
   }
 
-  // Check permissions
+  // Check permissions - V2에서는 user만 사용 (역할은 별도 처리)
   const canEdit = (item: any) => {
-    return !!(user && profile && item.author_id === user.id)
+    return !!(user && (user as any)?.id === item.author_id)
   }
 
   const canDelete = (item: any) => {
-    return !!(user && profile && (
-      profile.role === 'admin' || 
-      profile.role === 'leader' || 
-      profile.role === 'vice-leader' || 
-      item.author_id === user.id
-    ))
+    return !!(user && (user as any)?.id === item.author_id)
   }
 
   // Categories for tabs
@@ -190,7 +201,7 @@ export default function ResourcesPage() {
         resultCount={filteredResources.length}
         emptyMessage="자료가 없습니다."
         emptyAction={
-          user && (
+          (user ? (
             <Button 
               className="kepco-gradient" 
               onClick={() => router.push('/resources/new')}
@@ -198,7 +209,7 @@ export default function ResourcesPage() {
               <Plus className="mr-2 h-4 w-4" />
               첫 번째 자료를 공유해보세요!
             </Button>
-          )
+          ) : null) as React.ReactNode
         }
       >
         {(currentViewMode) => (

@@ -35,7 +35,8 @@ import { Search, MoreVertical, UserCog, UserMinus, Crown, Shield, UserCheck, Use
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
-import { useMembers, useUpdateMemberRole, useDeleteMember, type MemberWithStats } from '@/hooks/features/useMembers'
+import { useMembersV2, useUpdateMemberRoleV2, type MemberWithStatsV2 } from '@/hooks/features/useMembersV2'
+import { type UserRole } from '@/hooks/features'
 import { useDeleteUserCompletely } from '@/hooks/features/useEdgeFunctions'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import type { UserMetadata } from '@/lib/types'
@@ -74,9 +75,9 @@ const roleColors = {
 export default function MemberManagement() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
-  const { data: membersData = [], isLoading: loading } = useMembers()
-  const updateMemberRoleMutation = useUpdateMemberRole()
-  const deleteMemberMutation = useDeleteMember()
+  const { data: membersData = [], isLoading: loading } = useMembersV2()
+  const updateMemberRoleMutation = useUpdateMemberRoleV2()
+  // const deleteMemberMutation = useDeleteMember() // TODO: Implement in V2
   const deleteUserCompletelyMutation = useDeleteUserCompletely()
   
   const [searchTerm, setSearchTerm] = useState('')
@@ -87,17 +88,16 @@ export default function MemberManagement() {
   // Transform members data to expected format
   const members = useMemo<MemberData[]>(() => {
     return Array.isArray(membersData) 
-      ? membersData.map((userData: MemberWithStats) => ({
+      ? membersData.map((userData: MemberWithStatsV2) => ({
           id: userData.id || '',
           name: userData.name || '',
           email: userData.email || '',
           role: userData.role || 'guest',
           department: userData.department === '미지정' ? null : userData.department,
           created_at: userData.created_at || '',
-          activity_score: userData.activity_score || 0,
-          post_count: userData.posts_count || 0,
-          comment_count: userData.comments_count || 0,
-          metadata: userData.metadata || {}
+          activity_score: userData.stats?.activity_score || 0,
+          post_count: userData.stats?.content_count || 0,
+          comment_count: userData.stats?.comment_count || 0
         }))
       : []
   }, [membersData])
@@ -135,7 +135,7 @@ export default function MemberManagement() {
     try {
       await updateMemberRoleMutation.mutateAsync({
         userId: memberId,
-        newRole: newRole as Database['public']['Enums']['user_role']
+        newRole: newRole as UserRole
       })
 
       const member = members.find(m => m.id === memberId)

@@ -8,8 +8,8 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuth } from '@/providers'
-import { useStartConversation, useSendMessage } from '@/hooks/features/useMessages'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
@@ -46,16 +46,16 @@ export function MessageButton({
   disabled,
   onMessageSent
 }: MessageButtonProps) {
-  const { user, isMember } = useAuth()
+  const { user, isMember } = useAuthV2()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   
-  const startConversation = useStartConversation()
-  const sendMessage = useSendMessage()
+  const createConversation = useCreateConversationV2()
+  const sendMessage = useSendMessageV2()
   const sending = sendMessage.isPending
 
   // 자신에게는 메시지를 보낼 수 없음
-  if (!user || !isMember || user.id === recipientId) {
+  if (!user || !isMember || (user as any)?.id === recipientId) {
     return null
   }
 
@@ -63,14 +63,10 @@ export function MessageButton({
     if (!message.trim() || sending) return
 
     try {
-      // 대화방 찾기 또는 생성
-      const conversationId = await startConversation.mutateAsync(recipientId)
-
-      // 메시지 전송
-      await sendMessage.mutateAsync({
-        conversationId,
-        recipientId,
-        content: message.trim()
+      // 대화방 생성 (이미 있으면 기존 것 반환)
+      const conversationId = await createConversation.mutateAsync({
+        participant_id: recipientId,
+        initial_message: message.trim()
       })
 
       // 성공 처리

@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuth } from '@/providers'
-import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useContentV2 } from '@/hooks/features/useContentV2'
 
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
@@ -37,59 +37,60 @@ const sortOptions = [
 
 export default function CommunityPage() {
   const router = useRouter()
-  const { user, profile } = useAuth()
+  const { user } = useAuthV2()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
   
-  // Use Supabase hooks
-  const { data: posts, isLoading: loading, refetch } = useContentList('post')
-  const deleteContentMutation = useDeleteContent()
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  
+  // Map sortBy to V2 format
+  const getSortByV2 = (sort: string) => {
+    switch (sort) {
+      case 'latest': return 'created_at'
+      case 'popular': return 'like_count'
+      case 'views': return 'view_count'
+      case 'comments': return 'comment_count'
+      default: return 'created_at'
+    }
+  }
+  
+  const { data: postsData, isLoading: loading } = contentV2.useInfiniteContents(
+    {
+      type: 'community',
+      categoryId: activeCategory === 'all' ? undefined : activeCategory,
+      searchQuery: searchTerm || undefined
+    },
+    getSortByV2(sortBy),
+    'desc',
+    100 // Large page size to get all at once for now
+  )
+  
+  const posts = useMemo(() => {
+    return postsData?.pages.flatMap(page => page.contents) || []
+  }, [postsData])
 
-  // Filter and sort posts
+  // V2 hooks handle filtering and sorting server-side, so we just need final client-side adjustments
   const filteredPosts = useMemo(() => {
     if (!posts) return []
     
     let filtered = [...posts]
     
-    // Category filter
-    if (activeCategory !== 'all') {
-      filtered = filtered.filter(post => post.category === activeCategory)
-    }
-    
-    // Search filter
-    if (searchTerm) {
-      const searchLower = searchTerm.toLowerCase()
-      filtered = filtered.filter(post => 
-        post.title?.toLowerCase().includes(searchLower) ||
-        post.content?.toLowerCase().includes(searchLower) ||
-        post.author_name?.toLowerCase().includes(searchLower)
-      )
-    }
-    
-    // Sorting
+    // Handle pinned posts priority (V2 schema uses is_pinned field directly)
     filtered.sort((a, b) => {
-      const aIsPinned = (a.metadata as any)?.is_pinned || false
-      const bIsPinned = (b.metadata as any)?.is_pinned || false
+      const aIsPinned = a.is_pinned || false
+      const bIsPinned = b.is_pinned || false
       
       if (aIsPinned && !bIsPinned) return -1
       if (!aIsPinned && bIsPinned) return 1
       
-      switch (sortBy) {
-        case 'popular':
-          return (b.like_count || 0) - (a.like_count || 0)
-        case 'views':
-          return (b.view_count || 0) - (a.view_count || 0)
-        case 'comments':
-          return (b.comment_count || 0) - (a.comment_count || 0)
-        case 'latest':
-        default:
-          return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
-      }
+      // If both are pinned or both are not pinned, maintain existing order (already sorted by server)
+      return 0
     })
     
     return filtered
-  }, [posts, activeCategory, searchTerm, sortBy])
+  }, [posts])
 
   const stats = {
     totalPosts: posts?.length || 0,
@@ -98,7 +99,7 @@ export default function CommunityPage() {
       const today = new Date()
       return postDate.toDateString() === today.toDateString()
     }).length || 0,
-    totalViews: posts?.reduce((sum, p) => sum + (p.view_count || 0), 0) || 0,
+    totalViews: posts?.reduce((sum, p) => sum + (p.interaction_counts?.views || 0), 0) || 0,
     totalComments: posts?.reduce((sum, p) => sum + (p.comment_count || 0), 0) || 0
   }
 
@@ -109,26 +110,25 @@ export default function CommunityPage() {
     }
     
     try {
-      await deleteContentMutation.mutateAsync({ id: id, contentType: 'community' })
+      await contentV2.deleteContentAsync(id)
       toast.success('게시글이 삭제되었습니다.')
-      refetch()
     } catch (error: any) {
       console.error('Error deleting post:', error)
       toast.error(error.message || '게시글 삭제에 실패했습니다.')
     }
   }
 
-  // Check permissions
-  const canEdit = (item: Tables<'content_with_author'>) => {
-    return !!(user && profile && item.author_id === user.id)
+  // Check permissions - V2 uses ContentWithRelations type
+  const canEdit = (item: any) => {
+    return !!(user && item.author_id === (user as any)?.id)
   }
 
-  const canDelete = (item: Tables<'content_with_author'>) => {
-    return !!(user && profile && (
-      profile.role === 'admin' || 
-      profile.role === 'leader' || 
-      profile.role === 'vice-leader' || 
-      item.author_id === user.id
+  const canDelete = (item: any) => {
+    return !!(user && (
+      (user as any)?.role === 'admin' || 
+      (user as any)?.role === 'leader' || 
+      (user as any)?.role === 'vice-leader' || 
+      item.author_id === (user as any)?.id
     ))
   }
 
@@ -159,7 +159,7 @@ export default function CommunityPage() {
       />
       <StatsCard
         title="고정 게시글"
-        value={loading ? 0 : posts?.filter(p => (p.metadata as any)?.is_pinned).length || 0}
+        value={loading ? 0 : posts?.filter(p => p.is_pinned).length || 0}
         icon={Tag}
         loading={loading}
       />
@@ -197,7 +197,7 @@ export default function CommunityPage() {
         resultCount={filteredPosts.length}
         emptyMessage="게시글이 없습니다."
         emptyAction={
-          user && (
+          user ? (
             <Button 
               className="kepco-gradient" 
               onClick={() => router.push('/community/new')}
@@ -205,7 +205,7 @@ export default function CommunityPage() {
               <Plus className="mr-2 h-4 w-4" />
               첫 번째 게시글을 작성해보세요!
             </Button>
-          )
+          ) : null
         }
       >
         {(currentViewMode) => (

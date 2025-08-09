@@ -9,6 +9,7 @@
 
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js'
 import type { Database } from '../database.types'
+import { getEnvConfig } from '../config/environment'
 
 // 연결 상태 타입
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
@@ -53,16 +54,13 @@ export class ConnectionCore {
   private visibilityHandler: (() => void) | null = null
 
   private constructor() {
-    // 환경 변수 검증
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-    if (!supabaseUrl || !supabaseAnonKey) {
-      throw new Error('Missing Supabase environment variables')
-    }
+    // 환경 설정 가져오기
+    const envConfig = getEnvConfig()
+    
+    console.log(`[ConnectionCore] Initializing in ${envConfig.environment} mode`)
 
     // Supabase 클라이언트 생성 (단일 인스턴스)
-    this.client = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    this.client = createClient<Database>(envConfig.supabaseUrl, envConfig.supabaseAnonKey, {
       auth: {
         autoRefreshToken: true,
         persistSession: true,

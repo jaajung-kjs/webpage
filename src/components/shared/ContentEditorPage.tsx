@@ -34,7 +34,7 @@ import {
 import Link from 'next/link'
 import { toast } from 'sonner'
 import { useAuth } from '@/providers'
-import { useContent, useCreateContent, useUpdateContent } from '@/hooks/features/useContent'
+import { useContentV2 } from '@/hooks/features/useContentV2'
 import { TablesInsert, TablesUpdate, Tables } from '@/lib/database.types'
 import ContentListLayout from './ContentListLayout'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -79,11 +79,12 @@ export default function ContentEditorPage({
 }: ContentEditorPageProps) {
   const router = useRouter()
   const { user, profile } = useAuth()
-  const createMutation = useCreateContent()
-  const updateMutation = useUpdateContent()
+  
+  // Use V2 hooks
+  const contentV2 = useContentV2()
   
   // Use custom query for edit mode to disable auto-refetch
-  const { data: existingContent, isLoading: loadingContent } = useContent(editId)
+  const { data: existingContent, isPending: loadingContent } = contentV2.useContent(editId || '')
   
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -105,9 +106,9 @@ export default function ContentEditorPage({
   useEffect(() => {
     if (isEditMode && existingContent) {
       form.setValue('title', existingContent.title || '')
-      form.setValue('category', existingContent.category || '')
+      form.setValue('category', (existingContent as any).category || '')
       form.setValue('content', existingContent.content || '')
-      form.setValue('tags', existingContent.tags || [])
+      form.setValue('tags', (existingContent.tags || []).map((tag: any) => typeof tag === 'string' ? tag : tag.name))
     }
   }, [isEditMode, existingContent, form])
 
@@ -221,30 +222,35 @@ export default function ContentEditorPage({
       
       if (isEditMode) {
         // Update existing content
-        const updates: TablesUpdate<'content'> = {
+        const updates: TablesUpdate<'content_v2'> = {
           title: values.title.trim(),
           content: values.content.trim(),
-          category: values.category,
-          tags: values.tags || [],
           updated_at: new Date().toISOString()
         }
 
-        await updateMutation.mutateAsync({ id: editId!, updates })
+        await new Promise((resolve, reject) => {
+          contentV2.updateContent({ id: editId!, updates }, { 
+            onSuccess: resolve, 
+            onError: reject 
+          })
+        })
         contentId = editId!
       } else {
         // Create new content
-        const newContent: TablesInsert<'content'> = {
-          type: contentType,
+        const newContent: TablesInsert<'content_v2'> = {
+          content_type: contentType,
           title: values.title.trim(),
           content: values.content.trim(),
-          category: values.category,
-          tags: values.tags || [],
-          author_id: user.id,
-          status: 'published'
+          author_id: (user as any).id
         }
 
-        const result = await createMutation.mutateAsync(newContent)
-        contentId = result.id
+        const result = await new Promise((resolve, reject) => {
+          contentV2.createContent(newContent, { 
+            onSuccess: resolve, 
+            onError: reject 
+          })
+        })
+        contentId = (result as any).id
       }
 
       // Clear draft on successful submission
@@ -535,10 +541,10 @@ export default function ContentEditorPage({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={createMutation.isPending || updateMutation.isPending || isSubmitting}
+                  disabled={isSubmitting}
                   className="kepco-gradient"
                 >
-                  {(createMutation.isPending || updateMutation.isPending || isSubmitting) && (
+                  {isSubmitting && (
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   <Save className="mr-2 h-4 w-4" />

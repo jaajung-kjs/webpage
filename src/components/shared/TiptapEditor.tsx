@@ -29,9 +29,9 @@ import {
   AlignRight
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { supabaseClient } from '@/lib/core/connection-core'
 import { cn } from '@/lib/utils'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useImageUploadForEditor, useMultipleFileUploadForEditor } from '@/hooks/features/useFileUploadV2'
 
 interface TiptapEditorProps {
   value: string
@@ -48,9 +48,14 @@ export default function TiptapEditor({
   height = 400,
   className
 }: TiptapEditorProps) {
-  const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const isMobile = useIsMobile()
+  
+  // V2 Hooks for file upload
+  const imageUploadMutation = useImageUploadForEditor()
+  const fileUploadMutation = useMultipleFileUploadForEditor()
+  
+  const uploading = imageUploadMutation.isPending || fileUploadMutation.isPending
 
   // Initialize editor
   const editor = useEditor({
@@ -134,42 +139,16 @@ export default function TiptapEditor({
   const handleImageUpload = async (files: File[]) => {
     if (!editor) return
     
-    setUploading(true)
-    
     try {
       for (const file of files) {
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          toast.error(`${file.name} is too large. Maximum size is 5MB.`)
-          continue
-        }
-
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-        const filePath = `content/${fileName}`
-
-        // Upload to Supabase Storage
-        const { data, error } = await supabaseClient.storage
-          .from('attachments')
-          .upload(filePath, file)
-
-        if (error) throw error
-
-        // Get public URL
-        const { data: { publicUrl } } = supabaseClient.storage
-          .from('attachments')
-          .getPublicUrl(filePath)
-
-        // Insert image at current position
-        editor.chain().focus().setImage({ src: publicUrl }).run()
+        const result = await imageUploadMutation.mutateAsync(file)
+        editor.chain().focus().setImage({ src: result.url }).run()
       }
       
       toast.success(`${files.length}개 이미지가 업로드되었습니다.`)
     } catch (error: any) {
       console.error('Error uploading images:', error)
-      toast.error('이미지 업로드에 실패했습니다.')
-    } finally {
-      setUploading(false)
+      // 에러 처리는 V2 훅에서 자동으로 처리됨
     }
   }
 
@@ -177,34 +156,18 @@ export default function TiptapEditor({
   const handleFileUpload = async (files: File[]) => {
     if (!editor) return
     
-    setUploading(true)
-    
     try {
-      for (const file of files) {
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
-        const filePath = `content/${fileName}`
-
-        // Upload to Supabase Storage
-        const { data, error } = await supabaseClient.storage
-          .from('attachments')
-          .upload(filePath, file)
-
-        if (error) throw error
-
-        // Get public URL
-        const { data: { publicUrl } } = supabaseClient.storage
-          .from('attachments')
-          .getPublicUrl(filePath)
-
-        // Insert as link for non-image files
-        if (file.type.startsWith('image/')) {
-          editor.chain().focus().setImage({ src: publicUrl }).run()
+      const results = await fileUploadMutation.mutateAsync(files)
+      
+      for (const result of results) {
+        // Insert as image or link based on file type
+        if (result.type.startsWith('image/')) {
+          editor.chain().focus().setImage({ src: result.url }).run()
         } else {
           editor
             .chain()
             .focus()
-            .insertContent(`<a href="${publicUrl}" target="_blank">📎 ${file.name}</a>`)
+            .insertContent(`<a href="${result.url}" target="_blank">📎 ${result.name}</a>`)
             .run()
         }
       }
@@ -212,9 +175,7 @@ export default function TiptapEditor({
       toast.success(`${files.length}개 파일이 업로드되었습니다.`)
     } catch (error: any) {
       console.error('Error uploading files:', error)
-      toast.error('파일 업로드에 실패했습니다.')
-    } finally {
-      setUploading(false)
+      // 에러 처리는 V2 훅에서 자동으로 처리됨
     }
   }
 

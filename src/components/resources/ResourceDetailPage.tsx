@@ -14,10 +14,10 @@ import {
   ExternalLink,
   Tag
 } from 'lucide-react'
-import { useContent, useToggleLike, useDeleteContent, useIsLiked, useUpdateContent, useIncrementView } from '@/hooks/features/useContent'
-import { useIsBookmarked, useToggleBookmark } from '@/hooks/features/useBookmarks'
+import { useContentV2 } from '@/hooks/features/useContentV2'
+import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
-import { useAuth } from '@/providers'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { toast } from 'sonner'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
@@ -61,42 +61,37 @@ const typeIcons = {
 }
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
-  const { user, profile, isMember } = useAuth()
+  const { user, isMember } = useAuthV2()
   const router = useRouter()
   
-  // Use hooks
-  const { data: resourceData, isLoading: loading, error } = useContent(resourceId)
-  const { data: isLikedFromHook } = useIsLiked(resourceId)
-  const toggleLikeMutation = useToggleLike()
-  const updateContentMutation = useUpdateContent()
-  const deleteContentMutation = useDeleteContent()
-  const incrementViewMutation = useIncrementView()
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  const interactionsV2 = useInteractionsV2()
   
-  // Derive like state from query data
-  const isLiked = isLikedFromHook || false
-  const likeCount = resourceData?.like_count || 0
+  const { data: resourceData, isPending: loading, error } = contentV2.useContent(resourceId)
+  const { data: interactionStats } = interactionsV2.useInteractionStats(resourceId, 'content')
+  const { data: userInteractions } = interactionsV2.useUserInteractions(resourceId, 'content')
+  
+  // Derive interaction states
+  const isLiked = (userInteractions as any)?.user_liked || false
+  const likeCount = (interactionStats as any)?.like_count || 0
+  const isBookmarked = (userInteractions as any)?.user_bookmarked || false
+  
   const downloadCount = useMemo(() => {
-    if (resourceData?.metadata) {
-      const metadata = resourceData.metadata as any
-      return metadata?.downloads || 0
-    }
-    return 0
+    // V2에서는 interaction_counts에서 다운로드 수를 가져옴
+    return (resourceData as any)?.interaction_counts?.downloads || 0
   }, [resourceData])
   
-  // Use bookmark hooks
-  const { data: isBookmarkedData } = useIsBookmarked(resourceId)
-  const toggleBookmarkMutation = useToggleBookmark()
-  
   // Use mutation loading states
-  const likeLoading = toggleLikeMutation.isPending
-  const deleteLoading = deleteContentMutation.isPending
-  const updateLoading = updateContentMutation.isPending
-  const bookmarkLoading = toggleBookmarkMutation.isPending
+  const likeLoading = interactionsV2.isToggling
+  const bookmarkLoading = interactionsV2.isToggling
+  const deleteLoading = contentV2.isDeleting
+  const updateLoading = contentV2.isUpdating
 
-  // Increment view count when resource is loaded
+  // V2에서는 view count를 interaction으로 처리
   useEffect(() => {
     if (resourceData?.id) {
-      incrementViewMutation.mutate(resourceData.id)
+      // TODO: view interaction 추가 또는 별도 view count API 호출
     }
   }, [resourceData?.id])
 
@@ -110,8 +105,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
   }, [error])
 
-  // Bookmark state is now managed by the hook
-  const isBookmarked = isBookmarkedData || false
+  // Bookmark state is now managed by V2 interactions hook
 
   const handleLike = async () => {
     if (!user) {
@@ -128,8 +122,12 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     if (likeLoading) return
 
     try {
-      const isNowLiked = await toggleLikeMutation.mutateAsync(resourceId)
-      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+      await interactionsV2.toggleInteractionAsync({
+        targetId: resourceId,
+        targetType: 'content',
+        interactionType: 'like'
+      })
+      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
@@ -150,26 +148,17 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
 
     try {
-      // Update download count in metadata
-      const metadata = resourceData.metadata as any
-      const newMetadata = {
-        ...metadata,
-        downloads: (metadata?.downloads || 0) + 1
-      }
+      // V2에서는 다운로드 이벤트를 interaction으로 처리
+      // TODO: 다운로드 interaction 추가 
       
-      await updateContentMutation.mutateAsync({
-        id: resourceId,
-        updates: {
-          metadata: newMetadata
-        }
-      })
-
-      // Handle download based on resource type
-      if (metadata?.url) {
-        window.open(metadata.url, '_blank')
-      } else if (metadata?.file_url) {
+      // Handle download - V2에서는 다른 방식으로 URL 저장됨
+      const resourceUrl = (resourceData as any)?.url || (resourceData as any)?.content_url
+      if (resourceUrl) {
+        window.open(resourceUrl, '_blank')
+      } else {
+        // V2에서는 파일 URL 구조가 다름
         const link = document.createElement('a')
-        link.href = metadata.file_url
+        link.href = resourceUrl || '#'
         link.download = resourceData.title || 'download'
         document.body.appendChild(link)
         link.click()
@@ -184,12 +173,28 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   }
 
   const handleBookmark = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 북마크를 사용할 수 있습니다.')
+      return
+    }
+
     if (bookmarkLoading) return
     
     try {
-      await toggleBookmarkMutation.mutateAsync(resourceId)
-    } catch (error) {
-      // Error is handled by the mutation hook
+      await interactionsV2.toggleInteractionAsync({
+        targetId: resourceId,
+        targetType: 'content',
+        interactionType: 'bookmark'
+      })
+      toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling bookmark:', error)
+      toast.error(error.message || '북마크 처리에 실패했습니다.')
     }
   }
 
@@ -209,7 +214,7 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     }
 
     try {
-      await deleteContentMutation.mutateAsync({ id: resourceId, contentType: 'resource' })
+      await contentV2.deleteContentAsync(resourceId)
       
       toast.success('학습자료가 삭제되었습니다.')
       router.push('/resources')
@@ -243,34 +248,34 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
     )
   }
 
-  const metadata = (resourceData.metadata || {}) as any
-  const TypeIcon = typeIcons[metadata?.type as keyof typeof typeIcons] || File
+  // V2에서는 metadata가 별도 테이블에 있거나 content_type 필드 사용
+  const TypeIcon = typeIcons['document' as keyof typeof typeIcons] || File
 
   return (
     <DetailLayout
       title={resourceData.title || ''}
       content={resourceData.content || ''}
       author={{
-        id: resourceData.author_id || '',
-        name: resourceData.author_name || '익명',
-        avatar: resourceData.author_avatar_url || undefined,
-        department: resourceData.author_department || undefined
+        id: resourceData.author?.id || resourceData.author_id || '',
+        name: resourceData.author?.name || '익명',
+        avatar: resourceData.author?.avatar_url || undefined,
+        department: resourceData.author?.department || undefined
       }}
       createdAt={resourceData.created_at || new Date().toISOString()}
       viewCount={resourceData.view_count || 0}
       category={{
-        label: categoryLabels[resourceData.category as keyof typeof categoryLabels] || '자료',
-        value: resourceData.category || 'resource',
-        color: categoryColors[resourceData.category as keyof typeof categoryColors],
+        label: categoryLabels['reference' as keyof typeof categoryLabels] || '자료',
+        value: 'resource',
+        color: categoryColors['reference' as keyof typeof categoryColors],
         icon: BookOpen
       }}
-      tags={resourceData.tags || []}
+      tags={resourceData.tags?.map(tag => tag.name || tag.slug) || []}
       likeCount={likeCount}
       commentCount={resourceData.comment_count || 0}
       isLiked={isLiked}
       isBookmarked={isBookmarked}
-      canEdit={!!(user && user.id === resourceData.author_id)}
-      canDelete={!!(user && (user.id === resourceData.author_id || ['admin', 'leader', 'vice-leader'].includes(profile?.role || '')))}
+      canEdit={!!(user && (user as any)?.id === resourceData.author_id)}
+      canDelete={!!(user && ((user as any)?.id === resourceData.author_id || (user as any)?.id === resourceData.author?.id))}
       onLike={handleLike}
       onBookmark={handleBookmark}
       onShare={handleShare}
@@ -282,12 +287,12 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
           <div className="mb-4">
             <Badge variant="outline">
               <TypeIcon className="mr-1 h-3 w-3" />
-              {typeLabels[metadata?.type as keyof typeof typeLabels] || '자료'}
+              {typeLabels['document' as keyof typeof typeLabels] || '자료'}
             </Badge>
           </div>
 
           {/* Resource info */}
-          {(metadata?.url || metadata?.file_url) && (
+          {downloadCount > 0 && (
             <div className="space-y-4">
               <h4 className="font-semibold">자료 정보</h4>
               <div className="rounded-lg bg-gray-50 dark:bg-gray-900 p-4 space-y-2">

@@ -1,3 +1,11 @@
+/**
+ * LoginDialog Component - V2 Migration
+ * 
+ * Authentication dialog with sign-in and sign-up functionality
+ * Uses useAuthV2 for user state and Supabase auth directly for auth operations
+ * Migration: useAuthV2 + direct supabaseClient.auth calls
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -23,7 +31,9 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAuth } from '@/providers'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useMutation } from '@tanstack/react-query'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 // import { logger } from '@/lib/logger'
@@ -56,7 +66,12 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false)
   const [emailForVerification, setEmailForVerification] = useState('')
-  const { signIn, signUp, user } = useAuth()
+  const { 
+    signOut, // V2 uses signOut mutation, sign-in/up handled directly with Supabase
+    user, // V2 returns user as V2 profile data
+    isAuthenticated,
+    updateProfile
+  } = useAuthV2()
   const router = useRouter()
 
   // Update activeTab when defaultTab changes
@@ -86,7 +101,10 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     setLoading(true)
     try {
-      const { error } = await signIn(values.email, values.password)
+      const { error } = await supabaseClient.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      })
       
       if (error) {
         // 이메일 인증 관련 에러 체크 먼저 (로그 출력 전에)
@@ -147,14 +165,16 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onSignup = async (values: z.infer<typeof signupSchema>) => {
     setLoading(true)
     try {
-      const { error } = await signUp(
-        values.email,
-        values.password,
-        {
-          name: values.name,
-          department: values.department
+      const { error } = await supabaseClient.auth.signUp({
+        email: values.email,
+        password: values.password,
+        options: {
+          data: {
+            name: values.name,
+            department: values.department
+          }
         }
-      )
+      })
       
       if (error) {
         // 개발 환경에서만 에러 로그 출력

@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/providers'
-import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+import { useContentV2 } from '@/hooks/features/useContentV2'
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { getBoardCategoryData } from '@/lib/categories'
@@ -31,10 +31,19 @@ export default function CasesListPage() {
   const [sortBy, setSortBy] = useState('latest')
   
   const { user, profile } = useAuth()
-  const deleteContentMutation = useDeleteContent()
   
-  // Use new architecture Hook
-  const { data: cases, isLoading: loading, refetch } = useContentList('case')
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  
+  const { 
+    data: casesData, 
+    isPending: loading,
+    refetch
+  } = contentV2.useInfiniteContents({
+    type: 'case'
+  }, sortBy as any)
+  
+  const cases = casesData?.pages.flatMap(page => page.contents) || []
   
   // Filter and sort cases
   const filteredCases = useMemo(() => {
@@ -48,7 +57,7 @@ export default function CasesListPage() {
       filtered = filtered.filter(item => 
         item.title?.toLowerCase().includes(lowerSearch) ||
         item.content?.toLowerCase().includes(lowerSearch) ||
-        item.tags?.some((tag: string) => tag.toLowerCase().includes(lowerSearch))
+        item.tags?.some((tag: any) => tag.name?.toLowerCase().includes(lowerSearch))
       )
     }
     
@@ -56,9 +65,9 @@ export default function CasesListPage() {
     filtered.sort((a, b) => {
       switch (sortBy) {
         case 'popular':
-          return (b.like_count || 0) - (a.like_count || 0)
+          return (b.interaction_counts?.likes || 0) - (a.interaction_counts?.likes || 0)
         case 'views':
-          return (b.view_count || 0) - (a.view_count || 0)
+          return (b.interaction_counts?.views || 0) - (a.interaction_counts?.views || 0)
         case 'comments':
           return (b.comment_count || 0) - (a.comment_count || 0)
         case 'latest':
@@ -78,7 +87,7 @@ export default function CasesListPage() {
     }
     
     try {
-      await deleteContentMutation.mutateAsync({ id: id, contentType: 'case' })
+      await contentV2.deleteContentAsync(id)
       toast.success('활용사례가 삭제되었습니다.')
       refetch()
     } catch (error: any) {

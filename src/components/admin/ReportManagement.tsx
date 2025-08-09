@@ -36,7 +36,7 @@ import {
   ExternalLink
 } from 'lucide-react'
 import { useAuth } from '@/providers'
-import { useReports, useUpdateReport, type ReportWithDetails } from '@/hooks/features/useReports'
+import { useReportsV2, useUpdateReportV2 } from '@/hooks/features/useReportsV2'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { ko } from 'date-fns/locale'
@@ -61,28 +61,28 @@ export default function ReportManagement() {
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'reviewing' | 'resolved' | 'dismissed'>('all')
   
   // Dialog state
-  const [selectedReport, setSelectedReport] = useState<ReportWithDetails | null>(null)
+  const [selectedReport, setSelectedReport] = useState<any | null>(null)
   const [actionDialogOpen, setActionDialogOpen] = useState(false)
   const [actionType, setActionType] = useState<'reviewing' | 'resolved' | 'dismissed'>('resolved')
   const [resolutionNotes, setResolutionNotes] = useState('')
 
-  // Fetch reports using TanStack Query hook
-  const { data: reports = [], isLoading, refetch } = useReports(
+  // Fetch reports using V2 hook
+  const { data: reports = [], isPending: isLoading, refetch } = useReportsV2(
     activeTab === 'all' ? undefined : { status: activeTab as any }
   )
   
   // Update report mutation
-  const updateReportMutation = useUpdateReport()
+  const updateReportMutation = useUpdateReportV2()
 
   // Filter reports based on active tab
   const filteredReports = useMemo(() => {
     if (activeTab === 'all') {
       return reports
     }
-    return reports.filter(report => report.status === activeTab)
+    return reports.filter(report => report.report.metadata.status === activeTab)
   }, [activeTab, reports])
 
-  const handleAction = (report: ReportWithDetails, action: 'reviewing' | 'resolved' | 'dismissed') => {
+  const handleAction = (report: any, action: 'reviewing' | 'resolved' | 'dismissed') => {
     setSelectedReport(report)
     setActionType(action)
     setResolutionNotes('')
@@ -94,10 +94,10 @@ export default function ReportManagement() {
 
     try {
       await updateReportMutation.mutateAsync({
-        reportId: selectedReport.id,
-        status: actionType === 'reviewing' ? 'resolved' : actionType,
+        reportId: selectedReport.report.id,
+        status: actionType === 'reviewing' ? 'under_review' : actionType,
         adminNote: resolutionNotes || undefined,
-        action: actionType === 'reviewing' ? 'under_review' : actionType
+        actionTaken: actionType === 'reviewing' ? 'under_review' : actionType
       })
       
       toast.success(`신고를 ${statusConfig[actionType].label} 처리했습니다.`)
@@ -154,7 +154,7 @@ export default function ReportManagement() {
             <Card>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-yellow-600">
-                  {reports.filter(r => r.status === 'pending').length}
+                  {reports.filter(r => r.report.metadata.status === 'pending').length}
                 </div>
                 <div className="text-sm text-muted-foreground">대기중</div>
               </CardContent>
@@ -162,7 +162,7 @@ export default function ReportManagement() {
             <Card>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-blue-600">
-                  {reports.filter(r => r.status === 'reviewing').length}
+                  {reports.filter(r => r.report.metadata.status === 'under_review').length}
                 </div>
                 <div className="text-sm text-muted-foreground">검토중</div>
               </CardContent>
@@ -170,7 +170,7 @@ export default function ReportManagement() {
             <Card>
               <CardContent className="p-4">
                 <div className="text-2xl font-bold text-green-600">
-                  {reports.filter(r => r.status === 'resolved').length}
+                  {reports.filter(r => r.report.metadata.status === 'resolved').length}
                 </div>
                 <div className="text-sm text-muted-foreground">처리완료</div>
               </CardContent>
@@ -241,11 +241,11 @@ export default function ReportManagement() {
                       </TableRow>
                     ) : (
                       filteredReports.map((report) => {
-                        const StatusIcon = getStatusIcon(report.status)
+                        const StatusIcon = getStatusIcon(report.report.metadata.status)
                         return (
-                          <TableRow key={report.id}>
+                          <TableRow key={report.report.id}>
                             <TableCell className="whitespace-nowrap">
-                              {formatDate(report.created_at)}
+                              {formatDate(report.report.created_at)}
                             </TableCell>
                             <TableCell>
                               <div className="flex items-center gap-2">
@@ -262,35 +262,35 @@ export default function ReportManagement() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {targetTypeLabels[report.target_type as keyof typeof targetTypeLabels] || report.target_type}
+                                {targetTypeLabels[report.report.target_type as keyof typeof targetTypeLabels] || report.report.target_type}
                               </Badge>
                             </TableCell>
                             <TableCell>
                               <div>
                                 <div className="font-medium">
-                                  {getReportTypeName(report.report_type_id)}
+                                  {report.report.metadata.category}
                                 </div>
                                 <div className="text-sm text-muted-foreground">
-                                  {report.reason}
+                                  {report.report.metadata.reason}
                                 </div>
                               </div>
                             </TableCell>
                             <TableCell>
                               <Badge 
                                 variant="secondary" 
-                                className={`${statusConfig[report.status as keyof typeof statusConfig]?.color || 'bg-gray-100 text-gray-800'} flex items-center gap-1 w-fit`}
+                                className={`${statusConfig[report.report.metadata.status as keyof typeof statusConfig]?.color || 'bg-gray-100 text-gray-800'} flex items-center gap-1 w-fit`}
                               >
                                 <StatusIcon className="h-3 w-3" />
-                                {statusConfig[report.status as keyof typeof statusConfig]?.label || report.status}
+                                {statusConfig[report.report.metadata.status as keyof typeof statusConfig]?.label || report.report.metadata.status}
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {report.reviewed_by ? (
+                              {report.admin ? (
                                 <div className="text-sm">
-                                  <div>처리자</div>
-                                  {report.reviewed_at && (
+                                  <div>{report.admin.name}</div>
+                                  {report.report.metadata.resolvedAt && (
                                     <div className="text-xs text-muted-foreground">
-                                      {formatDate(report.reviewed_at)}
+                                      {formatDate(report.report.metadata.resolvedAt)}
                                     </div>
                                   )}
                                 </div>
@@ -305,8 +305,8 @@ export default function ReportManagement() {
                                   size="sm"
                                   onClick={() => {
                                     // Navigate to the reported content
-                                    const targetType = report.target_type
-                                    const targetId = report.target_id
+                                    const targetType = report.report.target_type
+                                    const targetId = report.report.target_id
                                     
                                     if (!targetId) {
                                       toast.error('대상 정보를 찾을 수 없습니다.')
@@ -321,8 +321,8 @@ export default function ReportManagement() {
                                         break
                                       case 'comment':
                                         // Navigate to the parent content with comment highlight
-                                        if (report.parent_content_id) {
-                                          url = `/community/${report.parent_content_id}#comment-${targetId}`
+                                        if (report.targetContent?.id) {
+                                          url = `/community/${report.targetContent.id}#comment-${targetId}`
                                         } else {
                                           toast.error('댓글이 속한 게시글 정보를 찾을 수 없습니다.')
                                           return
@@ -344,7 +344,7 @@ export default function ReportManagement() {
                                 >
                                   <ExternalLink className="h-4 w-4" />
                                 </Button>
-                                {report.status === 'pending' && (
+                                {report.report.metadata.status === 'pending' && (
                                   <>
                                     <Button
                                       variant="outline"
@@ -369,7 +369,7 @@ export default function ReportManagement() {
                                     </Button>
                                   </>
                                 )}
-                                {report.status === 'reviewing' && (
+                                {report.report.metadata.status === 'under_review' && (
                                   <>
                                     <Button
                                       variant="default"

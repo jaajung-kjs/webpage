@@ -13,8 +13,8 @@ import {
   Flag
 } from 'lucide-react'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
-import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
-import { useIsBookmarked, useToggleBookmark } from '@/hooks/features/useBookmarks'
+import { useContentV2 } from '@/hooks/features/useContentV2'
+import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
@@ -64,19 +64,18 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use hooks
-  const { data: announcementData, isLoading: loading } = useContent(announcementId)
-  const { data: isLikedFromHook } = useIsLiked(announcementId)
-  const toggleLikeMutation = useToggleLike()
-  const deleteContentMutation = useDeleteContent()
-  const incrementViewMutation = useIncrementView()
-  // Derive like state from query data
-  const isLiked = isLikedFromHook || false
-  const likeCount = announcementData?.like_count || 0
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  const interactionsV2 = useInteractionsV2()
   
-  // Use bookmark hooks
-  const { data: isBookmarkedData } = useIsBookmarked(announcementId)
-  const toggleBookmarkMutation = useToggleBookmark()
+  const { data: announcementData, isPending: loading } = contentV2.useContent(announcementId)
+  const { data: interactionStats } = interactionsV2.useInteractionStats(announcementId, 'content')
+  const { data: userInteractions } = interactionsV2.useUserInteractions(announcementId, 'content')
+  
+  // Derive interaction states
+  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const likeCount = (interactionStats as any)?.like_count || 0
+  const isBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
   
   // UI state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -84,16 +83,16 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const [parentContentId, setParentContentId] = useState<string | undefined>()
   
   // Use mutation loading states
-  const likeLoading = toggleLikeMutation.isPending
-  const deleteLoading = deleteContentMutation.isPending
-  const bookmarkLoading = toggleBookmarkMutation.isPending
+  const likeLoading = interactionsV2.isToggling
+  const bookmarkLoading = interactionsV2.isToggling
+  const deleteLoading = contentV2.isDeleting
 
   // Increment view count when announcement is loaded
   useEffect(() => {
     if (announcementData?.id) {
-      incrementViewMutation.mutate(announcementData.id)
+      contentV2.toggleInteraction({ targetId: announcementData.id, targetType: 'content', interactionType: 'view' })
     }
-  }, [announcementData?.id, incrementViewMutation])
+  }, [announcementData?.id, contentV2.toggleInteraction])
 
 
 
@@ -118,8 +117,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     }
   }, [])
 
-  // Bookmark state is now managed by the hook
-  const isBookmarked = isBookmarkedData || false
+  // Bookmark state is now managed by V2 interactions hook
 
   const handleLike = async () => {
     if (!user) {
@@ -136,7 +134,11 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     if (likeLoading) return
 
     try {
-      await toggleLikeMutation.mutateAsync(announcementId)
+      await interactionsV2.toggleInteractionAsync({
+        targetId: announcementId,
+        targetType: 'content',
+        interactionType: 'like'
+      })
       // The mutation will automatically update the cache and trigger a re-render
       toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
@@ -146,12 +148,28 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   }
 
   const handleBookmark = async () => {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!isMember) {
+      toast.error('동아리 회원만 북마크를 사용할 수 있습니다.')
+      return
+    }
+
     if (bookmarkLoading) return
     
     try {
-      await toggleBookmarkMutation.mutateAsync(announcementId)
-    } catch (error) {
-      // Error is handled by the mutation hook
+      await interactionsV2.toggleInteractionAsync({
+        targetId: announcementId,
+        targetType: 'content',
+        interactionType: 'bookmark'
+      })
+      toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling bookmark:', error)
+      toast.error(error.message || '북마크 처리에 실패했습니다.')
     }
   }
 
@@ -171,7 +189,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     }
 
     try {
-      await deleteContentMutation.mutateAsync({ id: announcementId, contentType: 'announcement' })
+      await contentV2.deleteContentAsync(announcementId)
       
       toast.success('공지사항이 삭제되었습니다.')
       router.push('/announcements')
@@ -207,8 +225,10 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
     )
   }
 
-  const CategoryIcon = categoryIcons[announcementData.category as keyof typeof categoryIcons] || categoryIcons.notice
-  const metadata = announcementData.metadata as any || {}
+  const primaryCategoryObj = announcementData.categories?.[0]
+  const primaryCategory = primaryCategoryObj?.slug || primaryCategoryObj?.name || 'notice'
+  const CategoryIcon = categoryIcons[primaryCategory as keyof typeof categoryIcons] || categoryIcons.notice
+  const metadata = (announcementData as any)?.metadata || {}
 
   return (
     <PermissionGate requireMember={true}>
@@ -217,19 +237,19 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
         content={announcementData.content || ''}
         author={{
           id: announcementData.author_id || '',
-          name: announcementData.author_name || '익명',
-          avatar: announcementData.author_avatar_url || undefined,
-          department: announcementData.author_department || undefined
+          name: announcementData.author?.name || '익명',
+          avatar: announcementData.author?.avatar_url || undefined,
+          department: announcementData.author?.department || undefined
         }}
         createdAt={announcementData.created_at || new Date().toISOString()}
         viewCount={announcementData.view_count || 0}
         category={{
-          label: categoryLabels[announcementData.category as keyof typeof categoryLabels] || '공지사항',
-          value: announcementData.category || 'notice',
-          color: categoryColors[announcementData.category as keyof typeof categoryColors],
+          label: categoryLabels[primaryCategory as keyof typeof categoryLabels] || '공지사항',
+          value: primaryCategory,
+          color: categoryColors[primaryCategory as keyof typeof categoryColors],
           icon: CategoryIcon
         }}
-        tags={announcementData.tags || []}
+        tags={announcementData.tags?.map(tag => tag.name) || []}
         likeCount={likeCount}
         commentCount={announcementData.comment_count || 0}
         isLiked={isLiked}

@@ -43,11 +43,8 @@ import {
   Check,
   X
 } from 'lucide-react'
-import { useAuth } from '@/providers'
-import { 
-  useMembershipApplications, 
-  useUpdateMembershipApplication
-} from '@/hooks/features/useMembership'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useMembershipV2 } from '@/hooks/features/useMembershipV2'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -55,13 +52,9 @@ import { ko } from 'date-fns/locale'
 
 import { Tables } from '@/lib/database.types'
 
-// DB 타입을 그대로 사용하고, JOIN된 데이터만 확장
-type MembershipApplication = Tables<'membership_applications'> & {
-  user: Pick<Tables<'users'>, 'id' | 'email' | 'name' | 'department' | 'avatar_url'>
-  reviewer?: {
-    name: string
-  } | null
-}
+// Use the V2 type from the hook
+import { MembershipApplicationWithUser } from '@/hooks/features/useMembershipV2'
+type MembershipApplication = MembershipApplicationWithUser
 
 const interests = [
   { id: 'chatgpt', label: 'ChatGPT 활용' },
@@ -83,18 +76,19 @@ const experienceLevels: Record<string, string> = {
 }
 
 export default function MembershipApplicationManager() {
-  const { user, profile } = useAuth()
+  const { user } = useAuthV2()
+  const membershipV2 = useMembershipV2()
   
   // Use hooks for data fetching
-  const { data: applications = [], isLoading: loading, refetch } = useMembershipApplications()
-  const updateMembershipMutation = useUpdateMembershipApplication()
+  const { data: applicationsData, isLoading: loading, refetch } = membershipV2.useApplications()
+  const applications = applicationsData?.pages.flatMap(page => page.applications) || []
   
   const [selectedApplication, setSelectedApplication] = useState<MembershipApplication | null>(null)
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false)
   const [reviewDecision, setReviewDecision] = useState<'approved' | 'rejected' | null>(null)
   const [reviewNotes, setReviewNotes] = useState('')
   
-  const processing = updateMembershipMutation.isPending
+  const processing = membershipV2.isProcessing
   
   // Filter states
   const [statusFilter, setStatusFilter] = useState('all')
@@ -127,11 +121,11 @@ export default function MembershipApplicationManager() {
     if (!selectedApplication || !reviewDecision || !user) return
     
     try {
-      // Update membership application (the hook handles user role update too)
-      await updateMembershipMutation.mutateAsync({
+      // Update membership application using V2 hook
+      await membershipV2.processApplicationAsync({
         applicationId: selectedApplication.id,
-        status: reviewDecision,
-        reviewNote: reviewNotes || undefined
+        action: reviewDecision === 'approved' ? 'approve' : 'reject',
+        comment: reviewNotes || undefined
       })
       
       toast.success(
@@ -139,9 +133,6 @@ export default function MembershipApplicationManager() {
           ? '가입 신청을 승인했습니다.' 
           : '가입 신청을 거절했습니다.'
       )
-      
-      // Refetch data to get updated state
-      await refetch()
       
       setReviewDialogOpen(false)
       setSelectedApplication(null)
@@ -291,8 +282,8 @@ export default function MembershipApplicationManager() {
                 <TableRow>
                   <TableHead>신청자</TableHead>
                   <TableHead>부서</TableHead>
-                  <TableHead>관심 분야</TableHead>
-                  <TableHead>경험 수준</TableHead>
+                  <TableHead>가입 동기</TableHead>
+                  <TableHead>경험</TableHead>
                   <TableHead>신청일</TableHead>
                   <TableHead>상태</TableHead>
                   <TableHead className="text-right">작업</TableHead>
@@ -328,22 +319,14 @@ export default function MembershipApplicationManager() {
                       </TableCell>
                       <TableCell>{application.user.department || '-'}</TableCell>
                       <TableCell>
-                        <div className="flex flex-wrap gap-1">
-                          {application.interests?.slice(0, 2).map(interest => (
-                            <Badge key={interest} variant="outline" className="text-xs">
-                              {interests.find(i => i.id === interest)?.label || interest}
-                            </Badge>
-                          ))}
-                          {application.interests && application.interests.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{application.interests.length - 2}
-                            </Badge>
-                          )}
+                        <div className="text-sm text-muted-foreground">
+                          {application.motivation?.slice(0, 50) || '-'}
+                          {(application.motivation?.length || 0) > 50 ? '...' : ''}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {application.experience_level 
-                          ? experienceLevels[application.experience_level] 
+                        {application.experience 
+                          ? application.experience.slice(0, 30) + ((application.experience.length > 30) ? '...' : '')
                           : '-'}
                       </TableCell>
                       <TableCell>
@@ -442,33 +425,43 @@ export default function MembershipApplicationManager() {
                     <Card className="bg-muted/50">
                       <CardContent className="pt-4">
                         <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                          {selectedApplication.application_reason}
+                          {selectedApplication.motivation}
                         </p>
                       </CardContent>
                     </Card>
                   </div>
                   
-                  {/* 관심 분야 */}
-                  {selectedApplication.interests && selectedApplication.interests.length > 0 && (
+                  {/* 경험 */}
+                  {selectedApplication.experience && (
                     <div className="space-y-2">
-                      <Label className="text-sm font-medium">관심 분야</Label>
-                      <div className="flex flex-wrap gap-2">
-                        {selectedApplication.interests.map(interest => (
-                          <Badge key={interest} variant="secondary" className="text-sm">
-                            {interests.find(i => i.id === interest)?.label || interest}
-                          </Badge>
-                        ))}
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <Label className="text-sm font-medium">경험</Label>
                       </div>
+                      <Card className="bg-muted/50">
+                        <CardContent className="pt-4">
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                            {selectedApplication.experience}
+                          </p>
+                        </CardContent>
+                      </Card>
                     </div>
                   )}
                   
-                  {/* 경험 수준 */}
-                  {selectedApplication.experience_level && (
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium">AI 도구 경험</Label>
-                      <Badge variant="outline" className="font-medium">
-                        {experienceLevels[selectedApplication.experience_level]}
-                      </Badge>
+                  {/* 목표 */}
+                  {selectedApplication.goals && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <Label className="text-sm font-medium">목표</Label>
+                      </div>
+                      <Card className="bg-muted/50">
+                        <CardContent className="pt-4">
+                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
+                            {selectedApplication.goals}
+                          </p>
+                        </CardContent>
+                      </Card>
                     </div>
                   )}
                 </CardContent>
@@ -488,12 +481,12 @@ export default function MembershipApplicationManager() {
                       <span className="text-muted-foreground">검토 일시</span>
                       <span>{format(new Date(selectedApplication.reviewed_at), 'yyyy년 MM월 dd일 HH:mm', { locale: ko })}</span>
                     </div>
-                    {selectedApplication.review_notes && (
+                    {selectedApplication.review_comment && (
                       <div className="pt-2">
                         <Label className="text-sm text-muted-foreground">검토 메모</Label>
                         <Card className="mt-2 bg-muted/50">
                           <CardContent className="pt-3">
-                            <p className="text-sm">{selectedApplication.review_notes}</p>
+                            <p className="text-sm">{selectedApplication.review_comment}</p>
                           </CardContent>
                         </Card>
                       </div>

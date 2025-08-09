@@ -7,7 +7,8 @@ import {
   Lightbulb,
   Flag
 } from 'lucide-react'
-import { useContent, useToggleLike, useDeleteContent, useIsLiked, useIncrementView } from '@/hooks/features/useContent'
+import { useContentV2 } from '@/hooks/features/useContentV2'
+import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
 
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { useAuth } from '@/providers'
@@ -50,20 +51,25 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { user, profile, isMember } = useAuth()
   const router = useRouter()
   
-  // Use hooks
-  const { data: caseData, isLoading: loading } = useContent(caseId)
-  const { data: isLikedFromHook } = useIsLiked(caseId)
-  const toggleLikeMutation = useToggleLike()
-  const deleteContentMutation = useDeleteContent()
-  const incrementViewMutation = useIncrementView()
-  // Derive state from query data and mutations
-  const isLiked = isLikedFromHook || false
-  const likeCount = caseData?.like_count || 0
-  const likeLoading = toggleLikeMutation.isPending
-  const deleteLoading = deleteContentMutation.isPending
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  const interactionsV2 = useInteractionsV2()
+  
+  const { data: caseData, isPending: loading } = contentV2.useContent(caseId)
+  const { data: interactionStats } = interactionsV2.useInteractionStats(caseId, 'content')
+  const { data: userInteractions } = interactionsV2.useUserInteractions(caseId, 'content')
+  
+  // Derive interaction states
+  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const likeCount = (interactionStats as any)?.likes || 0
+  const isBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
+  
+  // Use mutation loading states
+  const likeLoading = interactionsV2.isToggling
+  const bookmarkLoading = interactionsV2.isToggling
+  const deleteLoading = contentV2.isDeleting
   
   // Keep only UI-specific state
-  const [isBookmarked, setIsBookmarked] = useState(false)
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
@@ -71,9 +77,9 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   // Increment view count when case is loaded
   useEffect(() => {
     if (caseData?.id) {
-      incrementViewMutation.mutate(caseData.id)
+      contentV2.toggleInteraction({ targetId: caseData.id, targetType: 'content', interactionType: 'view' })
     }
-  }, [caseData?.id])
+  }, [caseData?.id, contentV2.toggleInteraction])
 
 
 
@@ -109,8 +115,12 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     if (likeLoading) return
 
     try {
-      const isNowLiked = await toggleLikeMutation.mutateAsync(caseId)
-      toast.success(isNowLiked ? '좋아요를 눌렀습니다.' : '좋아요를 취소했습니다.')
+      await interactionsV2.toggleInteractionAsync({
+        targetId: caseId,
+        targetType: 'content',
+        interactionType: 'like'
+      })
+      toast.success(isLiked ? '좋아요를 취소했습니다.' : '좋아요를 눌렀습니다.')
     } catch (error: any) {
       console.error('Error toggling like:', error)
       toast.error(error.message || '좋아요 처리에 실패했습니다.')
@@ -129,8 +139,25 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
       return
     }
     
-    setIsBookmarked(!isBookmarked)
-    toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    if (!isMember) {
+      toast.error('동아리 회원만 북마크를 사용할 수 있습니다.')
+      return
+    }
+
+    // Prevent multiple clicks
+    if (bookmarkLoading) return
+
+    try {
+      await interactionsV2.toggleInteractionAsync({
+        targetId: caseId,
+        targetType: 'content',
+        interactionType: 'bookmark'
+      })
+      toast.success(isBookmarked ? '북마크를 취소했습니다.' : '북마크에 추가했습니다.')
+    } catch (error: any) {
+      console.error('Error toggling bookmark:', error)
+      toast.error(error.message || '북마크 처리에 실패했습니다.')
+    }
   }
 
   const handleEdit = () => {
@@ -143,7 +170,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
     }
 
     try {
-      await deleteContentMutation.mutateAsync({ id: caseId, contentType: 'case' })
+      await contentV2.deleteContentAsync(caseId)
       
       toast.success('활용사례가 삭제되었습니다.')
       router.push('/cases')
@@ -184,19 +211,19 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
         content={caseData.content || ''}
         author={{
           id: caseData.author_id || '',
-          name: caseData.author_name || '익명',
-          avatar: caseData.author_avatar_url || undefined,
-          department: caseData.author_department || undefined
+          name: caseData.author?.name || '익명',
+          avatar: caseData.author?.avatar_url || undefined,
+          department: caseData.author?.department || undefined
         }}
         createdAt={caseData.created_at || new Date().toISOString()}
-        viewCount={caseData.view_count || 0}
+        viewCount={caseData.interaction_counts?.views || 0}
         category={{
-          label: categoryLabels[caseData.category as keyof typeof categoryLabels] || '기타',
-          value: caseData.category || 'other',
-          color: categoryColors[caseData.category as keyof typeof categoryColors],
-          icon: categoryIcons[caseData.category as keyof typeof categoryIcons] || Lightbulb
+          label: categoryLabels[caseData.categories?.[0]?.slug as keyof typeof categoryLabels] || '기타',
+          value: caseData.categories?.[0]?.slug || 'other',
+          color: categoryColors[caseData.categories?.[0]?.slug as keyof typeof categoryColors],
+          icon: categoryIcons[caseData.categories?.[0]?.slug as keyof typeof categoryIcons] || Lightbulb
         }}
-        tags={caseData.tags || []}
+        tags={caseData.tags?.map(tag => tag.name) || []}
         likeCount={likeCount}
         commentCount={caseData.comment_count || 0}
         isLiked={isLiked}

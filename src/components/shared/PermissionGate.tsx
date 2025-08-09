@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Shield, Users, Lock } from 'lucide-react'
-import { useAuth } from '@/providers'
+import { useAuthV2 } from '@/hooks/features/useAuthV2'
 
 interface PermissionGateProps {
   children: React.ReactNode
@@ -25,14 +25,14 @@ export default function PermissionGate({
   fallbackUrl = '/',
   showMessage = true
 }: PermissionGateProps) {
-  const { user, profile, loading } = useAuth()
+  const { user, isLoading } = useAuthV2()
   const router = useRouter()
   
   // Check permissions
   const hasPermission = () => {
     if (!user) return false
     
-    const userRole = profile?.role || 'guest'
+    const userRole = (user as any)?.role || 'guest'
     
     // Check specific required roles
     if (requiredRole && !requiredRole.includes(userRole)) {
@@ -59,12 +59,12 @@ export default function PermissionGate({
   }
   
   useEffect(() => {
-    if (!loading && !hasPermission() && !showMessage) {
+    if (!isLoading && !hasPermission() && !showMessage) {
       router.push(fallbackUrl)
     }
-  }, [user, loading])
+  }, [user, isLoading])
   
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
@@ -77,7 +77,7 @@ export default function PermissionGate({
       return null
     }
     
-    const userRole = profile?.role || 'guest'
+    const userRole = (user as any)?.role || 'guest'
     
     return (
       <div className="container mx-auto px-4 py-8 max-w-2xl">

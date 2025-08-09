@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/providers'
-import { useContentList, useDeleteContent } from '@/hooks/features/useContent'
+import { useContentV2 } from '@/hooks/features/useContentV2'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import { Tables } from '@/lib/database.types'
@@ -39,9 +39,18 @@ export default function AnnouncementsPage() {
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
   
-  // Use Supabase hooks
-  const { data: announcements, isLoading: loading, refetch } = useContentList('announcement')
-  const deleteContentMutation = useDeleteContent()
+  // Use V2 hooks
+  const contentV2 = useContentV2()
+  
+  const { 
+    data: announcementsData, 
+    isPending: loading,
+    refetch
+  } = contentV2.useInfiniteContents({
+    type: 'announcement'
+  }, sortBy as any)
+  
+  const announcements = announcementsData?.pages.flatMap(page => page.contents) || []
 
   // Filter and sort announcements
   const filteredAnnouncements = useMemo(() => {
@@ -51,7 +60,9 @@ export default function AnnouncementsPage() {
     
     // Category filter
     if (activeCategory !== 'all') {
-      filtered = filtered.filter(announcement => announcement.category === activeCategory)
+      filtered = filtered.filter(announcement => 
+        announcement.categories?.some(cat => cat.slug === activeCategory)
+      )
     }
     
     // Search filter
@@ -60,23 +71,23 @@ export default function AnnouncementsPage() {
       filtered = filtered.filter(announcement => 
         announcement.title?.toLowerCase().includes(searchLower) ||
         announcement.content?.toLowerCase().includes(searchLower) ||
-        announcement.author_name?.toLowerCase().includes(searchLower)
+        announcement.author?.name?.toLowerCase().includes(searchLower)
       )
     }
     
     // Sorting
     filtered.sort((a, b) => {
-      const aIsPinned = (a.metadata as any)?.is_pinned || false
-      const bIsPinned = (b.metadata as any)?.is_pinned || false
+      const aIsPinned = a.is_pinned || false
+      const bIsPinned = b.is_pinned || false
       
       if (aIsPinned && !bIsPinned) return -1
       if (!aIsPinned && bIsPinned) return 1
       
       switch (sortBy) {
         case 'popular':
-          return (b.like_count || 0) - (a.like_count || 0)
+          return (b.interaction_counts?.likes || 0) - (a.interaction_counts?.likes || 0)
         case 'views':
-          return (b.view_count || 0) - (a.view_count || 0)
+          return (b.interaction_counts?.views || 0) - (a.interaction_counts?.views || 0)
         case 'comments':
           return (b.comment_count || 0) - (a.comment_count || 0)
         case 'latest':
@@ -95,7 +106,7 @@ export default function AnnouncementsPage() {
       const today = new Date()
       return announcementDate.toDateString() === today.toDateString()
     }).length || 0,
-    totalViews: announcements?.reduce((sum, a) => sum + (a.view_count || 0), 0) || 0,
+    totalViews: announcements?.reduce((sum, a) => sum + (a.interaction_counts?.views || 0), 0) || 0,
     totalComments: announcements?.reduce((sum, a) => sum + (a.comment_count || 0), 0) || 0
   }
 
@@ -106,7 +117,7 @@ export default function AnnouncementsPage() {
     }
     
     try {
-      await deleteContentMutation.mutateAsync({ id, contentType: 'announcement' })
+      await contentV2.deleteContentAsync(id)
       toast.success('공지사항이 삭제되었습니다.')
       refetch()
     } catch (error: any) {
@@ -116,11 +127,11 @@ export default function AnnouncementsPage() {
   }
 
   // Check permissions
-  const canEdit = (item: Tables<'content_with_author'>) => {
+  const canEdit = (item: any) => {
     return !!(user && profile && item.author_id === user.id)
   }
 
-  const canDelete = (item: Tables<'content_with_author'>) => {
+  const canDelete = (item: any) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 
@@ -129,7 +140,7 @@ export default function AnnouncementsPage() {
     ))
   }
 
-  const canPin = (item: Tables<'content_with_author'>) => {
+  const canPin = (item: any) => {
     return !!(user && profile && (
       profile.role === 'admin' || 
       profile.role === 'leader' || 
@@ -145,16 +156,12 @@ export default function AnnouncementsPage() {
     }
 
     try {
-      const { data, error } = await supabaseClient
-        .from('content')
-        .update({
-          metadata: { is_pinned: pinned }
-        })
-        .eq('id', id)
-
-      if (error) {
-        throw error
-      }
+      await contentV2.updateContentAsync({
+        id,
+        updates: {
+          is_pinned: pinned
+        }
+      })
 
       toast.success(pinned ? '공지사항이 고정되었습니다.' : '공지사항 고정이 해제되었습니다.')
       refetch()
@@ -191,7 +198,9 @@ export default function AnnouncementsPage() {
       />
       <StatsCard
         title="중요 공지"
-        value={loading ? 0 : announcements?.filter(a => a.category === 'important' || a.category === 'urgent').length || 0}
+        value={loading ? 0 : announcements?.filter(a => 
+          a.categories?.some(cat => cat.slug === 'important' || cat.slug === 'urgent')
+        ).length || 0}
         icon={AlertCircle}
         loading={loading}
       />

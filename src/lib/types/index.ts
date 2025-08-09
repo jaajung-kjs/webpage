@@ -117,37 +117,37 @@ export {
  */
 
 // 사용자 관련
-export type User = Tables<'users'>
-export type UserInsert = TablesInsert<'users'>
-export type UserUpdate = TablesUpdate<'users'>
+export type User = Tables<'users_v2'>
+export type UserInsert = TablesInsert<'users_v2'>
+export type UserUpdate = TablesUpdate<'users_v2'>
 
 // 콘텐츠 관련
-export type Content = Tables<'content'>
-export type ContentInsert = TablesInsert<'content'>
-export type ContentUpdate = TablesUpdate<'content'>
+export type Content = Tables<'content_v2'>
+export type ContentInsert = TablesInsert<'content_v2'>
+export type ContentUpdate = TablesUpdate<'content_v2'>
 
 // 댓글 관련
-export type Comment = Tables<'comments'>
-export type CommentInsert = TablesInsert<'comments'>
-export type CommentUpdate = TablesUpdate<'comments'>
+export type Comment = Tables<'comments_v2'>
+export type CommentInsert = TablesInsert<'comments_v2'>
+export type CommentUpdate = TablesUpdate<'comments_v2'>
 
 // 메시지 관련
-export type Message = Tables<'messages'>
-export type MessageInsert = TablesInsert<'messages'>
-export type MessageUpdate = TablesUpdate<'messages'>
+export type Message = Tables<'messages_v2'>
+export type MessageInsert = TablesInsert<'messages_v2'>
+export type MessageUpdate = TablesUpdate<'messages_v2'>
 
 // 활동 관련
-export type Activity = Tables<'activities'>
-export type ActivityInsert = TablesInsert<'activities'>
-export type ActivityUpdate = TablesUpdate<'activities'>
+export type Activity = Tables<'activities_v2'>
+export type ActivityInsert = TablesInsert<'activities_v2'>
+export type ActivityUpdate = TablesUpdate<'activities_v2'>
 
-// 신고 관련
-export type Report = Tables<'reports'>
-export type ReportInsert = TablesInsert<'reports'>
-export type ReportUpdate = TablesUpdate<'reports'>
+// 신고 관련 - V2에서는 interactions_v2 테이블을 사용
+// export type Report = Tables<'interactions_v2'>
+// export type ReportInsert = TablesInsert<'interactions_v2'>
+// export type ReportUpdate = TablesUpdate<'interactions_v2'>
 
-// 역할 타입
-export type UserRole = Database['public']['Enums']['user_role']
+// 역할 타입 - V2에서는 수동 정의
+export type UserRole = 'admin' | 'leader' | 'vice-leader' | 'member' | 'pending' | 'guest'
 
 // 콘텐츠 타입
 export type ContentType = 'post' | 'resource' | 'announcement' | 'case'

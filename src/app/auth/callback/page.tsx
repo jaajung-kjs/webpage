@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabaseClient } from '@/lib/core/connection-core'
@@ -43,9 +45,9 @@ export default function AuthCallbackPage() {
           }
           
           if (data.user && data.user.email_confirmed_at) {
-            // 이메일 인증이 완료되었으므로 public.users에 프로필 생성
+            // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
             const { error: profileError } = await supabaseClient
-              .from('users')
+              .from('users_v2')
               .insert({
                 id: data.user.id,
                 email: data.user.email!,

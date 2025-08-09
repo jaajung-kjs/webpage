@@ -1,5 +1,7 @@
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
@@ -8,13 +10,13 @@ import { useAuth } from '@/providers'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import { Tables } from '@/lib/database.types'
-import { useMembershipApplications } from '@/hooks/features/useMembership'
+import { useMembershipV2 } from '@/hooks/features/useMembershipV2'
 
 export default function MembershipStatusPage() {
   const { user, profile } = useAuth()
   const router = useRouter()
-  const { data: applications, isLoading: loading } = useMembershipApplications()
-  const application = applications?.[0] || null
+  const { useMyApplication } = useMembershipV2()
+  const { data: application, isLoading: loading } = useMyApplication()
 
   useEffect(() => {
     if (!user) {
@@ -131,23 +133,25 @@ export default function MembershipStatusPage() {
               <h3 className="font-semibold mb-2">신청 내용</h3>
               <div className="space-y-2 text-sm">
                 <div>
-                  <span className="text-muted-foreground">신청 사유:</span> {application.application_reason}
+                  <span className="text-muted-foreground">지원 동기:</span> {application.motivation}
                 </div>
-                <div>
-                  <span className="text-muted-foreground">경험 수준:</span> {application.experience_level}
-                </div>
-                {application.interests && application.interests.length > 0 && (
+                {application.experience && (
                   <div>
-                    <span className="text-muted-foreground">관심 분야:</span> {application.interests.join(', ')}
+                    <span className="text-muted-foreground">경험:</span> {application.experience}
+                  </div>
+                )}
+                {application.goals && (
+                  <div>
+                    <span className="text-muted-foreground">목표:</span> {application.goals}
                   </div>
                 )}
               </div>
             </div>
 
-            {application.status === 'rejected' && application.review_notes && (
+            {application.status === 'rejected' && application.review_comment && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  <strong>거절 사유:</strong> {application.review_notes}
+                  <strong>거절 사유:</strong> {application.review_comment}
                 </AlertDescription>
               </Alert>
             )}

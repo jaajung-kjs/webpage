@@ -7,6 +7,8 @@
 
 'use client'
 
+export const dynamic = 'force-dynamic'
+
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -25,7 +27,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { useUserProfileComplete, useCheckAchievements } from '@/hooks/features/useProfileV2'
-import { useUserProfile, useUserStats, useUserActivities } from '@/hooks/features/useProfile'
+import { useUserProfile, useUserStats, useUserActivities } from '@/hooks/features/useProfileV2'
 
 export default function ProfileV2TestPage() {
   const { user } = useAuth()

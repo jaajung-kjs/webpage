@@ -8,10 +8,10 @@ import type {
 } from '@/lib/database.types'
 
 // Type aliases
-type User = Tables<'users'>
-type Content = Tables<'content'>
-type ContentType = Enums<'content_type'>
-type UserRole = Enums<'user_role'>
+type User = Tables<'users_v2'>
+type Content = Tables<'content_v2'>
+type ContentType = 'post' | 'resource' | 'announcement' | 'case'
+type UserRole = 'admin' | 'leader' | 'vice-leader' | 'member' | 'pending' | 'guest'
 
 /**
  * User 프로필 타입 가드

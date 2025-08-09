@@ -10,6 +10,147 @@ KEPCO AI 학습동아리 커뮤니티 웹 애플리케이션
 - **Authentication**: Supabase Auth
 - **Deployment**: Vercel
 
+## 개발 환경 설정 (2025-01-29 업데이트)
+
+### 🔧 로컬 개발 환경 vs 프로덕션 환경
+
+#### 옵션 1: 로컬 Supabase 사용 (권장)
+```bash
+# 로컬 Supabase 시작
+npm run db:start
+
+# 로컬 환경으로 전환
+npm run env:local
+
+# 개발 서버 실행 (로컬 DB 사용)
+npm run dev:local
+
+# 로컬 DB 타입 생성
+npm run db:types:local
+```
+
+#### 옵션 2: 프로덕션 DB 직접 사용 (주의 필요)
+```bash
+# 프로덕션 환경으로 전환
+npm run env:prod
+
+# 개발 서버 실행 (프로덕션 DB 사용)
+npm run dev:prod
+
+# 프로덕션 DB 타입 생성
+npm run db:types
+```
+
+### 환경 전환 스크립트
+- `npm run env:local` - 로컬 개발 환경으로 전환
+- `npm run env:prod` - 프로덕션 환경으로 전환
+- `npm run db:start` - 로컬 Supabase 시작 (Docker 필요)
+- `npm run db:stop` - 로컬 Supabase 중지
+- `npm run db:reset` - 로컬 DB 초기화
+- `npm run db:migrate` - 마이그레이션 실행
+- `npm run db:pull` - 프로덕션 DB 스키마 가져오기
+- `npm run db:push` - 로컬 변경사항 프로덕션에 적용
+
+### 개발 워크플로우
+1. **기능 개발 시작**
+   ```bash
+   npm run env:local  # 로컬 환경으로 전환
+   npm run db:start   # 로컬 Supabase 시작
+   npm run db:pull    # 프로덕션 스키마 동기화
+   ```
+
+2. **스키마 변경**
+   - 로컬에서 자유롭게 테스트
+   - MCP를 통해 마이그레이션 적용
+   - `npm run db:types:local`로 타입 생성
+
+3. **프로덕션 배포**
+   ```bash
+   npm run env:prod   # 프로덕션 환경으로 전환
+   npm run db:push    # 변경사항 프로덕션에 적용
+   npm run db:types   # 프로덕션 타입 생성
+   ```
+
+### ⚠️ 주의사항
+- `.env.local.development`와 `.env.local.production`은 git에 커밋되지 않음
+- 환경 전환 시 반드시 현재 환경 확인: 콘솔에 표시됨
+- 로컬 개발 시 Docker Desktop 필요
+- 프로덕션 DB 직접 사용 시 매우 주의 필요
+
+## 로컬 환경에서 스키마 작업 (2025-01-29 추가)
+
+### 🔨 로컬 DB 스키마 생성/수정
+
+#### 방법 1: Supabase CLI 사용 (권장)
+```bash
+# 새 마이그레이션 생성
+npm run db:migrate:create my_new_feature
+
+# 생성된 파일(supabase/migrations/xxx_my_new_feature.sql)에 SQL 작성
+# 예시:
+CREATE TABLE posts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+# 마이그레이션 실행
+npm run db:migrate
+
+# 타입 생성
+npm run db:types:local
+```
+
+#### 방법 2: 직접 SQL 실행
+```bash
+# SQL 직접 실행
+npm run db:exec "CREATE TABLE posts (id UUID PRIMARY KEY, title TEXT);"
+
+# 복잡한 스키마는 마이그레이션으로
+npm run db:migrate:new "create_posts" "
+CREATE TABLE posts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  title TEXT NOT NULL,
+  content TEXT,
+  author_id UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_posts_author ON posts(author_id);
+"
+```
+
+#### 방법 3: Supabase Studio 사용
+```bash
+# 로컬 Supabase 시작 후
+npm run db:start
+
+# 브라우저에서 접속
+open http://localhost:54323
+
+# GUI로 테이블/컬럼 생성 가능
+```
+
+### 🔄 프로덕션과 동기화
+
+```bash
+# 프로덕션 스키마를 로컬로 가져오기
+npm run db:pull
+
+# 로컬 변경사항을 프로덕션에 적용
+npm run env:prod
+npm run db:push
+
+# 스키마 차이 확인
+npm run db:diff
+```
+
+### 📝 MCP 사용 관련
+- **프로덕션**: MCP의 `apply_migration`, `execute_sql` 직접 사용 가능
+- **로컬**: Supabase CLI나 npm 스크립트 사용 (MCP는 프로덕션 연결)
+- **팁**: 로컬에서 테스트 후 프로덕션에 적용하는 워크플로우 권장
+
 ## 권한 시스템 (2025-01-28 업데이트)
 
 ### 역할 계층 구조

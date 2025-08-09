@@ -29,6 +29,7 @@ import {
   PinOff,
 } from 'lucide-react'
 import { cn, extractCleanPreview } from '@/lib/utils'
+import UserLevelBadges from './UserLevelBadges'
 interface ContentCardProps {
   content: any
   viewMode?: 'grid' | 'list'
@@ -212,20 +213,29 @@ export default function ContentCard({
           viewMode === 'list' ? "justify-between" : "justify-between"
         )}>
           {/* Author Info */}
-          <div className="flex items-center gap-2">
-            <Avatar className="h-6 w-6">
+          <div className="flex items-center gap-2 min-w-0">
+            <Avatar className="h-6 w-6 flex-shrink-0">
               <AvatarImage src={content.author_avatar_url || undefined} />
               <AvatarFallback>{content.author_name?.charAt(0) || 'U'}</AvatarFallback>
             </Avatar>
-            <span className="font-medium">{content.author_name || '익명'}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-medium truncate">{content.author_name || '익명'}</span>
+              {/* 게임화 V2 레벨 뱃지 */}
+              <UserLevelBadges 
+                userId={content.author_id} 
+                variant="minimal" 
+                size="sm" 
+                className="flex-shrink-0"
+              />
+            </div>
             {viewMode === 'list' && content.author_department && (
               <>
-                <span>·</span>
-                <span>{content.author_department}</span>
+                <span className="flex-shrink-0">·</span>
+                <span className="truncate">{content.author_department}</span>
               </>
             )}
-            <span>·</span>
-            <span>{formatDate(content.created_at)}</span>
+            <span className="flex-shrink-0">·</span>
+            <span className="flex-shrink-0">{formatDate(content.created_at)}</span>
           </div>
 
           {/* Stats */}

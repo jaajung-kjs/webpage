@@ -7,7 +7,7 @@
 'use client'
 
 import React, { createContext, useContext } from 'react'
-import { useAuth as useAuthHook } from '@/hooks/core/useAuth'
+import { useAuthV2 as useAuthHook } from '@/hooks/features/useAuthV2'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Tables } from '@/lib/database.types'
 
@@ -15,7 +15,7 @@ import type { Tables } from '@/lib/database.types'
 interface AuthContextValue {
   // 상태
   user: User | null
-  profile: Tables<'users'> | null
+  profile: Tables<'users_v2'> | null
   session: Session | null
   loading: boolean
   error: any
@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const auth = useAuthHook()
 
   return (
-    <AuthContext.Provider value={auth}>
+    <AuthContext.Provider value={auth as any}>
       {children}
     </AuthContext.Provider>
   )
@@ -65,7 +65,37 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 export function useAuth() {
   const context = useContext(AuthContext)
   if (!context) {
-    throw new Error('useAuth must be used within AuthProvider')
+    // Return default values for build-time rendering
+    return {
+      // 상태
+      user: null,
+      profile: null,
+      session: null,
+      loading: false,
+      error: null,
+      isAuthenticated: false,
+      
+      // 권한
+      isMember: false,
+      isAdmin: false,
+      isLeader: false,
+      canViewDetails: false,
+      canDownload: false,
+      canMessage: false,
+      canComment: false,
+      canLike: false,
+      canReport: false,
+      canAccessAdmin: false,
+      canManageMembers: false,
+      canEditAllContent: false,
+      
+      // 메서드 (no-op functions for build time)
+      signIn: async () => ({ error: new Error('Not available during build') }),
+      signUp: async () => ({ error: new Error('Not available during build') }),
+      signOut: async () => ({ error: new Error('Not available during build') }),
+      updateProfile: async () => ({ error: new Error('Not available during build') }),
+      resendEmailConfirmation: async () => ({ error: new Error('Not available during build') })
+    }
   }
   return context
 }

@@ -24,7 +24,7 @@ import {
   Target
 } from 'lucide-react'
 import { useAuth } from '@/providers'
-import { useMyMembershipApplication, useCreateMembershipApplication } from '@/hooks/features/useMembership'
+import { useMembershipV2 } from '@/hooks/features/useMembershipV2'
 import { toast } from 'sonner'
 
 const interests = [
@@ -49,8 +49,10 @@ const experienceLevels = [
 export default function MembershipApplicationPage() {
   const { user, profile } = useAuth()
   const router = useRouter()
-  const { data: application, isLoading: checking } = useMyMembershipApplication()
-  const createApplicationMutation = useCreateMembershipApplication()
+  const membershipV2 = useMembershipV2()
+  
+  const { data: application, isPending: checking } = membershipV2.useMyApplication()
+  const createApplicationMutation = membershipV2.submitApplication
   
   // Form state
   const [applicationReason, setApplicationReason] = useState('')
@@ -109,10 +111,10 @@ export default function MembershipApplicationPage() {
     }
     
     try {
-      await createApplicationMutation.mutateAsync({
-        application_reason: applicationReason,
-        interests: selectedInterests,
-        experience_level: experienceLevel
+      await membershipV2.submitApplicationAsync({
+        motivation: applicationReason,
+        experience: experienceLevel,
+        goals: selectedInterests.join(', ')
       })
       
       toast.success('가입 신청이 완료되었습니다.')
@@ -199,10 +201,10 @@ export default function MembershipApplicationPage() {
                     죄송합니다. 가입 신청이 거절되었습니다.
                   </AlertDescription>
                 </Alert>
-                {application.review_notes && (
+                {application.review_comment && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-900 rounded-lg">
                     <p className="text-sm font-medium mb-1">거절 사유:</p>
-                    <p className="text-sm text-muted-foreground">{application.review_notes}</p>
+                    <p className="text-sm text-muted-foreground">{application.review_comment}</p>
                   </div>
                 )}
               </>
@@ -214,28 +216,24 @@ export default function MembershipApplicationPage() {
               <div>
                 <p className="text-sm font-medium mb-1">가입 동기</p>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">
-                  {application.application_reason}
+                  {application.motivation}
                 </p>
               </div>
               
-              {application.interests && application.interests.length > 0 && (
+              {application.goals && (
                 <div>
-                  <p className="text-sm font-medium mb-2">관심 분야</p>
-                  <div className="flex flex-wrap gap-2">
-                    {application.interests.map((interest: string) => (
-                      <Badge key={interest} variant="secondary">
-                        {interests.find(i => i.id === interest)?.label || interest}
-                      </Badge>
-                    ))}
-                  </div>
+                  <p className="text-sm font-medium mb-2">관심 분야 및 목표</p>
+                  <p className="text-sm text-muted-foreground">
+                    {application.goals}
+                  </p>
                 </div>
               )}
               
-              {application.experience_level && (
+              {application.experience && (
                 <div>
                   <p className="text-sm font-medium mb-1">경험 수준</p>
                   <p className="text-sm text-muted-foreground">
-                    {experienceLevels.find(e => e.value === application.experience_level)?.label}
+                    {experienceLevels.find(e => e.value === application.experience)?.label}
                   </p>
                 </div>
               )}
@@ -371,10 +369,10 @@ export default function MembershipApplicationPage() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                disabled={createApplicationMutation.isPending}
+                disabled={membershipV2.isSubmitting}
                 className="flex-1 kepco-gradient"
               >
-                {createApplicationMutation.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {membershipV2.isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 가입 신청
               </Button>
             </div>

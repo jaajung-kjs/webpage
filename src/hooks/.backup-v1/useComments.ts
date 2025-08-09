@@ -16,7 +16,10 @@ import type { CommentMutationContext } from '@/lib/types'
 
 // 댓글 타입 (author 정보 포함)
 interface CommentWithAuthor extends Tables<'comments'> {
-  author: Pick<Tables<'users'>, 'id' | 'name' | 'avatar_url'>
+  author: Pick<Tables<'users'>, 'id' | 'name' | 'avatar_url' | 'role'>
+  author_name: string
+  author_avatar_url?: string | null
+  author_role?: string | null
   likes_count?: number
   is_liked?: boolean
 }
@@ -38,7 +41,8 @@ export function useComments(contentId: string) {
           author:users!comments_author_id_fkey (
             id,
             name,
-            avatar_url
+            avatar_url,
+            role
           )
         `)
         .eq('content_id', contentId)
@@ -72,6 +76,9 @@ export function useComments(contentId: string) {
           
           return {
             ...comment,
+            author_name: comment.author?.name || '익명',
+            author_avatar_url: comment.author?.avatar_url,
+            author_role: comment.author?.role,
             likes_count: likesCount || 0,
             is_liked: isLiked
           }
@@ -95,26 +102,38 @@ export function useComments(contentId: string) {
  * 댓글 생성 Hook
  */
 export function useCreateComment() {
-  const { user } = useAuth()
+  const { user, profile } = useAuth()
   const queryClient = useQueryClient()
   
   return useMutation<Tables<'comments'>, Error, { contentId: string; content: string; parentId?: string }>({
     mutationFn: async ({ contentId, content, parentId }) => {
+      if (!user) throw new Error('User not authenticated')
+      
       const { data, error } = await supabaseClient
         .from('comments')
         .insert({
           content_id: contentId,
-          author_id: user!.id,
+          author_id: user.id,
           comment: content,
-          parent_id: parentId
+          parent_id: parentId || null
         })
         .select()
         .single()
       
-      if (error) throw error
+      if (error) {
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        })
+        throw new Error(error.message || 'Failed to create comment')
+      }
       return data
     },
     onMutate: async (variables) => {
+      if (!user) return { previous: null }
+      
       // Cancel queries and do optimistic update
       await queryClient.cancelQueries({ queryKey: ['comments', variables.contentId] })
       const previous = queryClient.getQueryData<CommentWithAuthor[]>(['comments', variables.contentId])
@@ -122,17 +141,21 @@ export function useCreateComment() {
       const optimisticComment: CommentWithAuthor = {
         id: `temp-${Date.now()}`,
         content_id: variables.contentId,
-        author_id: user!.id,
+        author_id: user.id,
         comment: variables.content,
         parent_id: variables.parentId || null,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         like_count: 0,
         author: {
-          id: user!.id,
-          name: user!.user_metadata?.name || 'Unknown',
-          avatar_url: user!.user_metadata?.avatar_url || null
+          id: user.id,
+          name: profile?.name || user.email?.split('@')[0] || '익명',
+          avatar_url: profile?.avatar_url || null,
+          role: profile?.role || 'member'
         },
+        author_name: profile?.name || user.email?.split('@')[0] || '익명',
+        author_avatar_url: profile?.avatar_url || null,
+        author_role: profile?.role || 'member',
         likes_count: 0,
         is_liked: false
       }
@@ -154,7 +177,8 @@ export function useCreateComment() {
     onSettled: (data, error, variables) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['comments', variables.contentId] })
-      queryClient.invalidateQueries({ queryKey: ['content', variables.contentId] }) // 콘텐츠의 댓글 수 업데이트
+      // 댓글 수만 업데이트하고 전체 content 재조회는 하지 않음 (조회수 버그 방지)
+      // queryClient.invalidateQueries({ queryKey: ['content', variables.contentId] })
     }
   })
 }
@@ -248,7 +272,8 @@ export function useDeleteComment() {
     onSettled: (data, error, variables) => {
       // Invalidate queries
       queryClient.invalidateQueries({ queryKey: ['comments', variables.contentId] })
-      queryClient.invalidateQueries({ queryKey: ['content', variables.contentId] }) // 콘텐츠의 댓글 수 업데이트
+      // 댓글 수만 업데이트하고 전체 content 재조회는 하지 않음 (조회수 버그 방지)
+      // queryClient.invalidateQueries({ queryKey: ['content', variables.contentId] })
     }
   })
 }
@@ -373,14 +398,26 @@ export function useMyComments() {
           author:users!comments_author_id_fkey (
             id,
             name,
-            avatar_url
+            avatar_url,
+            role
           )
         `)
         .eq('author_id', user.id)
         .order('created_at', { ascending: false })
       
       if (error) throw error
-      return data as CommentWithAuthor[] || []
+      
+      // 데이터 플래튼화
+      const flattenedComments = (data || []).map(comment => ({
+        ...comment,
+        author_name: comment.author?.name || '익명',
+        author_avatar_url: comment.author?.avatar_url,
+        author_role: comment.author?.role,
+        likes_count: 0,
+        is_liked: false
+      }))
+      
+      return flattenedComments as CommentWithAuthor[]
     },
     enabled: !!user,
     staleTime: 5 * 60 * 1000 // 5분
