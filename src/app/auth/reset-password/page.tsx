@@ -44,13 +44,15 @@ function PasswordResetContent() {
         const error = hashParams.get('error') || searchParams.get('error')
         const errorDescription = hashParams.get('error_description') || searchParams.get('error_description')
         
-        // Supabase 새로운 방식: code parameter 사용
+        // Supabase 새로운 방식: code parameter 또는 PKCE token 사용
         const code = hashParams.get('code') || searchParams.get('code')
+        const token = hashParams.get('token') || searchParams.get('token')
 
         console.log('Password reset parameters:', { 
           accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
           refreshToken: refreshToken ? `${refreshToken.substring(0, 10)}...` : null,
           code: code ? `${code.substring(0, 10)}...` : null,
+          token: token ? `${token.substring(0, 10)}...` : null,
           type,
           error,
           errorDescription
@@ -65,6 +67,67 @@ function PasswordResetContent() {
             setResetState('expired')
           }
           return
+        }
+
+        // PKCE 방식: token 파라미터가 있는 경우 처리 (우선순위 높음)
+        if (token && type === 'recovery') {
+          console.log('Using PKCE token-based password reset flow')
+          try {
+            // 🔒 보안: 기존 세션이 있다면 먼저 로그아웃
+            const { data: existingSession } = await supabaseClient.auth.getSession()
+            if (existingSession.session) {
+              console.log('Clearing existing session for security')
+              await supabaseClient.auth.signOut()
+            }
+            
+            // PKCE token으로 세션 교환 시도
+            const { data, error: tokenError } = await supabaseClient.auth.verifyOtp({
+              token_hash: token,
+              type: 'recovery'
+            })
+            
+            if (tokenError) {
+              console.error('PKCE token verification error:', tokenError)
+              if (tokenError.message.includes('expired') || tokenError.message.includes('invalid')) {
+                setResetState('expired')
+              } else {
+                setResetState('invalid')
+              }
+              // 🔒 보안: 에러 시 세션 완전히 제거
+              await supabaseClient.auth.signOut()
+              return
+            }
+            
+            console.log('🔍 PKCE token verification result:', {
+              hasSession: !!data.session,
+              hasUser: !!data.user,
+              sessionId: data.session?.access_token?.substring(0, 10) + '...',
+              userId: data.user?.id,
+              userEmail: data.user?.email
+            })
+            
+            if (data.session && data.user) {
+              console.log('✅ PKCE token verification successful, session established for password reset ONLY')
+              setResetState('valid')
+              setShowNewPasswordModal(true)
+              return
+            } else {
+              console.error('❌ PKCE token verification returned no session or user:', {
+                session: data.session,
+                user: data.user
+              })
+              setResetState('invalid')
+              // 🔒 보안: 실패 시 세션 완전히 제거
+              await supabaseClient.auth.signOut()
+              return
+            }
+          } catch (tokenError) {
+            console.error('PKCE token processing error:', tokenError)
+            setResetState('invalid')
+            // 🔒 보안: 예외 발생 시 세션 완전히 제거
+            await supabaseClient.auth.signOut()
+            return
+          }
         }
 
         // 새로운 방식: code 파라미터가 있는 경우 처리
@@ -126,29 +189,34 @@ function PasswordResetContent() {
         }
 
         // URL 파라미터가 전혀 없는 경우 - 직접 접근
-        if (!accessToken && !refreshToken && !type && !error && !code) {
+        if (!accessToken && !refreshToken && !type && !error && !code && !token) {
           console.log('No parameters found - direct access to reset page')
           setResetState('invalid')
           return
         }
 
         // 기존 방식: access_token과 refresh_token 사용
-        if (type !== 'recovery' && !code) {
+        if (type !== 'recovery' && !code && !token) {
           console.warn('Invalid type parameter:', type)
           setResetState('invalid')
           return
         }
 
         if (!accessToken || !refreshToken) {
-          if (!code) {
-            console.warn('Missing tokens and no code:', { accessToken: !!accessToken, refreshToken: !!refreshToken, code: !!code })
+          if (!code && !token) {
+            console.warn('Missing tokens and no code/token:', { 
+              accessToken: !!accessToken, 
+              refreshToken: !!refreshToken, 
+              code: !!code,
+              token: !!token
+            })
             setResetState('invalid')
             return
           }
         }
 
-        // 기존 방식: Supabase 세션 설정 (code가 없을 때만 실행)
-        if (!code && accessToken && refreshToken) {
+        // 기존 방식: Supabase 세션 설정 (code나 token이 없을 때만 실행)
+        if (!code && !token && accessToken && refreshToken) {
           const { data, error: sessionError } = await supabaseClient.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
