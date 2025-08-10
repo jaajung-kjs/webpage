@@ -5,7 +5,7 @@ export const dynamic = 'force-dynamic'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Clock, CheckCircle, XCircle, User } from 'lucide-react'
+import { Clock, CheckCircle, XCircle, User, ArrowLeft, Home } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
@@ -70,10 +70,30 @@ export default function MembershipStatusPage() {
     }
   }
 
+  const handleGoBack = () => {
+    router.back()
+  }
+
+  const handleGoHome = () => {
+    router.push('/')
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          {/* Navigation buttons */}
+          <div className="flex gap-2 mb-6">
+            <Button variant="outline" onClick={handleGoBack} className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              뒤로가기
+            </Button>
+            <Button variant="outline" onClick={handleGoHome} className="flex items-center gap-2">
+              <Home className="h-4 w-4" />
+              홈으로
+            </Button>
+          </div>
+          
           <Card>
             <CardContent className="py-8">
               <div className="flex justify-center">
@@ -90,6 +110,18 @@ export default function MembershipStatusPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          {/* Navigation buttons */}
+          <div className="flex gap-2 mb-6">
+            <Button variant="outline" onClick={handleGoBack} className="flex items-center gap-2">
+              <ArrowLeft className="h-4 w-4" />
+              뒤로가기
+            </Button>
+            <Button variant="outline" onClick={handleGoHome} className="flex items-center gap-2">
+              <Home className="h-4 w-4" />
+              홈으로
+            </Button>
+          </div>
+          
           <Card>
             <CardHeader>
               <CardTitle>가입 신청 내역 없음</CardTitle>
@@ -111,6 +143,18 @@ export default function MembershipStatusPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-2xl mx-auto space-y-6">
+        {/* Navigation buttons */}
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={handleGoBack} className="flex items-center gap-2">
+            <ArrowLeft className="h-4 w-4" />
+            뒤로가기
+          </Button>
+          <Button variant="outline" onClick={handleGoHome} className="flex items-center gap-2">
+            <Home className="h-4 w-4" />
+            홈으로
+          </Button>
+        </div>
+        
         <h1 className="text-3xl font-bold">가입 신청 현황</h1>
 
         <Card>
