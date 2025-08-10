@@ -71,6 +71,13 @@ function PasswordResetContent() {
         if (code) {
           console.log('Using new code-based password reset flow')
           try {
+            // 🔒 보안: 기존 세션이 있다면 먼저 로그아웃
+            const { data: existingSession } = await supabaseClient.auth.getSession()
+            if (existingSession.session) {
+              console.log('Clearing existing session for security')
+              await supabaseClient.auth.signOut()
+            }
+            
             // exchangeCodeForSession을 사용하여 code를 세션으로 교환
             const { data, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(code)
             
@@ -81,21 +88,39 @@ function PasswordResetContent() {
               } else {
                 setResetState('invalid')
               }
+              // 🔒 보안: 에러 시 세션 완전히 제거
+              await supabaseClient.auth.signOut()
               return
             }
             
+            console.log('🔍 Code exchange result:', {
+              hasSession: !!data.session,
+              hasUser: !!data.user,
+              sessionId: data.session?.access_token?.substring(0, 10) + '...',
+              userId: data.user?.id,
+              userEmail: data.user?.email
+            })
+            
             if (data.session && data.user) {
-              console.log('Code exchange successful, session established')
+              console.log('✅ Code exchange successful, session established for password reset ONLY')
               setResetState('valid')
               setShowNewPasswordModal(true)
               return
             } else {
+              console.error('❌ Code exchange returned no session or user:', {
+                session: data.session,
+                user: data.user
+              })
               setResetState('invalid')
+              // 🔒 보안: 실패 시 세션 완전히 제거
+              await supabaseClient.auth.signOut()
               return
             }
           } catch (codeError) {
             console.error('Code processing error:', codeError)
             setResetState('invalid')
+            // 🔒 보안: 예외 발생 시 세션 완전히 제거
+            await supabaseClient.auth.signOut()
             return
           }
         }
@@ -156,9 +181,14 @@ function PasswordResetContent() {
     handlePasswordReset()
   }, [searchParams])
 
-  const handleComplete = () => {
+  const handleComplete = async () => {
     setResetState('completed')
     setShowNewPasswordModal(false)
+    
+    // 🔒 보안: 비밀번호 변경 완료 후 세션 제거
+    // 사용자가 새 비밀번호로 다시 로그인하도록 강제
+    console.log('Password changed successfully, clearing session for security')
+    await supabaseClient.auth.signOut()
     
     // 로그인 페이지로 리다이렉트
     toast.success('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.')
@@ -168,7 +198,10 @@ function PasswordResetContent() {
     }, 2000)
   }
 
-  const handleRetryReset = () => {
+  const handleRetryReset = async () => {
+    // 🔒 보안: 페이지 이동 전 세션 완전히 제거
+    console.log('Clearing any existing session before retry')
+    await supabaseClient.auth.signOut()
     router.push('/')
   }
 
@@ -218,14 +251,25 @@ function PasswordResetContent() {
             
             <div className="flex gap-2">
               <Button
-                onClick={() => window.open('/', '_blank')}
+                onClick={async () => {
+                  // 🔒 보안: 새 재설정 요청 전 세션 완전히 제거
+                  console.log('Clearing any existing session before redirect')
+                  await supabaseClient.auth.signOut()
+                  // 홈페이지로 이동 (새 창 아님)
+                  router.push('/')
+                }}
                 variant="outline"
                 className="flex-1"
               >
                 새 재설정 요청
               </Button>
               <Button
-                onClick={handleRetryReset}
+                onClick={async () => {
+                  // 🔒 보안: 홈으로 가기 전 세션 완전히 제거
+                  console.log('Clearing any existing session before going home')
+                  await supabaseClient.auth.signOut()
+                  router.push('/')
+                }}
                 className="flex-1 kepco-gradient"
               >
                 홈페이지로
@@ -287,7 +331,12 @@ function PasswordResetContent() {
               잠시 후 홈페이지로 이동합니다...
             </div>
             <Button
-              onClick={() => router.push('/')}
+              onClick={async () => {
+                // 🔒 보안: 홈으로 가기 전 세션 상태 확인 (이미 signOut 되었어야 함)
+                console.log('Ensuring no session exists before going home')
+                await supabaseClient.auth.signOut()
+                router.push('/')
+              }}
               className="w-full kepco-gradient"
             >
               홈페이지로 이동
