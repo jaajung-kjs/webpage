@@ -101,7 +101,7 @@ export function PasswordResetModal({ open, onOpenChange }: PasswordResetModalPro
       form.reset()
       
       toast.success('이메일 전송 완료', {
-        description: '비밀번호 재설정 링크가 이메일로 전송되었습니다.',
+        description: '새로운 재설정 링크가 전송되었습니다. 이전 링크는 무효화되었습니다.',
         duration: 5000
       })
       
@@ -211,6 +211,7 @@ export function PasswordResetModal({ open, onOpenChange }: PasswordResetModalPro
               <div className="text-sm text-muted-foreground space-y-2">
                 <p>• 이메일함을 확인하세요 (스팸함도 확인해주세요)</p>
                 <p>• 링크는 1시간 동안 유효합니다</p>
+                <p>• <strong>이전에 받은 재설정 링크는 무효화되었습니다</strong></p>
                 <p>• 이메일이 오지 않으면 다시 시도해주세요</p>
               </div>
               

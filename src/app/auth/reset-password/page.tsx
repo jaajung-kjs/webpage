@@ -81,14 +81,14 @@ function PasswordResetContent() {
         }
 
         // Supabase 세션 설정
-        const { data, error } = await supabaseClient.auth.setSession({
+        const { data, error: sessionError } = await supabaseClient.auth.setSession({
           access_token: accessToken,
           refresh_token: refreshToken
         })
 
-        if (error) {
-          console.error('Session error:', error)
-          if (error.message.includes('expired') || error.message.includes('invalid')) {
+        if (sessionError) {
+          console.error('Session error:', sessionError)
+          if (sessionError.message.includes('expired') || sessionError.message.includes('invalid')) {
             setResetState('expired')
           } else {
             setResetState('invalid')

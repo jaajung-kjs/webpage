@@ -24,23 +24,54 @@ export default function AuthCallbackPage() {
           return
         }
         
-        // URL 파라미터 확인
+        // 전체 URL 로깅 (디버깅용)
+        console.log('Full URL:', window.location.href)
+        console.log('Hash:', window.location.hash)
+        console.log('Search:', window.location.search)
+        
+        // URL 파라미터 확인 (query parameters와 hash fragments 모두 확인)
         const urlParams = new URLSearchParams(window.location.search)
-        const type = urlParams.get('type')
-        const accessToken = urlParams.get('access_token')
-        const refreshToken = urlParams.get('refresh_token')
+        const hashParams = new URLSearchParams(window.location.hash.substring(1))
+        
+        const type = urlParams.get('type') || hashParams.get('type')
+        const accessToken = urlParams.get('access_token') || hashParams.get('access_token')
+        const refreshToken = urlParams.get('refresh_token') || hashParams.get('refresh_token')
+        const error = urlParams.get('error') || hashParams.get('error')
+        const errorDescription = urlParams.get('error_description') || hashParams.get('error_description')
+        
+        console.log('Auth callback parameters:', { 
+          type,
+          accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
+          refreshToken: refreshToken ? `${refreshToken.substring(0, 10)}...` : null,
+          error,
+          errorDescription
+        })
+        
+        // 에러가 있는 경우 처리
+        if (error) {
+          console.error('URL contains error:', error, errorDescription)
+          setStatus('error')
+          if (error === 'access_denied') {
+            setMessage('인증이 거부되었습니다.')
+          } else if (error === 'expired_token') {
+            setMessage('인증 링크가 만료되었습니다. 새로운 인증 이메일을 요청해주세요.')
+          } else {
+            setMessage(`인증 중 오류가 발생했습니다: ${errorDescription || error}`)
+          }
+          return
+        }
         
         // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등)
         if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken) {
-          const { data, error } = await supabaseClient.auth.setSession({
+          const { data, error: sessionError } = await supabaseClient.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
           
-          if (error) {
-            console.error('Session set error:', error)
+          if (sessionError) {
+            console.error('Session set error:', sessionError)
             setStatus('error')
-            setMessage('이메일 인증 처리 중 오류가 발생했습니다: ' + error.message)
+            setMessage('이메일 인증 처리 중 오류가 발생했습니다: ' + sessionError.message)
             return
           }
           
@@ -78,15 +109,15 @@ export default function AuthCallbackPage() {
         }
         
         // 일반 세션 확인
-        const { data, error } = await supabaseClient.auth.getSession()
+        const { data: sessionData, error: getSessionError } = await supabaseClient.auth.getSession()
         
-        if (error) {
+        if (getSessionError) {
           setStatus('error')
-          setMessage('인증 중 오류가 발생했습니다: ' + error.message)
+          setMessage('인증 중 오류가 발생했습니다: ' + getSessionError.message)
           return
         }
 
-        if (data.session) {
+        if (sessionData.session) {
           setStatus('success')
           setMessage('인증이 완료되었습니다! 환영합니다.')
           

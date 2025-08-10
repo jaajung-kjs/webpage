@@ -10,8 +10,8 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Mail, RefreshCw, X, CheckCircle } from 'lucide-react'
-import { useAuth } from '@/providers'
+import { Mail, RefreshCw, X, CheckCircle, AlertTriangle } from 'lucide-react'
+import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 
 interface EmailVerificationModalProps {
@@ -25,7 +25,6 @@ export default function EmailVerificationModal({
   onOpenChange, 
   email 
 }: EmailVerificationModalProps) {
-  const { resendEmailConfirmation } = useAuth()
   const [isResending, setIsResending] = useState(false)
   const [resendSuccess, setResendSuccess] = useState(false)
 
@@ -34,21 +33,41 @@ export default function EmailVerificationModal({
 
     setIsResending(true)
     try {
-      const { error } = await resendEmailConfirmation(email)
+      // Supabase에서 회원가입 이메일을 다시 전송
+      // 새로운 토큰이 생성되며 기존 토큰은 자동으로 무효화됩니다
+      const { error } = await supabaseClient.auth.resend({
+        type: 'signup',
+        email: email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`
+        }
+      })
       
       if (error) {
+        console.error('Email resend error:', error)
+        
+        let errorMessage = '인증 이메일 재발송에 실패했습니다.'
+        if (error.message) {
+          if (error.message.includes('too many requests') || error.message.includes('rate limit')) {
+            errorMessage = '너무 많은 요청이 있었습니다. 잠시 후 다시 시도해주세요.'
+          } else if (error.message.includes('User not found')) {
+            errorMessage = '등록되지 않은 이메일 주소입니다.'
+          }
+        }
+        
         toast.error('재발송 실패', {
-          description: '인증 이메일 재발송에 실패했습니다.',
+          description: errorMessage,
           duration: 4000
         })
       } else {
         setResendSuccess(true)
         toast.success('이메일 재발송 완료!', {
-          description: '이메일을 확인해주세요.',
-          duration: 4000
+          description: '새로운 인증 이메일이 발송되었습니다. 이전 링크는 무효화되었습니다.',
+          duration: 5000
         })
       }
     } catch (error) {
+      console.error('Email resend exception:', error)
       toast.error('오류 발생', {
         description: '예상치 못한 오류가 발생했습니다.',
         duration: 4000
@@ -88,10 +107,21 @@ export default function EmailVerificationModal({
             <Alert className="border-green-200 bg-green-50">
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription className="text-green-800 ml-2">
-                <strong>재발송 완료!</strong> 인증 이메일이 다시 발송되었습니다. 이메일을 확인해주세요.
+                <strong>재발송 완료!</strong> 새로운 인증 이메일이 발송되었습니다. 
+                <br/>
+                <span className="text-sm text-green-700">이전에 받은 인증 링크는 무효화되었습니다.</span>
               </AlertDescription>
             </Alert>
           )}
+          
+          {/* 기존 링크 무효화 안내 */}
+          <Alert className="border-amber-200 bg-amber-50">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            <AlertDescription className="text-amber-800 ml-2">
+              <strong>중요 안내:</strong> 재발송 시 이전 인증 링크는 자동으로 무효화되며, 
+              새로 받은 링크만 사용할 수 있습니다.
+            </AlertDescription>
+          </Alert>
 
           <div className="space-y-3">
             {email && (
