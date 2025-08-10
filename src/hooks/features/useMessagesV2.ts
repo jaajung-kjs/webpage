@@ -396,20 +396,36 @@ function useConversationMessagesV2(conversationId: string, options?: {
         replyToMessages = replyData || []
       }
       
-      // Get read status for current user
+      // Get read status for all participants (to show who read what)
       const messageIds = messages.map(m => m.id)
       const { data: readStatuses, error: readError } = await supabaseClient
         .from('message_read_status_v2')
-        .select('message_id, is_read, read_at')
+        .select('message_id, user_id, is_read, read_at')
         .in('message_id', messageIds)
-        .eq('user_id', user.id)
       
       if (readError) throw readError
       
       // Combine all data
       const data = messages.map(msg => {
         const sender = users?.find(u => u.id === msg.sender_id)
-        const readStatus = readStatuses?.find(rs => rs.message_id === msg.id)
+        
+        // 읽음상태 로직 개선:
+        // - 내가 보낸 메시지: 상대방이 읽었는지 확인
+        // - 상대방이 보낸 메시지: 내가 읽었는지 확인
+        const isMyMessage = msg.sender_id === user.id
+        
+        let readStatus
+        if (isMyMessage) {
+          // 내가 보낸 메시지: 상대방의 읽음상태 확인
+          readStatus = readStatuses?.find(rs => 
+            rs.message_id === msg.id && rs.user_id !== user.id
+          )
+        } else {
+          // 상대방이 보낸 메시지: 내 읽음상태 확인
+          readStatus = readStatuses?.find(rs => 
+            rs.message_id === msg.id && rs.user_id === user.id
+          )
+        }
         
         return {
           ...msg,
@@ -443,9 +459,9 @@ function useConversationMessagesV2(conversationId: string, options?: {
     },
     enabled: !!user && !!conversationId,
     gcTime: 10 * 60 * 1000, // 10 minutes
-    staleTime: 1 * 1000, // 1초로 줄여서 즉시 refetch
+    staleTime: 1 * 1000, // 1초로 빠른 응답
     refetchOnWindowFocus: true, // 포커스 시 새로고침
-    refetchInterval: false // polling 비활성화 (위의 useEffect에서 직접 실시간 구독 처리)
+    refetchInterval: false // polling 비활성화 (직접 실시간 구독으로 처리)
     // refetchOnWindowFocus와 refetchOnReconnect는 기본값(true) 사용
   })
 }
