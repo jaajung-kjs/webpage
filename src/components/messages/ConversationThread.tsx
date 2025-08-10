@@ -378,16 +378,21 @@ export function ConversationThread({
               )} */}
               
               <AnimatePresence initial={false}>
-                {messages?.map((message, index) => {
+                {messages
+                  // 중복 메시지 필터링 (같은 ID가 여러 번 나오는 경우 첫 번째만 사용)
+                  ?.filter((message, index, arr) => 
+                    arr.findIndex(m => m.id === message.id) === index
+                  )
+                  ?.map((message, index, filteredMessages) => {
                   const isOwn = message.sender_id === (user as any)?.id
-                  const showAvatar = index === 0 || messages[index - 1]?.sender_id !== message.sender_id
+                  const showAvatar = index === 0 || filteredMessages[index - 1]?.sender_id !== message.sender_id
                   
                   // 시간 표시 여부 결정: 다음 메시지와 1분 이상 차이나거나 마지막 메시지인 경우
                   const showTime = (() => {
-                    if (index === (messages?.length || 0) - 1) return true // 마지막 메시지
+                    if (index === filteredMessages.length - 1) return true // 마지막 메시지
                     
                     const currentTime = new Date(message.created_at)
-                    const nextMessage = messages[index + 1]
+                    const nextMessage = filteredMessages[index + 1]
                     
                     if (!nextMessage) return true
                     if (nextMessage.sender_id !== message.sender_id) return true // 다른 발신자
@@ -490,7 +495,7 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
         <div className="w-8">
           {showAvatar ? (
             <Avatar className="h-6 w-6">
-              <AvatarImage src={message.sender.avatar_url || undefined} />
+              <AvatarImage src={message.sender?.avatar_url || undefined} />
               <AvatarFallback className="text-xs">
                 <User className="h-3 w-3" />
               </AvatarFallback>
@@ -583,6 +588,8 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
     prevProps.message.id === nextProps.message.id &&
     prevProps.message.read_status?.is_read === nextProps.message.read_status?.is_read &&
     prevProps.message.content === nextProps.message.content &&
+    prevProps.message.sender?.id === nextProps.message.sender?.id &&
+    prevProps.message.sender?.name === nextProps.message.sender?.name &&
     prevProps.isOwn === nextProps.isOwn &&
     prevProps.showAvatar === nextProps.showAvatar &&
     prevProps.showTime === nextProps.showTime &&

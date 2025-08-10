@@ -87,10 +87,13 @@ export function useMessageNotifications() {
       silent: !settings.sound
     })
 
-    // 클릭 시 대화방으로 이동
+    // 클릭 시 메시지 모달 열기
     browserNotification.onclick = () => {
       window.focus()
-      router.push(`/messages?conversation=${notification.conversationId}`)
+      // 메시지 모달 열기 이벤트 발생
+      window.dispatchEvent(new CustomEvent('openMessageModal', {
+        detail: { conversationId: notification.conversationId }
+      }))
       browserNotification.close()
     }
 
@@ -111,7 +114,10 @@ export function useMessageNotifications() {
       action: {
         label: '확인',
         onClick: () => {
-          router.push(`/messages?conversation=${notification.conversationId}`)
+          // 메시지 모달 열기 이벤트 발생
+          window.dispatchEvent(new CustomEvent('openMessageModal', {
+            detail: { conversationId: notification.conversationId }
+          }))
         }
       },
       duration: 4000

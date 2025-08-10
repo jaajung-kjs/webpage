@@ -7,7 +7,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/providers'
 import { MessageInbox } from './MessageInbox'
 import { ConversationThread } from './ConversationThread'
@@ -16,6 +16,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { MessageCircle, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useConversationsV2 } from '@/hooks/features/useMessagesV2'
 
 interface MessageModalProps {
   open: boolean
@@ -43,6 +44,7 @@ export function MessageModal({
   initialRecipientName
 }: MessageModalProps) {
   const { isMember } = useAuth()
+  const { data: conversations } = useConversationsV2()
   const [viewState, setViewState] = useState<ViewState>(() => {
     if (initialConversationId && initialRecipientId && initialRecipientName) {
       return {
@@ -55,6 +57,22 @@ export function MessageModal({
     return { type: 'inbox' }
   })
   const [showNewMessage, setShowNewMessage] = useState(false)
+
+  // initialConversationId가 변경될 때 해당 대화방으로 이동
+  useEffect(() => {
+    if (initialConversationId && conversations) {
+      const conversation = conversations.find(c => c.id === initialConversationId)
+      if (conversation) {
+        setViewState({
+          type: 'conversation',
+          conversationId: conversation.id,
+          recipientId: conversation.participant.id,
+          recipientName: conversation.participant.name,
+          recipientAvatar: conversation.participant.avatar_url
+        })
+      }
+    }
+  }, [initialConversationId, conversations])
 
   const handleConversationSelect = (
     conversationId: string,

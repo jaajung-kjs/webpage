@@ -136,9 +136,12 @@ function useConversationsV2() {
   useEffect(() => {
     if (!user) return
 
+    // 고유한 채널 이름으로 충돌 방지
+    const uniqueId = Math.random().toString(36).substr(2, 9)
+    
     // 메시지 변경사항 구독
     const messagesChannel = supabaseClient
-      .channel('messages-for-conversations')
+      .channel(`messages-conversations-${user.id}-${uniqueId}`)
       .on('postgres_changes' as any, {
         event: '*',
         schema: 'public',
@@ -151,7 +154,7 @@ function useConversationsV2() {
 
     // 읽음상태 변경사항 구독  
     const readStatusChannel = supabaseClient
-      .channel('read-status-for-conversations')
+      .channel(`read-status-conversations-${user.id}-${uniqueId}`)
       .on('postgres_changes' as any, {
         event: '*',
         schema: 'public', 
@@ -360,25 +363,35 @@ function useConversationMessagesV2(conversationId: string, options?: {
       if (readError) throw readError
       
       // Combine all data
-      const data = messages.map(msg => ({
-        ...msg,
-        sender: users?.find(u => u.id === msg.sender_id) || null,
-        read_status: readStatuses?.find(rs => rs.message_id === msg.id) || null,
-        reply_to: msg.reply_to_id ? {
-          ...replyToMessages.find(rm => rm.id === msg.reply_to_id),
-          sender: users?.find(u => u.id === replyToMessages.find(rm => rm.id === msg.reply_to_id)?.sender_id)
-        } : null
-      }))
+      const data = messages.map(msg => {
+        const sender = users?.find(u => u.id === msg.sender_id)
+        const readStatus = readStatuses?.find(rs => rs.message_id === msg.id)
+        
+        return {
+          ...msg,
+          sender: sender || {
+            id: msg.sender_id,
+            name: 'Unknown User',
+            avatar_url: null,
+            role: 'member'
+          },
+          read_status: readStatus || { is_read: false, read_at: null },
+          reply_to: msg.reply_to_id ? {
+            ...replyToMessages.find(rm => rm.id === msg.reply_to_id),
+            sender: users?.find(u => u.id === replyToMessages.find(rm => rm.id === msg.reply_to_id)?.sender_id)
+          } : null
+        }
+      })
       
       // Transform data
       const transformedMessages: MessageV2[] = (data || []).map(msg => ({
         ...msg,
-        sender: (msg as any).sender,
-        read_status: (msg as any).read_status?.[0] || { is_read: false, read_at: null },
-        reply_to: (msg as any).reply_to ? {
-          id: (msg as any).reply_to.id,
-          content: (msg as any).reply_to.content,
-          sender_name: (msg as any).reply_to.sender.name
+        sender: msg.sender,
+        read_status: msg.read_status,
+        reply_to: msg.reply_to ? {
+          id: msg.reply_to.id,
+          content: msg.reply_to.content,
+          sender_name: msg.reply_to.sender?.name || 'Unknown User'
         } : undefined
       }))
       
@@ -410,9 +423,12 @@ function useUnreadCountV2() {
   useEffect(() => {
     if (!user) return
 
+    // 고유한 채널 이름으로 충돌 방지
+    const uniqueId = Math.random().toString(36).substr(2, 9)
+
     // 메시지 변경사항 구독 (새 메시지 등)
     const messagesChannel = supabaseClient
-      .channel('messages-for-unread-count')
+      .channel(`messages-unread-count-${user.id}-${uniqueId}`)
       .on('postgres_changes' as any, {
         event: '*',
         schema: 'public',
@@ -424,7 +440,7 @@ function useUnreadCountV2() {
 
     // 읽음상태 변경사항 구독 (읽음 처리 등)
     const readStatusChannel = supabaseClient
-      .channel('read-status-for-unread-count')
+      .channel(`read-status-unread-count-${user.id}-${uniqueId}`)
       .on('postgres_changes' as any, {
         event: '*',
         schema: 'public', 
@@ -581,7 +597,16 @@ function useSendMessageV2() {
       
       queryClient.setQueryData(
         ['conversation-messages-v2', variables.conversation_id, user?.id],
-        (old: MessageV2[] = []) => [...old, optimisticMessage]
+        (old: MessageV2[] = []) => {
+          // 중복 체크: temp ID가 이미 있으면 교체, 없으면 추가
+          const existingIndex = old.findIndex(msg => msg.id === optimisticMessage.id)
+          if (existingIndex !== -1) {
+            const updated = [...old]
+            updated[existingIndex] = optimisticMessage
+            return updated
+          }
+          return [...old, optimisticMessage]
+        }
       )
       
       return { previousData: previous }

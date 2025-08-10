@@ -73,6 +73,17 @@ export default function Header() {
     return () => window.removeEventListener('openLoginDialog', handleOpenLoginDialog)
   }, [])
   
+  // Listen for message modal open events
+  useEffect(() => {
+    const handleOpenMessageModal = (event: any) => {
+      const { conversationId } = event.detail || {}
+      openModal({ conversationId })
+    }
+    
+    window.addEventListener('openMessageModal', handleOpenMessageModal)
+    return () => window.removeEventListener('openMessageModal', handleOpenMessageModal)
+  }, [openModal])
+  
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">

@@ -127,10 +127,17 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
       case 'merge':
         if (Array.isArray(currentData)) {
           const list = [...currentData]
-          const index = list.findIndex((item) => (item as any).id === ((newRecord as any)?.id || (oldRecord as any)?.id))
+          const recordId = (newRecord as any)?.id || (oldRecord as any)?.id
+          const index = list.findIndex((item) => (item as any).id === recordId)
           
           if (eventType === 'INSERT') {
-            return [...list, newRecord]
+            // 중복 체크: 이미 존재하는 항목이면 업데이트, 없으면 추가
+            if (index !== -1) {
+              list[index] = { ...list[index], ...newRecord }
+              return list
+            } else {
+              return [...list, newRecord]
+            }
           } else if (eventType === 'UPDATE' && index !== -1) {
             list[index] = { ...list[index], ...newRecord }
             return list
@@ -243,9 +250,12 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     const { table, event = '*', filter, updateStrategy = 'invalidate', schema = 'public' } = options.realtime
 
-    // 채널 생성 - queryKey의 안정적인 부분만 사용
-    const stableKey = Array.isArray(options.queryKey) ? options.queryKey[0] : String(options.queryKey)
-    const channelName = `realtime-v2-${table}-${stableKey}`
+    // 채널 생성 - 고유한 채널 이름으로 충돌 방지
+    const queryKeyString = Array.isArray(options.queryKey) 
+      ? options.queryKey.filter(k => k != null).join('-')
+      : String(options.queryKey)
+    const uniqueId = Math.random().toString(36).substr(2, 9)
+    const channelName = `realtime-v2-${table}-${queryKeyString}-${uniqueId}`
     channelRef.current = supabaseClient.channel(channelName)
 
     // 필터 적용
