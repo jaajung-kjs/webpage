@@ -138,16 +138,47 @@ export function useAuthV2() {
       .is('deleted_at', null)
   }, [user?.id, supabase])
 
-  // 로그아웃
+  // 로그아웃 (개선된 에러 핸들링)
   const signOut = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.auth.signOut()
-      if (error) throw error
+      try {
+        const { error } = await supabase.auth.signOut()
+        if (error) {
+          console.warn('Supabase signOut API error:', error)
+          // 403이나 네트워크 에러여도 로컬 세션은 정리해야 함
+          if (error.status === 403 || error.message?.includes('network')) {
+            console.log('Forcing local session cleanup due to network/permission error')
+            return // 에러를 throw하지 않고 정상 처리로 간주
+          }
+          throw error
+        }
+      } catch (err: any) {
+        console.warn('SignOut network error, forcing local cleanup:', err)
+        // 네트워크 에러나 403은 로컬에서 정리하고 성공으로 처리
+        if (err.status === 403 || err.code === 'network_error' || err.name === 'NetworkError') {
+          return
+        }
+        throw err
+      }
     },
-    onSuccess: () => {
-      // 모든 쿼리 캐시 초기화
+    onSettled: () => {
+      // 성공/실패와 관계없이 항상 로컬 세션 정리
+      console.log('Clearing local session data')
       queryClient.clear()
-      router.push('/login')
+      
+      // 현재 경로가 보호된 경로인지 확인하고 적절한 경로로 리다이렉트
+      const currentPath = window.location.pathname
+      const protectedPaths = ['/profile', '/admin', '/settings', '/activities']
+      
+      if (protectedPaths.some(path => currentPath.startsWith(path))) {
+        router.push('/')
+      } else {
+        router.refresh() // 현재 페이지에서 상태만 새로고침
+      }
+    },
+    onError: (error: any) => {
+      console.error('SignOut error details:', error)
+      // 에러가 발생해도 사용자에게는 로그아웃이 완료된 것으로 보이도록 함
     }
   })
 

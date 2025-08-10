@@ -42,6 +42,7 @@ interface AuthContextValue {
   loading: boolean
   error: any
   isAuthenticated: boolean
+  isSigningOut: boolean
   
   // 권한 체크
   isMember: boolean
@@ -75,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isSigningOut, setIsSigningOut] = useState(false)
   const queryClient = useQueryClient()
 
   // users_v2 프로필 조회
@@ -176,8 +178,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signOut = async () => {
-    const { error } = await supabaseClient.auth.signOut()
-    return { error }
+    if (isSigningOut) {
+      console.log('SignOut already in progress, skipping')
+      return { error: null }
+    }
+    
+    setIsSigningOut(true)
+    
+    try {
+      const { error } = await supabaseClient.auth.signOut()
+      if (error) {
+        console.warn('AuthProvider signOut error:', error)
+        // 403이나 네트워크 에러는 로컬에서 정리하고 성공으로 처리
+        if (error.status === 403 || error.message?.includes('network') || error.message?.includes('Invalid session')) {
+          console.log('Forcing local session cleanup in AuthProvider')
+          // 로컬 세션 상태 강제 정리
+          setSession(null)
+          setUser(null)
+          queryClient.clear()
+          return { error: null } // 성공으로 처리
+        }
+        return { error }
+      }
+      return { error: null }
+    } catch (err: any) {
+      console.warn('AuthProvider signOut network error:', err)
+      // 네트워크 에러는 로컬 세션만 정리
+      if (err.name === 'NetworkError' || err.code === 'network_error') {
+        setSession(null)
+        setUser(null)
+        queryClient.clear()
+        return { error: null }
+      }
+      return { error: err }
+    } finally {
+      setIsSigningOut(false)
+    }
   }
 
   const updateProfile = async (updates: Partial<Tables<'users_v2'>>) => {
@@ -220,6 +256,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading: loading || profileLoading,
     error,
     isAuthenticated,
+    isSigningOut,
     
     // 권한
     isMember,
@@ -265,6 +302,7 @@ export function useAuth() {
       loading: false,
       error: null,
       isAuthenticated: false,
+      isSigningOut: false,
       
       // 권한
       isMember: false,

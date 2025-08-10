@@ -23,6 +23,7 @@
 
 'use client'
 
+import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { useRealtimeQueryV2 } from '@/hooks/core/useRealtimeQueryV2'
@@ -129,6 +130,43 @@ export interface SearchMessageResult {
  */
 function useConversationsV2() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  
+  // 메시지와 읽음상태 변경사항 실시간 감지 후 대화방 목록 무효화
+  useEffect(() => {
+    if (!user) return
+
+    // 메시지 변경사항 구독
+    const messagesChannel = supabaseClient
+      .channel('messages-for-conversations')
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public',
+        table: 'messages_v2'
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
+        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+      })
+      .subscribe()
+
+    // 읽음상태 변경사항 구독  
+    const readStatusChannel = supabaseClient
+      .channel('read-status-for-conversations')
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public', 
+        table: 'message_read_status_v2'
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
+        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+      })
+      .subscribe()
+
+    return () => {
+      supabaseClient.removeChannel(messagesChannel)
+      supabaseClient.removeChannel(readStatusChannel)
+    }
+  }, [user?.id, queryClient])
   
   return useRealtimeQueryV2<ConversationV2[]>({
     queryKey: ['conversations-v2', user?.id],
@@ -230,8 +268,9 @@ function useConversationsV2() {
     realtime: {
       enabled: true,
       table: 'conversations_v2',
-      filter: `user1_id=eq.${user?.id},user2_id=eq.${user?.id}`,
-      updateStrategy: 'invalidate'
+      updateStrategy: 'invalidate',
+      event: '*'
+      // conversations는 복잡한 조건(OR)이라서 필터 없이 전체 감지 후 invalidate
     }
   })
 }
@@ -352,7 +391,8 @@ function useConversationMessagesV2(conversationId: string, options?: {
       enabled: true,
       table: 'messages_v2',
       filter: `conversation_id=eq.${conversationId}`,
-      updateStrategy: 'append'
+      updateStrategy: 'merge', // append에서 merge로 변경하여 업데이트도 처리
+      event: '*' // 모든 이벤트 감지 (INSERT, UPDATE, DELETE)
     }
     // refetchOnWindowFocus와 refetchOnReconnect는 기본값(true) 사용
   })
@@ -364,6 +404,41 @@ function useConversationMessagesV2(conversationId: string, options?: {
  */
 function useUnreadCountV2() {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  
+  // 메시지와 읽음상태 변경사항을 감지해서 안읽은 메시지 카운트 실시간 업데이트
+  useEffect(() => {
+    if (!user) return
+
+    // 메시지 변경사항 구독 (새 메시지 등)
+    const messagesChannel = supabaseClient
+      .channel('messages-for-unread-count')
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public',
+        table: 'messages_v2'
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+      })
+      .subscribe()
+
+    // 읽음상태 변경사항 구독 (읽음 처리 등)
+    const readStatusChannel = supabaseClient
+      .channel('read-status-for-unread-count')
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public', 
+        table: 'message_read_status_v2'
+      }, () => {
+        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+      })
+      .subscribe()
+
+    return () => {
+      supabaseClient.removeChannel(messagesChannel)
+      supabaseClient.removeChannel(readStatusChannel)
+    }
+  }, [user?.id, queryClient])
   
   return useQuery<number>({
     queryKey: ['unread-count-v2', user?.id],
@@ -378,8 +453,8 @@ function useUnreadCountV2() {
     },
     enabled: !!user,
     gcTime: 2 * 60 * 1000, // 2 minutes
-    staleTime: 2 * 60 * 1000, // 2 minutes (Real-time handles updates)
-    refetchOnWindowFocus: false, // Real-time handles updates
+    staleTime: 30 * 1000, // 30초로 줄여서 더 자주 업데이트
+    refetchOnWindowFocus: true, // 포커스 시에도 새로고침
   })
 }
 

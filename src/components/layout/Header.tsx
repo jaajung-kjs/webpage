@@ -11,6 +11,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescri
 import { Menu, User, LogOut, Settings, Shield, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
+import { useMessageNotifications } from '@/hooks/features/useMessageNotifications'
 import LoginDialog from '@/components/auth/LoginDialog'
 
 const navigation = [
@@ -26,14 +27,40 @@ export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const { user, profile, loading, isMember, signOut } = useAuth()
+  const { user, profile, loading, isMember, signOut, isSigningOut } = useAuth()
   const { openModal, modalProps } = useMessageModal()
+  const { requestPermission, permission } = useMessageNotifications()
   const router = useRouter()
   
   const handleSignOut = async () => {
-    await signOut()
-    router.push('/')
+    if (isSigningOut) return // 이미 로그아웃 진행중이면 무시
+    
+    try {
+      const { error } = await signOut()
+      if (error) {
+        console.warn('Header signOut error:', error)
+        // 에러가 발생해도 사용자 경험을 위해 홈으로 이동
+      }
+      // useAuth의 signOut이 이미 적절한 리다이렉트를 처리하므로 
+      // 여기서는 추가 리다이렉트를 하지 않음
+    } catch (err) {
+      console.error('Unexpected signOut error:', err)
+      // 예상치 못한 에러 발생 시 강제로 홈으로 이동
+      router.push('/')
+    }
   }
+  
+  // 로그인한 멤버에게 알림 권한 요청
+  useEffect(() => {
+    if (user && isMember && permission === 'default') {
+      // 로그인 후 5초 후에 알림 권한 요청 (사용자 경험 개선)
+      const timer = setTimeout(() => {
+        requestPermission()
+      }, 5000)
+      
+      return () => clearTimeout(timer)
+    }
+  }, [user, isMember, permission, requestPermission])
   
   // Listen for login dialog open events
   useEffect(() => {
@@ -159,10 +186,11 @@ export default function Header() {
                   )}
                   <DropdownMenuItem
                     onClick={handleSignOut}
-                    className="text-red-600 focus:text-red-600 cursor-pointer"
+                    disabled={isSigningOut}
+                    className="text-red-600 focus:text-red-600 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>로그아웃</span>
+                    <LogOut className={`mr-2 h-4 w-4 ${isSigningOut ? 'animate-spin' : ''}`} />
+                    <span>{isSigningOut ? '로그아웃 중...' : '로그아웃'}</span>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -222,14 +250,24 @@ export default function Header() {
 }
 
 function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMessage?: () => void }) {
-  const { user, profile, isMember, signOut } = useAuth()
+  const { user, profile, isMember, signOut, isSigningOut } = useAuth()
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
   const router = useRouter()
   
   const handleSignOut = async () => {
-    await signOut()
-    router.push('/')
+    if (isSigningOut) return // 이미 로그아웃 진행중이면 무시
+    
+    try {
+      const { error } = await signOut()
+      if (error) {
+        console.warn('MobileNav signOut error:', error)
+      }
+      // AuthProvider의 signOut이 리다이렉트를 처리함
+    } catch (err) {
+      console.error('Unexpected MobileNav signOut error:', err)
+      router.push('/')
+    }
   }
   
   const handleMessageClick = () => {
@@ -327,10 +365,11 @@ function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMes
               variant="outline" 
               size="default" 
               onClick={handleSignOut}
-              className="w-full justify-start h-11 text-red-600 hover:text-red-600"
+              disabled={isSigningOut}
+              className="w-full justify-start h-11 text-red-600 hover:text-red-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              로그아웃
+              <LogOut className={`h-4 w-4 mr-2 ${isSigningOut ? 'animate-spin' : ''}`} />
+              {isSigningOut ? '로그아웃 중...' : '로그아웃'}
             </Button>
           </>
         ) : (
