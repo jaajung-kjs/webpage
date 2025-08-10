@@ -38,6 +38,7 @@ import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 // import { logger } from '@/lib/logger'
 import EmailVerificationModal from './EmailVerificationModal'
+import { PasswordResetModal } from './PasswordResetModal'
 
 const loginSchema = z.object({
   email: z.string().email('올바른 이메일 주소를 입력해주세요'),
@@ -66,6 +67,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [showEmailVerificationModal, setShowEmailVerificationModal] = useState(false)
   const [emailForVerification, setEmailForVerification] = useState('')
+  const [showPasswordResetModal, setShowPasswordResetModal] = useState(false)
   const { 
     signOut, // V2 uses signOut mutation, sign-in/up handled directly with Supabase
     user, // V2 returns user as V2 profile data
@@ -314,6 +316,17 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   로그인
                 </Button>
+                
+                {/* 비밀번호 찾기 링크 */}
+                <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowPasswordResetModal(true)}
+                    className="text-sm text-muted-foreground hover:text-primary underline-offset-4 hover:underline"
+                  >
+                    비밀번호를 잊으셨나요?
+                  </button>
+                </div>
               </form>
             </Form>
           </TabsContent>
@@ -409,6 +422,12 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
         open={showEmailVerificationModal}
         onOpenChange={setShowEmailVerificationModal}
         email={emailForVerification}
+      />
+      
+      {/* Password Reset Modal */}
+      <PasswordResetModal 
+        open={showPasswordResetModal}
+        onOpenChange={setShowPasswordResetModal}
       />
     </Dialog>
   )

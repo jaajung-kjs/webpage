@@ -182,6 +182,43 @@ export function useAuthV2() {
     }
   })
 
+  // 비밀번호 재설정 이메일 전송
+  const sendPasswordResetEmail = useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
+  // 비밀번호 업데이트
+  const updatePassword = useMutation({
+    mutationFn: async (newPassword: string) => {
+      const { error } = await supabase.auth.updateUser({
+        password: newPassword
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
+  // 현재 비밀번호로 재인증 (필요한 경우)
+  const reauthenticate = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
   // 사용자 삭제 (Soft Delete)
   const deleteAccount = useMutation({
     mutationFn: async () => {
@@ -251,10 +288,21 @@ export function useAuthV2() {
     signOut: signOut.mutate,
     deleteAccount: deleteAccount.mutate,
     
+    // 비밀번호 관련
+    sendPasswordResetEmail: sendPasswordResetEmail.mutate,
+    sendPasswordResetEmailAsync: sendPasswordResetEmail.mutateAsync,
+    updatePassword: updatePassword.mutate,
+    updatePasswordAsync: updatePassword.mutateAsync,
+    reauthenticate: reauthenticate.mutate,
+    reauthenticateAsync: reauthenticate.mutateAsync,
+    
     // 뮤테이션 상태
     isUpdatingProfile: updateProfile.isPending,
     isSigningOut: signOut.isPending,
     isDeletingAccount: deleteAccount.isPending,
+    isSendingPasswordReset: sendPasswordResetEmail.isPending,
+    isUpdatingPassword: updatePassword.isPending,
+    isReauthenticating: reauthenticate.isPending,
   }
 }
 
