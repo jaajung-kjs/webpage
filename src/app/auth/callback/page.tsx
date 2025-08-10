@@ -39,10 +39,14 @@ export default function AuthCallbackPage() {
         const error = urlParams.get('error') || hashParams.get('error')
         const errorDescription = urlParams.get('error_description') || hashParams.get('error_description')
         
+        // PKCE 토큰 처리 추가
+        const token = urlParams.get('token') || hashParams.get('token')
+        
         console.log('Auth callback parameters:', { 
           type,
           accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
           refreshToken: refreshToken ? `${refreshToken.substring(0, 10)}...` : null,
+          token: token ? `${token.substring(0, 10)}...` : null,
           error,
           errorDescription
         })
@@ -61,8 +65,67 @@ export default function AuthCallbackPage() {
           return
         }
         
-        // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등)
-        if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken) {
+        // PKCE 토큰 처리 (우선순위 높음)
+        if (token && (type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email')) {
+          console.log('Using PKCE token-based authentication flow')
+          try {
+            const { data, error: tokenError } = await supabaseClient.auth.verifyOtp({
+              token_hash: token,
+              type: type as any
+            })
+            
+            if (tokenError) {
+              console.error('PKCE token verification error:', tokenError)
+              setStatus('error')
+              if (tokenError.message.includes('expired')) {
+                setMessage('인증 링크가 만료되었습니다. 새로운 인증 이메일을 요청해주세요.')
+              } else {
+                setMessage(`PKCE 토큰 인증 중 오류가 발생했습니다: ${tokenError.message}`)
+              }
+              return
+            }
+            
+            if (data.user && data.user.email_confirmed_at) {
+              // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
+              const { error: profileError } = await supabaseClient
+                .from('users_v2')
+                .insert({
+                  id: data.user.id,
+                  email: data.user.email!,
+                  name: data.user.user_metadata?.name || data.user.email!.split('@')[0],
+                  department: data.user.user_metadata?.department || '미지정',
+                  role: 'guest'
+                })
+                
+              if (profileError && profileError.code !== '23505') { // 23505 = duplicate key error
+                console.error('Profile creation error:', profileError)
+                // 프로필 생성 실패해도 인증은 성공이므로 계속 진행
+              }
+              
+              setStatus('success')
+              setMessage('이메일 인증이 완료되었습니다! 환영합니다.')
+              
+              toast.success('이메일 인증 성공!', {
+                description: '계정이 성공적으로 인증되었습니다.',
+                duration: 3000
+              })
+              
+              // 3초 후 홈페이지로 리다이렉트
+              setTimeout(() => {
+                router.push('/')
+              }, 3000)
+              return
+            }
+          } catch (error) {
+            console.error('PKCE token processing error:', error)
+            setStatus('error')
+            setMessage('PKCE 토큰 처리 중 오류가 발생했습니다.')
+            return
+          }
+        }
+        
+        // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등) - 기존 방식
+        if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken && !token) {
           const { data, error: sessionError } = await supabaseClient.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
