@@ -287,6 +287,50 @@ function useConversationMessagesV2(conversationId: string, options?: {
   offset?: number
 }) {
   const { user } = useAuth()
+  const queryClient = useQueryClient()
+  
+  // 대화목록처럼 직접 구독 방식으로 변경 (더 안정적)
+  useEffect(() => {
+    if (!user || !conversationId) return
+
+    const uniqueId = Math.random().toString(36).substr(2, 9)
+    
+    // 메시지 변경사항 직접 구독
+    const messagesChannel = supabaseClient
+      .channel(`messages-direct-${conversationId}-${user.id}-${uniqueId}`)
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public',
+        table: 'messages_v2',
+        filter: `conversation_id=eq.${conversationId}`
+      }, () => {
+        console.log('[ConversationMessages] 실시간 메시지 변경 감지, 무효화 실행')
+        queryClient.invalidateQueries({ 
+          queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
+        })
+      })
+      .subscribe()
+
+    // 읽음 상태 변경사항 구독
+    const readStatusChannel = supabaseClient
+      .channel(`read-status-messages-${conversationId}-${user.id}-${uniqueId}`)
+      .on('postgres_changes' as any, {
+        event: '*',
+        schema: 'public',
+        table: 'message_read_status_v2'
+      }, () => {
+        console.log('[ConversationMessages] 실시간 읽음상태 변경 감지, 무효화 실행')
+        queryClient.invalidateQueries({ 
+          queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
+        })
+      })
+      .subscribe()
+
+    return () => {
+      supabaseClient.removeChannel(messagesChannel)
+      supabaseClient.removeChannel(readStatusChannel)
+    }
+  }, [user?.id, conversationId, options, queryClient])
   
   return useRealtimeQueryV2<MessageV2[]>({
     queryKey: ['conversation-messages-v2', conversationId, user?.id, options],
@@ -399,14 +443,9 @@ function useConversationMessagesV2(conversationId: string, options?: {
     },
     enabled: !!user && !!conversationId,
     gcTime: 10 * 60 * 1000, // 10 minutes
-    staleTime: 30 * 1000, // 30 seconds
-    realtime: {
-      enabled: true,
-      table: 'messages_v2',
-      filter: `conversation_id=eq.${conversationId}`,
-      updateStrategy: 'merge', // append에서 merge로 변경하여 업데이트도 처리
-      event: '*' // 모든 이벤트 감지 (INSERT, UPDATE, DELETE)
-    }
+    staleTime: 1 * 1000, // 1초로 줄여서 즉시 refetch
+    refetchOnWindowFocus: true, // 포커스 시 새로고침
+    refetchInterval: false // polling 비활성화 (위의 useEffect에서 직접 실시간 구독 처리)
     // refetchOnWindowFocus와 refetchOnReconnect는 기본값(true) 사용
   })
 }
