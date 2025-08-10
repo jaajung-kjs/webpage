@@ -32,6 +32,16 @@ function PasswordResetContent() {
         console.log('Hash:', window.location.hash)
         console.log('Search:', window.location.search)
         
+        // 먼저 현재 세션 확인 - 이미 /auth/callback에서 인증되었을 수 있음
+        const { data: currentSession, error: sessionCheckError } = await supabaseClient.auth.getSession()
+        
+        if (!sessionCheckError && currentSession.session) {
+          console.log('✅ Already authenticated session found, showing password change modal')
+          setResetState('valid')
+          setShowNewPasswordModal(true)
+          return
+        }
+        
         // URL 파라미터 확인 (query parameters와 hash fragments 모두 확인)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         

@@ -85,6 +85,15 @@ export default function AuthCallbackPage() {
               return
             }
             
+            // 비밀번호 재설정의 경우
+            if (type === 'recovery' && data.session && data.user) {
+              console.log('✅ Password reset token verified, redirecting to reset page')
+              // 비밀번호 재설정 페이지로 리다이렉트 (세션 유지)
+              router.push('/auth/reset-password')
+              return
+            }
+            
+            // 회원가입의 경우
             if (data.user && data.user.email_confirmed_at) {
               // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
               const { error: profileError } = await supabaseClient

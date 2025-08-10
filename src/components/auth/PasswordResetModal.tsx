@@ -63,8 +63,8 @@ export function PasswordResetModal({ open, onOpenChange }: PasswordResetModalPro
   const onSubmit = async (values: z.infer<typeof passwordResetSchema>) => {
     setLoading(true)
     try {
-      // 리다이렉트 URL 로깅
-      const redirectUrl = `${window.location.origin}/auth/reset-password`
+      // 리다이렉트 URL을 /auth/callback으로 변경 (PKCE 방식 지원)
+      const redirectUrl = `${window.location.origin}/auth/callback`
       console.log('Password reset redirect URL:', redirectUrl)
       
       // Supabase에서 비밀번호 재설정 이메일 전송
