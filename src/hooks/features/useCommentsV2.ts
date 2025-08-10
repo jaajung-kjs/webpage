@@ -62,90 +62,99 @@ export function useCommentsV2(
   } = options || {}
 
   const queryFn = async (): Promise<CommentWithAuthorV2[]> => {
-    let query = supabaseClient
-      .from('comments_v2')
-      .select(`
-        *,
-        author:users_v2!comments_v2_author_id_fkey (
-          id,
-          name,
-          avatar_url,
-          role
-        )
-      `)
-      .eq('content_id', contentId)
-
-    // Soft delete 처리
-    if (!includeDeleted) {
-      query = query.is('deleted_at', null)
-    }
-
-    // 깊이 제한
-    if (maxDepth > 0) {
-      query = query.lte('depth', maxDepth)
-    }
-
-    // 정렬 (ltree path 기본)
-    if (sortBy === 'path') {
-      query = query.order('path', { ascending: true })
-    } else {
-      query = query.order(sortBy, { ascending: sortOrder === 'asc' })
-    }
-
-    const { data: comments, error } = await query
+    // V2 RPC 함수 사용하여 계층형 댓글 트리 가져오기
+    const { data: commentTree, error } = await supabaseClient
+      .rpc('get_comment_tree_v2', {
+        p_content_id: contentId,
+        p_max_depth: maxDepth
+      })
 
     if (error) throw error
+    if (!commentTree) return []
 
-    // 각 댓글의 상호작용 정보 가져오기 (배치 처리로 최적화)
-    const commentIds = comments?.map(c => c.id) || []
-    
-    // 모든 댓글의 좋아요 정보를 한 번에 가져오기
-    const [allInteractions, userInteractions] = await Promise.all([
-      supabaseClient
-        .from('interactions_v2')
-        .select('target_id, interaction_type')
-        .in('target_id', commentIds)
-        .eq('target_type', 'comment'),
+    // RPC 함수가 반환한 데이터를 CommentWithAuthorV2 형식으로 변환
+    // get_comment_tree_v2는 평면 배열로 반환하므로 트리 구조로 재구성 필요
+    const buildCommentTree = (flatComments: any[]): CommentWithAuthorV2[] => {
+      const commentMap = new Map<string, CommentWithAuthorV2>()
+      const rootComments: CommentWithAuthorV2[] = []
       
-      user ? supabaseClient
+      // 먼저 모든 댓글을 CommentWithAuthorV2 형식으로 변환하고 맵에 저장
+      flatComments.forEach(comment => {
+        const transformed: CommentWithAuthorV2 = {
+          // CommentV2 필드들 (RPC가 content_id를 반환하지 않으므로 contentId 사용)
+          id: comment.id,
+          content_id: contentId,
+          author_id: comment.author_id,
+          comment_text: comment.comment_text,
+          created_at: comment.created_at,
+          updated_at: comment.updated_at,
+          deleted_at: null, // RPC는 삭제된 댓글을 반환하지 않음
+          parent_id: comment.parent_id || null,
+          path: comment.path,
+          depth: comment.depth,
+          like_count: comment.like_count || 0, // CommentV2에 필수 필드
+          // 추가 필드들
+          author: {
+            id: comment.author_id,
+            name: comment.author_name || 'Unknown',
+            avatar_url: comment.author_avatar || null,
+            role: comment.author_role || 'member' // RPC에서 반환하는 실제 role 사용
+          },
+          interaction_counts: {
+            likes: comment.like_count || 0
+          },
+          user_interactions: {
+            is_liked: false // 나중에 업데이트
+          },
+          children: []
+        }
+        commentMap.set(comment.id, transformed)
+      })
+      
+      // 부모-자식 관계 설정
+      flatComments.forEach(comment => {
+        const currentComment = commentMap.get(comment.id)!
+        if (comment.parent_id && commentMap.has(comment.parent_id)) {
+          const parent = commentMap.get(comment.parent_id)!
+          parent.children!.push(currentComment)
+        } else if (!comment.parent_id) {
+          rootComments.push(currentComment)
+        }
+      })
+      
+      return rootComments
+    }
+
+    // 트리 구조 생성
+    const commentTreeStructure = buildCommentTree(commentTree || [])
+    
+    // 사용자의 좋아요 상태 조회 및 업데이트
+    if (user && commentTree && commentTree.length > 0) {
+      const commentIds = commentTree.map((c: any) => c.id)
+      const { data: userLikes } = await supabaseClient
         .from('interactions_v2')
-        .select('target_id, interaction_type')
+        .select('target_id')
         .in('target_id', commentIds)
         .eq('target_type', 'comment')
         .eq('user_id', user.id)
-      : Promise.resolve({ data: [] })
-    ])
+        .eq('interaction_type', 'like')
 
-    // 상호작용 정보를 댓글별로 그룹화
-    const interactionsByComment = (allInteractions.data || []).reduce((acc, interaction) => {
-      if (!acc[interaction.target_id]) {
-        acc[interaction.target_id] = { likes: 0 }
+      const likedCommentIds = new Set((userLikes || []).map(l => l.target_id))
+      
+      // 재귀적으로 좋아요 상태 업데이트
+      const updateLikeStatus = (comments: CommentWithAuthorV2[]): void => {
+        comments.forEach(comment => {
+          comment.user_interactions.is_liked = likedCommentIds.has(comment.id)
+          if (comment.children && comment.children.length > 0) {
+            updateLikeStatus(comment.children)
+          }
+        })
       }
-      if (interaction.interaction_type === 'like') {
-        acc[interaction.target_id].likes++
-      }
-      return acc
-    }, {} as Record<string, { likes: number }>)
+      
+      updateLikeStatus(commentTreeStructure)
+    }
 
-    const userInteractionsByComment = (userInteractions.data || []).reduce((acc, interaction) => {
-      if (!acc[interaction.target_id]) {
-        acc[interaction.target_id] = { is_liked: false }
-      }
-      if (interaction.interaction_type === 'like') {
-        acc[interaction.target_id].is_liked = true
-      }
-      return acc
-    }, {} as Record<string, { is_liked: boolean }>)
-
-    // 댓글 데이터 병합
-    const enhancedComments: CommentWithAuthorV2[] = (comments || []).map(comment => ({
-      ...comment,
-      interaction_counts: interactionsByComment[comment.id] || { likes: 0 },
-      user_interactions: userInteractionsByComment[comment.id] || { is_liked: false }
-    }))
-
-    // ltree path를 활용한 중첩 구조 생성
-    return buildCommentTree(enhancedComments)
+    return commentTreeStructure
   }
 
   // 실시간 업데이트가 필요한 경우
@@ -174,32 +183,7 @@ export function useCommentsV2(
   })
 }
 
-/**
- * ltree path를 활용한 중첩 댓글 트리 구성
- */
-function buildCommentTree(comments: CommentWithAuthorV2[]): CommentWithAuthorV2[] {
-  const commentMap = new Map<string, CommentWithAuthorV2>()
-  const rootComments: CommentWithAuthorV2[] = []
-
-  // 모든 댓글을 맵에 저장
-  comments.forEach(comment => {
-    commentMap.set(comment.id, { ...comment, children: [] })
-  })
-
-  // ltree path를 기반으로 부모-자식 관계 설정
-  comments.forEach(comment => {
-    if (comment.parent_id && commentMap.has(comment.parent_id)) {
-      const parent = commentMap.get(comment.parent_id)!
-      const child = commentMap.get(comment.id)!
-      parent.children!.push(child)
-    } else if (!comment.parent_id) {
-      // 루트 레벨 댓글
-      rootComments.push(commentMap.get(comment.id)!)
-    }
-  })
-
-  return rootComments
-}
+// buildCommentTree 함수 제거 - get_comment_tree_v2 RPC가 이미 트리 구조로 반환
 
 /**
  * 댓글 생성 Hook
@@ -241,102 +225,46 @@ export function useCreateCommentV2() {
       const { data, error } = await supabaseClient
         .rpc('create_comment_v2', {
           p_content_id: contentId,
-          p_author_id: user.id,
-          p_comment_text: comment,
+          p_content: comment,
           p_parent_id: parentId || undefined
         })
 
       if (error) throw error
-      return data as CommentV2
+      return data as unknown as CommentV2
     },
     onMutate: async (variables) => {
-      // Optimistic Update
-      await queryClient.cancelQueries({ 
-        queryKey: ['comments-v2', variables.contentId] 
-      })
-
-      const previousComments = queryClient.getQueryData<CommentWithAuthorV2[]>([
-        'comments-v2', 
-        variables.contentId
-      ])
-
-      // 임시 댓글 생성
-      const tempComment: CommentWithAuthorV2 = {
-        id: `temp-${Date.now()}`,
-        content_id: variables.contentId,
-        author_id: user!.id,
-        comment_text: variables.comment,
-        parent_id: variables.parentId || null,
-        path: null, // ltree는 서버에서 생성
-        depth: variables.parentId ? 1 : 0, // 임시값
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        deleted_at: null,
-        author: {
-          id: user!.id,
-          name: user!.email?.split('@')[0] || '익명',
-          avatar_url: null,
-          role: 'member'
-        },
-        like_count: 0,
-        interaction_counts: { likes: 0 },
-        user_interactions: { is_liked: false },
-        children: []
-      }
-
-      // 부모 댓글을 찾아 자식으로 추가하거나 루트에 추가
-      const addCommentToTree = (comments: CommentWithAuthorV2[]): CommentWithAuthorV2[] => {
-        if (!variables.parentId) {
-          return [tempComment, ...comments]
-        }
-
-        return comments.map(comment => {
-          if (comment.id === variables.parentId) {
-            return {
-              ...comment,
-              children: [...(comment.children || []), tempComment]
-            }
-          } else if (comment.children) {
-            return {
-              ...comment,
-              children: addCommentToTree(comment.children)
-            }
-          }
-          return comment
-        })
-      }
-
-      const newComments = addCommentToTree(previousComments || [])
-      queryClient.setQueryData(['comments-v2', variables.contentId], newComments)
-
-      return { previousComments }
+      // Optimistic Update 제거 - 중복 댓글 수 증가 방지
+      // RPC 완료 후에만 업데이트하도록 변경
+      console.log('🚀 댓글 생성 시작:', variables.comment.substring(0, 20) + '...')
+      return null
     },
     onError: (error, variables, context: any) => {
-      // 롤백
-      if (context?.previousComments) {
-        queryClient.setQueryData(
-          ['comments-v2', variables.contentId], 
-          context.previousComments
-        )
-      }
+      // Optimistic Update가 없으므로 롤백 불필요
+      console.error('❌ 댓글 생성 실패:', error)
     },
     onSuccess: (data, variables) => {
-      // 댓글 생성 성공 시 활동 점수 업데이트
-      supabaseClient.rpc('increment_activity_score_v2', {
-        p_user_id: user!.id,
-        p_action_type: 'comment_create',
-        p_points: 5 // 댓글 작성 시 5점
-      })
+      // 활동 점수는 이미 create_comment_v2 RPC 함수에서 처리됨
+      // 중복 호출 제거
     },
-    onSettled: (data, error, variables) => {
-      // 관련 쿼리 무효화
-      queryClient.invalidateQueries({ 
+    onSettled: async (data, error, variables) => {
+      if (error) {
+        console.error('❌ 댓글 생성 최종 실패:', error)
+        return
+      }
+      
+      console.log('✅ 댓글 생성 완료, 캐시 갱신 중...')
+      
+      // 관련 쿼리 무효화만 하고 즉시 refetch는 하지 않음 (중복 방지)
+      await queryClient.invalidateQueries({ 
         queryKey: ['comments-v2', variables.contentId] 
       })
-      // 콘텐츠의 댓글 수 업데이트
-      queryClient.invalidateQueries({ 
+      
+      // 콘텐츠의 댓글 수 업데이트를 위해 무효화만 (refetch 대신 invalidate)
+      await queryClient.invalidateQueries({ 
         queryKey: ['content-v2', variables.contentId] 
       })
+      
+      console.log('🔄 댓글 캐시 무효화 완료')
     }
   })
 }
@@ -416,6 +344,10 @@ export function useUpdateCommentV2() {
       queryClient.invalidateQueries({ 
         queryKey: ['comments-v2', variables.contentId] 
       })
+      // 댓글 수 쿼리 무효화
+      queryClient.invalidateQueries({ 
+        queryKey: ['comment-count-v2', variables.contentId] 
+      })
     }
   })
 }
@@ -490,6 +422,10 @@ export function useDeleteCommentV2() {
       queryClient.invalidateQueries({ 
         queryKey: ['comments-v2', variables.contentId] 
       })
+      // 댓글 수 쿼리 무효화
+      queryClient.invalidateQueries({ 
+        queryKey: ['comment-count-v2', variables.contentId] 
+      })
     }
   })
 }
@@ -540,14 +476,10 @@ export function useToggleCommentLikeV2() {
           })
 
         if (error) throw error
-
-        // 활동 점수 업데이트
-        supabaseClient.rpc('increment_activity_score_v2', {
-          p_user_id: user.id,
-          p_action_type: 'comment_like',
-          p_points: 1
-        })
-
+        
+        // 활동 점수는 필요시 서버사이드에서 처리하도록 변경
+        // 클라이언트에서 중복 호출 제거
+        
         return true
       }
     },
@@ -608,6 +540,10 @@ export function useToggleCommentLikeV2() {
       // 관련 쿼리 무효화
       queryClient.invalidateQueries({ 
         queryKey: ['comments-v2', variables.contentId] 
+      })
+      // 댓글 수 쿼리 무효화
+      queryClient.invalidateQueries({ 
+        queryKey: ['comment-count-v2', variables.contentId] 
       })
     }
   })

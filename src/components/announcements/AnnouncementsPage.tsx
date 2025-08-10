@@ -58,10 +58,10 @@ export default function AnnouncementsPage() {
     
     let filtered = [...announcements]
     
-    // Category filter
+    // Category filter (V2 uses single category field)
     if (activeCategory !== 'all') {
       filtered = filtered.filter(announcement => 
-        announcement.categories?.some(cat => cat.slug === activeCategory)
+        announcement.category === activeCategory
       )
     }
     

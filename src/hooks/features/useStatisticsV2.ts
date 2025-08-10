@@ -312,13 +312,11 @@ export function useStatisticsV2() {
             .from('content_v2')
             .select('view_count, like_count, comment_count'),
 
-          // 상위 카테고리 (content_categories_v2를 통해)
+          // 상위 카테고리 (content_v2.category 필드에서 직접)
           supabaseClient
-            .from('content_categories_v2')
-            .select(`
-              category:categories_v2!category_id(name),
-              content_id
-            `)
+            .from('content_v2')
+            .select('category')
+            .not('category', 'is', null)
         ])
 
         // 활동 통계
@@ -385,11 +383,11 @@ export function useStatisticsV2() {
           contentTypeCount[content.content_type || 'unknown'] = (contentTypeCount[content.content_type || 'unknown'] || 0) + 1
         })
 
-        // 카테고리별 집계
+        // 카테고리별 집계 (content_v2.category 필드 직접 사용)
         const categoryMap = new Map<string, number>()
         topCategories.data?.forEach(item => {
-          if (item.category?.name) {
-            categoryMap.set(item.category.name, (categoryMap.get(item.category.name) || 0) + 1)
+          if (item.category) {
+            categoryMap.set(item.category, (categoryMap.get(item.category) || 0) + 1)
           }
         })
 

@@ -352,13 +352,12 @@ export function useCacheStrategyV2() {
  * 일관된 캐시 정책 적용을 위한 프리셋
  */
 export const QueryOptionsPresets = {
-  // 실시간성이 중요한 데이터 (댓글, 알림 등)
+  // 실시간성이 중요한 데이터 (댓글, 알림 등) - GlobalRealtimeManager handles updates
   realtime: {
-    staleTime: 30 * 1000, // 30초
-    refetchInterval: 60 * 1000, // 1분마다 refetch
-    refetchOnWindowFocus: true,
-    refetchOnReconnect: true,
-    retry: 3
+    staleTime: 2 * 60 * 1000, // 2 minutes (Real-time handles updates)
+    refetchOnWindowFocus: false, // Real-time handles updates
+    refetchOnReconnect: true, // Keep for network recovery
+    retry: 1
   },
 
   // 정적 데이터 (콘텐츠 상세 등)

@@ -110,7 +110,7 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember, canModerate } = useAuthV2()
   
   const { data: commentsData, isLoading: loading, refetch } = useCommentsV2(contentId)
   const createCommentMutation = useCreateCommentV2()
@@ -378,7 +378,7 @@ export default function CommentSection({
                     }))
                   }}
                     isAuthor={comment.author_id === (user as any)?.id}
-                    canModerate={false}
+                    canModerate={canModerate()}
                     isReplying={comment.id ? (replyingToComments[comment.id] || false) : false}
                     isEditing={comment.id ? (editingComments[comment.id] || false) : false}
                     editContent={comment.id ? (editContents[comment.id] || '') : ''}
@@ -566,7 +566,7 @@ function CommentItem({
               <Button 
                 variant="ghost" 
                 size="sm" 
-                className="h-8 w-8 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-8 w-8 p-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 touch-manipulation transition-opacity"
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>

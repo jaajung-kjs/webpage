@@ -1,0 +1,18 @@
+# Test artifacts
+.auth/
+screenshots/
+test-results/
+playwright-report/
+trace/
+
+# Test videos
+*.webm
+*.mp4
+
+# Temporary files
+*.tmp
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

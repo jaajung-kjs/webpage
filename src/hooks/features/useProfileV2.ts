@@ -14,6 +14,7 @@ import { supabaseClient } from '@/lib/core/connection-core'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
+import { useMemo } from 'react'
 
 type UserV2 = Tables<'users_v2'>
 type UserV2Insert = TablesInsert<'users_v2'>
@@ -56,38 +57,69 @@ export function useUserProfileV2(userId?: string) {
   })
 }
 
+
+
 /**
- * 사용자 통계 조회 Hook
+ * 사용자 레벨 계산 Hook
  * 
- * get_user_stats_v2 RPC를 사용하여 통계 조회
- * 
- * @param userId - 조회할 사용자 ID
+ * calculate_user_level_v2 RPC를 사용하여 레벨 계산
  */
-export function useUserStatsV2(userId?: string) {
+export function useUserLevelV2(userId?: string) {
   const { user } = useAuth()
   const targetUserId = userId || user?.id
 
-  return useQuery<any, Error>({
-    queryKey: ['user-stats-v2', targetUserId],
+  return useQuery<number, Error>({
+    queryKey: ['user-level-v2', targetUserId],
     queryFn: async () => {
-      if (!targetUserId) return null
+      if (!targetUserId) return 0
 
       const { data, error } = await supabaseClient
-        .rpc('get_user_stats_v2', {
+        .rpc('calculate_user_level_v2', {
           p_user_id: targetUserId
         })
 
       if (error) {
-        console.error('Error fetching user stats:', error)
+        console.error('Error calculating user level:', error)
         throw error
       }
 
-      return data
+      return data || 0
     },
     enabled: !!targetUserId,
     staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false
+    gcTime: 10 * 60 * 1000
+  })
+}
+
+/**
+ * 사용자 활동 점수 계산 Hook
+ * 
+ * calculate_activity_score RPC를 사용하여 활동 점수 계산
+ */
+export function useUserActivityScoreV2(userId?: string) {
+  const { user } = useAuth()
+  const targetUserId = userId || user?.id
+
+  return useQuery<number, Error>({
+    queryKey: ['user-activity-score-v2', targetUserId],
+    queryFn: async () => {
+      if (!targetUserId) return 0
+
+      const { data, error } = await supabaseClient
+        .rpc('calculate_activity_score', {
+          p_user_id: targetUserId
+        })
+
+      if (error) {
+        console.error('Error calculating activity score:', error)
+        throw error
+      }
+
+      return data || 0
+    },
+    enabled: !!targetUserId,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000
   })
 }
 
@@ -241,7 +273,7 @@ export function useIncrementActivityScore() {
     onSuccess: () => {
       // 캐시 무효화
       queryClient.invalidateQueries({ queryKey: ['user-v2'] })
-      queryClient.invalidateQueries({ queryKey: ['user-stats-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['user-stats-v3'] })
     }
   })
 }
@@ -264,15 +296,8 @@ export function useUserInteractionsV2(
     queryFn: async () => {
       if (!targetUserId) return null
 
-      const { data, error } = await supabaseClient
-        .rpc('get_user_interactions_v2', {
-          p_user_id: targetUserId,
-          p_target_type: targetType,
-          p_interaction_type: interactionType
-        })
-
-      if (error) throw error
-      return data
+      // 임시로 빈 배열 반환 (get_user_interactions_v2 함수가 없음)
+      return []
     },
     enabled: !!targetUserId,
     staleTime: 5 * 60 * 1000,
@@ -308,6 +333,41 @@ export function useUserActivityHistoryV2(userId?: string, includePast: boolean =
     refetchOnWindowFocus: false
   })
 }
+
+/**
+ * 사용자 최근 활동 조회 Hook
+ * 
+ * get_user_recent_activities_v2 RPC 사용
+ */
+export function useUserRecentActivitiesV2(userId?: string, limit: number = 10) {
+  const { user } = useAuth()
+  const targetUserId = userId || user?.id
+
+  return useQuery<any, Error>({
+    queryKey: ['user-recent-activities-v2', targetUserId, limit],
+    queryFn: async () => {
+      if (!targetUserId) return []
+
+      const { data, error } = await supabaseClient
+        .rpc('get_user_recent_activities_v2', {
+          p_user_id: targetUserId,
+          p_limit: limit
+        })
+
+      if (error) {
+        console.error('Error fetching recent activities:', error)
+        throw error
+      }
+
+      return data || []
+    },
+    enabled: !!targetUserId,
+    staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false
+  })
+}
+
+
 
 /**
  * 프로필 프리페치 Hook
@@ -382,26 +442,13 @@ export function useUploadAvatar() {
   })
 }
 
-// Achievement stub type for the test page
-type AchievementStub = {
-  achievement_id: string
-  name: string
-  description: string
-  icon: string
-  tier: 'bronze' | 'silver' | 'gold' | 'platinum'
-  points: number
-  is_completed: boolean
-  progress_percentage: number
-  current_progress: number
-  requirement_count: number
-}
 
 /**
  * Complete user profile with all data combined
  * This is a wrapper for backward compatibility with the test page
  * 
  * @param userId - User ID
- * @param includeAchievements - Whether to include achievements (not implemented yet) 
+ * @param includeAchievements - Whether to include achievements (deprecated) 
  * @param limit - Limit for activities (not used in V2)
  * @param includeStats - Whether to include stats
  */
@@ -412,49 +459,61 @@ export function useUserProfileComplete(
   includeStats?: boolean
 ) {
   const profileQuery = useUserProfileV2(userId)
-  const statsQuery = useUserStatsV2(userId)
-  const activitiesQuery = useUserActivityHistoryV2(userId)
+  const { data: statsData, isLoading: isStatsLoading, error: statsError, refetch: refetchStats } = useQuery({
+    queryKey: ['user-stats-v2', userId],
+    queryFn: async () => {
+      if (!userId) throw new Error('User ID required')
+      
+      // DB 함수 사용으로 롤백
+      const { data, error } = await supabaseClient
+        .rpc('get_user_stats_v2', {
+          p_user_id: userId
+        })
 
-  // Mock achievements data for testing
-  const mockAchievements: AchievementStub[] = includeAchievements ? [
-    {
-      achievement_id: '1',
-      name: '첫 게시글',
-      description: '첫 번째 게시글을 작성하세요',
-      icon: '📝',
-      tier: 'bronze',
-      points: 10,
-      is_completed: true,
-      progress_percentage: 100,
-      current_progress: 1,
-      requirement_count: 1
+      if (error) {
+        console.error('Error fetching user stats:', error)
+        throw error
+      }
+
+      return data
     },
-    {
-      achievement_id: '2', 
-      name: '활발한 참여자',
-      description: '댓글 10개를 작성하세요',
-      icon: '💬',
-      tier: 'silver',
-      points: 25,
-      is_completed: false,
-      progress_percentage: 60,
-      current_progress: 6,
-      requirement_count: 10
+    enabled: !!userId,
+    staleTime: 3 * 60 * 1000, // 3분
+    gcTime: 8 * 60 * 1000, // 8분
+    refetchOnWindowFocus: false
+  })
+  const activitiesQuery = useUserRecentActivitiesV2(userId, limit)
+
+  // 최근 활동 데이터 포맷 변환 (RPC 함수가 중첩된 형태로 반환하므로 평탄화)
+  const formattedActivities = useMemo(() => {
+    if (!activitiesQuery.data) return []
+    
+    // RPC 함수가 중첩된 배열 형태로 반환하는 경우 처리
+    if (Array.isArray(activitiesQuery.data) && activitiesQuery.data.length > 0) {
+      // 첫 번째 요소가 객체이고 get_user_recent_activities_v2 키를 가진 경우
+      if (activitiesQuery.data[0]?.get_user_recent_activities_v2) {
+        return activitiesQuery.data[0].get_user_recent_activities_v2
+      }
+      // 이미 평탄화된 데이터인 경우
+      return activitiesQuery.data
     }
-  ] : []
+    
+    return []
+  }, [activitiesQuery.data])
 
   return {
     data: profileQuery.data ? {
       profile: profileQuery.data,
-      stats: statsQuery.data,
-      recent_activities: activitiesQuery.data,
-      achievements: mockAchievements
+      stats: statsData,
+      recent_activities: formattedActivities,
+      achievements: [],
+      achievement_stats: null
     } : null,
-    isLoading: profileQuery.isLoading || statsQuery.isLoading || activitiesQuery.isLoading,
-    error: profileQuery.error || statsQuery.error || activitiesQuery.error,
+    isLoading: profileQuery.isLoading || activitiesQuery.isLoading || isStatsLoading,
+    error: profileQuery.error || activitiesQuery.error || statsError,
     refetch: () => {
       profileQuery.refetch()
-      statsQuery.refetch()
+      refetchStats()
       activitiesQuery.refetch()
     }
   }
@@ -462,22 +521,7 @@ export function useUserProfileComplete(
 
 // Legacy aliases for backward compatibility
 export const useUserProfile = useUserProfileV2  
-export const useUserStats = useUserStatsV2
 export const useUserActivities = useUserActivityHistoryV2
 export const useProfileList = useProfileListV2
-export const useUsersSimpleStats = useUserStatsV2
 export const useUserProfilesComplete = useUsersProfilesV2
 
-// Stub for achievements check - should be implemented separately
-export function useCheckAchievements() {
-  const queryClient = useQueryClient()
-  
-  return useMutation<void, Error>({
-    mutationFn: async () => {
-      console.log('Achievement check not implemented yet')
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-v2'] })
-    }
-  })
-}

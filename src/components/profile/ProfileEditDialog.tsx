@@ -143,7 +143,9 @@ export default function ProfileEditDialog({
         name: formData.name,
         department: formData.department,
         bio: formData.bio || undefined,
-        skill_level: updatedMetadata.skill_level || 'beginner'
+        skill_level: formData.skill_level || 'beginner',
+        // V2에서 metadata는 JSON 필드로 저장
+        metadata: updatedMetadata
       })
       
       onSuccess?.()

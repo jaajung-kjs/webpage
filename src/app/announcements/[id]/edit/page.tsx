@@ -1,4 +1,5 @@
 'use client'
+import { use } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import ContentEditorPage from '@/components/shared/ContentEditorPage'
 import PermissionGate from '@/components/shared/PermissionGate'
@@ -6,8 +7,8 @@ import { getCategoriesForSelect } from '@/lib/categories'
 
 const categories = getCategoriesForSelect('announcements')
 
-export default async function AnnouncementEditRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default function AnnouncementEditRoute({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   return (
     <MainLayout>
       <PermissionGate requireAdmin={true}>

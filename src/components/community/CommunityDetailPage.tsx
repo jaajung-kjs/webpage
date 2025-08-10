@@ -3,16 +3,10 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
-import { 
-  MessageCircle,
-  Coffee,
-  Lightbulb,
-  HelpCircle,
-  BookOpen,
-  Flag
-} from 'lucide-react'
+import { Flag } from 'lucide-react'
 import { useContentV2 } from '@/hooks/features/useContentV2'
 import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
+import { getCategoryConfig, ContentType } from '@/lib/constants/categories'
 
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
 import { useAuth } from '@/providers'
@@ -24,33 +18,6 @@ import type { ReportDialogEvent } from '@/lib/types'
 
 interface CommunityDetailPageProps {
   postId: string
-}
-
-const categoryLabels = {
-  tips: '꿀팁공유',
-  review: '후기',
-  help: '도움요청',
-  discussion: '토론',
-  question: '질문',
-  chat: '잡담'
-}
-
-const categoryColors = {
-  tips: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  review: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  help: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  discussion: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  question: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300',
-  chat: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-}
-
-const categoryIcons = {
-  tips: Lightbulb,
-  review: BookOpen,
-  help: HelpCircle,
-  discussion: MessageCircle,
-  question: HelpCircle,
-  chat: Coffee
 }
 
 export default function CommunityDetailPage({ postId }: CommunityDetailPageProps) {
@@ -66,10 +33,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
   const { data: userInteractions } = interactionsV2.useUserInteractions(postId, 'content')
   
   // Derive interaction states
-  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const isLiked = (userInteractions as any)?.liked || false
   const likeCount = (interactionStats as any)?.likes || 0
   const bookmarkCount = (interactionStats as any)?.bookmarks || 0
-  const userBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
+  const userBookmarked = (userInteractions as any)?.bookmarked || false
   
   // UI state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -82,12 +49,7 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
 
 
 
-  // Increment view count when post is loaded
-  useEffect(() => {
-    if (postData?.id) {
-      contentV2.toggleInteraction({ targetId: postData.id, targetType: 'content', interactionType: 'view' })
-    }
-  }, [postData?.id, contentV2.toggleInteraction])
+  // View count is now handled automatically by useContent hook - removed duplicate increment
 
 
 
@@ -219,7 +181,10 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
     )
   }
 
-  const CategoryIcon = categoryIcons[postData.categories?.[0]?.slug as keyof typeof categoryIcons] || MessageCircle
+  // 중앙화된 카테고리 설정 사용
+  const categorySlug = postData.category || 'discussion'
+  const categoryConfig = getCategoryConfig('community' as ContentType, categorySlug)
+  const CategoryIcon = categoryConfig?.icon as any
 
   return (
     <>
@@ -235,9 +200,9 @@ export default function CommunityDetailPage({ postId }: CommunityDetailPageProps
         createdAt={postData.created_at || new Date().toISOString()}
         viewCount={postData.interaction_counts?.views || 0}
         category={{
-          label: categoryLabels[postData.categories?.[0]?.slug as keyof typeof categoryLabels] || '토론',
-          value: postData.categories?.[0]?.slug || 'discussion',
-          color: categoryColors[postData.categories?.[0]?.slug as keyof typeof categoryColors],
+          label: categoryConfig?.label || '토론',
+          value: categorySlug,
+          color: categoryConfig?.bgColor,
           icon: CategoryIcon
         }}
         tags={postData.tags || []}

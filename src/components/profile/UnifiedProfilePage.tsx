@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -32,7 +33,10 @@ import {
   Trophy,
   Settings,
   Bell,
-  Camera
+  Camera,
+  FileText,
+  UserCheck,
+  ThumbsUp
 } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { toast } from 'sonner'
@@ -40,17 +44,19 @@ import { toast } from 'sonner'
 // V2 Hooks
 import { useUserProfileComplete, useUpdateProfileV2 } from '@/hooks/features/useProfileV2'
 import { useUploadAvatar } from '@/hooks/features/useProfileV2'
-import { useGamificationV2, useAchievementsV2, useUserRank } from '@/hooks/features'
+import { useGamificationV2, useUserRank } from '@/hooks/features'
 
 // Configs
 import { getRoleConfig } from '@/lib/roles'
 import { getSkillLevelConfig } from '@/lib/skills'
 import { getActivityLevelInfo, calculateLevelProgress } from '@/lib/activityLevels'
 import { getAIToolConfig } from '@/lib/aiTools'
-import { ACHIEVEMENTS, TIER_COLORS, TIER_ICONS } from '@/lib/achievements'
 
 // Profile Edit Dialog
 import ProfileEditDialog from './ProfileEditDialog'
+
+// Shared Components
+import UserLevelBadges from '@/components/shared/UserLevelBadges'
 
 interface UnifiedProfilePageProps {
   userId?: string
@@ -59,20 +65,22 @@ interface UnifiedProfilePageProps {
 export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) {
   const router = useRouter()
   const { user, profile: currentUserProfile } = useAuth()
+  const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('activity')
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [showAllAchievements, setShowAllAchievements] = useState(false)
   
   // 현재 사용자의 프로필인지 확인
   const targetUserId = userId || user?.id
   const isOwnProfile = !userId || userId === user?.id
   
-  // V2 통합 Hook 사용
+  // V2 통합 Hook 사용 - 최근활동을 8개로 제한
   const { 
     data: profileData, 
     isLoading: loading, 
     refetch
-  } = useUserProfileComplete(targetUserId, true, 10, true)
+  } = useUserProfileComplete(targetUserId, true, 8, true)
   
   const updateProfileMutation = useUpdateProfileV2()
   const uploadAvatarMutation = useUploadAvatar()
@@ -86,41 +94,32 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
     currentScore,
     levelProgress,
     totalAchievements,
-    recentAchievements,
     isLoading: isGamificationLoading
   } = useGamificationV2(targetUserId)
   
-  const {
-    earnedAchievements,
-    totalEarned,
-    totalPoints,
-    tierCounts,
-    isLoading: isAchievementsLoading
-  } = useAchievementsV2(targetUserId)
   
   const userRank = useUserRank(targetUserId)
+  
   
   // 프로필 데이터 추출
   const profile = profileData?.profile
   const stats = profileData?.stats
   const recentActivities = profileData?.recent_activities || []
-  const achievementProgress = profileData?.achievements || []
   
   // V2에서는 메타데이터가 직접 필드로 저장됨
   const metadata = useMemo(() => {
+    // stats나 profile의 metadata 필드에서 실제 데이터 가져오기
+    const dbMetadata = profile?.metadata || (userStats && typeof userStats === 'object' && 'metadata' in userStats ? userStats.metadata : {}) || {}
+    const metadata = typeof dbMetadata === 'object' && dbMetadata !== null ? dbMetadata as any : {}
     return {
       skill_level: profile?.skill_level || 'beginner',
-      ai_expertise: [], // V2에서는 아직 미구현
-      phone: null, // V2에서는 아직 미구현
-      location: null, // V2에서는 아직 미구현
-      job_position: null // V2에서는 아직 미구현
+      ai_expertise: metadata.ai_expertise || [],
+      phone: metadata.phone || null,
+      location: metadata.location || null,
+      job_position: metadata.job_position || null
     }
-  }, [profile])
+  }, [profile, userStats])
   
-  // 완료된 업적 - V2 시스템 사용
-  const completedAchievements = useMemo(() => {
-    return earnedAchievements || []
-  }, [earnedAchievements])
   
   // 권한 체크
   const hasPermission = useMemo(() => {
@@ -187,8 +186,40 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
     return formatDate(dateString)
   }
   
+  // 활동 타입별 아이콘 결정 함수
+  const getActivityIcon = (type: string) => {
+    switch(type) {
+      case 'post':
+        return <FileText className="h-4 w-4 text-blue-600" />
+      case 'comment': 
+        return <MessageSquare className="h-4 w-4 text-green-600" />
+      case 'activity':
+        return <UserCheck className="h-4 w-4 text-purple-600" />
+      case 'like':
+        return <ThumbsUp className="h-4 w-4 text-red-600" />
+      default:
+        return <Activity className="h-4 w-4 text-blue-600" />
+    }
+  }
+  
+  // 활동 타입별 배경색 결정 함수
+  const getActivityIconBg = (type: string) => {
+    switch(type) {
+      case 'post':
+        return 'bg-blue-100'
+      case 'comment': 
+        return 'bg-green-100'
+      case 'activity':
+        return 'bg-purple-100'
+      case 'like':
+        return 'bg-red-100'
+      default:
+        return 'bg-blue-100'
+    }
+  }
+  
   // Loading state
-  if (loading || isGamificationLoading || isAchievementsLoading) {
+  if (loading || isGamificationLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="animate-pulse">
@@ -301,8 +332,14 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
     )
   }
   
-  const activityLevel = getActivityLevelInfo(profile?.activity_score || 0)
-  const activityProgress = calculateLevelProgress(profile?.activity_score || 0)
+  // userStats 안전한 접근을 위한 헬퍼
+  const getUserStat = (key: string): any => {
+    return userStats && typeof userStats === 'object' && key in userStats ? (userStats as any)[key] : null
+  }
+
+  const userActivityScore = getUserStat('activity_score') || profile?.activity_score || 0
+  const activityLevel = getActivityLevelInfo(userActivityScore)
+  const activityProgress = calculateLevelProgress(userActivityScore)
   const roleConfig = getRoleConfig(profile?.role || 'member')
   const skillConfig = getSkillLevelConfig(metadata.skill_level)
   
@@ -379,73 +416,49 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                       </Badge>
                     )}
                     
-                    {/* V2 스킬 레벨 */}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800 border-blue-300">
-                            <Trophy className="h-3 w-3 mr-1" />
-                            {currentLevel === 'beginner' ? '초급' : 
-                             currentLevel === 'intermediate' ? '중급' :
-                             currentLevel === 'advanced' ? '고급' : '전문가'}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="font-semibold">스킬 레벨</p>
-                          <p className="text-xs">현재 점수: {currentScore}점</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {/* V2 활동 레벨 */}
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Badge variant="secondary" className="bg-green-100 text-green-800 border-green-300">
-                            <Activity className="h-3 w-3 mr-1" />
-                            {currentActivityLevel === 'beginner' ? '신입' :
-                             currentActivityLevel === 'active' ? '활발' :
-                             currentActivityLevel === 'enthusiast' ? '열정' : '리더'}
-                          </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p className="font-semibold">활동 레벨</p>
-                          <p className="text-xs">참여도 기반</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-
-                    {/* 순위 표시 */}
-                    {userRank && (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-300">
-                              <TrendingUp className="h-3 w-3 mr-1" />
-                              #{userRank.rank}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="font-semibold">전체 순위</p>
-                            <p className="text-xs">월간 기준</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
+                    {/* V2 레벨 뱃지 시스템 - 개별 뱃지들로 분리해서 회원목록과 동일하게 */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* 스킬 레벨 뱃지 */}
+                      <UserLevelBadges 
+                        userId={targetUserId} 
+                        variant="minimal" 
+                        size="sm" 
+                        showOnlySkill={true}
+                        className="flex-shrink-0"
+                      />
+                      
+                      {/* 활동 레벨 뱃지 */}
+                      <UserLevelBadges 
+                        userId={targetUserId} 
+                        variant="minimal" 
+                        size="sm" 
+                        showOnlyActivity={true}
+                        className="flex-shrink-0"
+                      />
+                      
+                      {/* 랭킹 뱃지 */}
+                      <UserLevelBadges 
+                        userId={targetUserId} 
+                        variant="minimal" 
+                        size="sm" 
+                        showOnlyRank={true}
+                        className="flex-shrink-0"
+                      />
+                    </div>
                   </div>
                   
                   {/* Activity Score V2 */}
                   <div className="mt-4">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium">활동 점수</span>
-                      <span className="text-sm font-bold">{currentScore}점</span>
+                      <span className="text-sm font-bold">{getUserStat('activity_score') || profile?.activity_score || 0}점</span>
                     </div>
-                    {levelProgress && (
+                    {getUserStat('level_progress') && (
                       <>
-                        <Progress value={levelProgress.progress} className="h-2" />
+                        <Progress value={getUserStat('level_progress')?.progress_percentage || 0} className="h-2" />
                         <p className="text-xs mt-1 text-muted-foreground">
-                          {levelProgress.nextLevelPoints > 0 ? 
-                            `다음 레벨까지 ${levelProgress.nextLevelPoints}점 필요` :
+                          {getUserStat('level_progress')?.points_to_next > 0 ? 
+                            `다음 레벨까지 ${getUserStat('level_progress')?.points_to_next}점 필요` :
                             '최고 레벨 달성!'
                           }
                         </p>
@@ -490,103 +503,8 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                     </div>
                   </div>
                   
-                  {skillConfig && (
-                    <div>
-                      <h3 className="text-sm font-medium mb-2">스킬 레벨</h3>
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Badge variant="secondary" className={skillConfig.color}>
-                              <skillConfig.icon className="h-3 w-3 mr-1" />
-                              {skillConfig.label}
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p className="font-semibold">AI 스킬 레벨</p>
-                            <p className="text-xs">{skillConfig.description}</p>
-                            <p className="text-xs mt-1">활동 점수 {skillConfig.minScore}점 이상</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    </div>
-                  )}
                 </div>
 
-                {/* Achievements V2 */}
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-medium">획득 업적</h3>
-                    <div className="flex items-center space-x-1 text-xs text-muted-foreground">
-                      <span>{totalEarned}개</span>
-                      <span>·</span>
-                      <span>{totalPoints}점</span>
-                    </div>
-                  </div>
-                  
-                  {/* 티어별 통계 */}
-                  {tierCounts && (tierCounts.bronze + tierCounts.silver + tierCounts.gold + tierCounts.platinum > 0) && (
-                    <div className="flex items-center justify-center space-x-2 mb-3 text-xs">
-                      {tierCounts.platinum > 0 && (
-                        <Badge variant="outline" className="px-1 py-0 text-xs">
-                          💎 {tierCounts.platinum}
-                        </Badge>
-                      )}
-                      {tierCounts.gold > 0 && (
-                        <Badge variant="outline" className="px-1 py-0 text-xs">
-                          🥇 {tierCounts.gold}
-                        </Badge>
-                      )}
-                      {tierCounts.silver > 0 && (
-                        <Badge variant="outline" className="px-1 py-0 text-xs">
-                          🥈 {tierCounts.silver}
-                        </Badge>
-                      )}
-                      {tierCounts.bronze > 0 && (
-                        <Badge variant="outline" className="px-1 py-0 text-xs">
-                          🥉 {tierCounts.bronze}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
-                  
-                  {completedAchievements.length > 0 ? (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-1">
-                        {completedAchievements.slice(0, 6).map((achievement) => (
-                          <TooltipProvider key={achievement.name}>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="secondary" 
-                                  className={`justify-center cursor-help text-xs ${TIER_COLORS[achievement.tier]}`}
-                                >
-                                  <span className="mr-1">{achievement.icon}</span>
-                                  <span className="truncate">{achievement.name}</span>
-                                </Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                <div className="text-xs">
-                                  <p className="font-semibold">{achievement.name}</p>
-                                  <p className="text-muted-foreground">{achievement.description}</p>
-                                  <p className="mt-1">
-                                    {TIER_ICONS[achievement.tier]} {achievement.tier} • {achievement.points}점
-                                  </p>
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
-                        ))}
-                      </div>
-                      {completedAchievements.length > 6 && (
-                        <div className="text-xs text-center text-muted-foreground">
-                          +{completedAchievements.length - 6}개 더 보기
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-muted-foreground">아직 획득한 업적이 없습니다</p>
-                  )}
-                </div>
 
                 {/* Contact Info */}
                 <div className="border-t pt-4 space-y-2 text-sm">
@@ -602,7 +520,7 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                   )}
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <MapPin className="h-4 w-4" />
-                    <span>{metadata.location || '강원도 춘천시'}</span>
+                    <span>{metadata.location || '위치 미설정'}</span>
                   </div>
                   <div className="flex items-center space-x-2 text-muted-foreground">
                     <Calendar className="h-4 w-4" />
@@ -639,10 +557,27 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
           className="lg:col-span-2"
         >
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="activity">활동 내역</TabsTrigger>
-              <TabsTrigger value="stats">통계</TabsTrigger>
-              {isOwnProfile && <TabsTrigger value="settings">설정</TabsTrigger>}
+            <TabsList className="flex w-full h-auto items-center justify-between rounded-md bg-muted p-0.5 text-muted-foreground overflow-x-auto">
+              <TabsTrigger 
+                value="activity" 
+                className="flex-1 px-2.5 py-2 text-sm font-medium touch-manipulation min-h-[32px] flex items-center justify-center whitespace-nowrap"
+              >
+                활동 내역
+              </TabsTrigger>
+              <TabsTrigger 
+                value="stats" 
+                className="flex-1 px-2.5 py-2 text-sm font-medium touch-manipulation min-h-[32px] flex items-center justify-center whitespace-nowrap"
+              >
+                통계
+              </TabsTrigger>
+              {isOwnProfile && (
+                <TabsTrigger 
+                  value="settings" 
+                  className="flex-1 px-2.5 py-2 text-sm font-medium touch-manipulation min-h-[32px] flex items-center justify-center whitespace-nowrap"
+                >
+                  설정
+                </TabsTrigger>
+              )}
             </TabsList>
 
             {/* Activity Tab */}
@@ -658,8 +593,8 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                       {recentActivities.map((activity: any, index: number) => (
                         <div key={index} className="flex items-start space-x-3 border-b pb-4 last:border-b-0">
                           <div className="flex-shrink-0">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-100">
-                              <Activity className="h-4 w-4 text-blue-600" />
+                            <div className={`flex h-8 w-8 items-center justify-center rounded-full ${getActivityIconBg(activity.type || activity.activity_type || 'default')}`}>
+                              {getActivityIcon(activity.type || activity.activity_type || 'default')}
                             </div>
                           </div>
                           <div className="flex-1">
@@ -712,20 +647,20 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                   <CardContent>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">총 게시글</span>
-                        <span className="font-semibold">{stats?.total_content_count || 0}</span>
+                        <span className="text-sm text-muted-foreground">총 콘텐츠</span>
+                        <span className="font-semibold">{getUserStat('total_content_count') || (stats && typeof stats === 'object' && 'content_created_count' in stats ? stats.content_created_count as number : 0) || 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">총 댓글</span>
-                        <span className="font-semibold">{stats?.comments_count || 0}</span>
+                        <span className="font-semibold">{getUserStat('comments_count') || 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">받은 좋아요</span>
-                        <span className="font-semibold">{stats?.total_likes_received || 0}</span>
+                        <span className="font-semibold">{getUserStat('total_likes_received') || 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">총 조회수</span>
-                        <span className="font-semibold">{(stats?.total_views || 0).toLocaleString()}</span>
+                        <span className="font-semibold">{getUserStat('total_views') || 0}</span>
                       </div>
                     </div>
                   </CardContent>
@@ -739,93 +674,21 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">참여 활동</span>
-                        <span className="font-semibold">{stats?.activities_joined || 0}</span>
+                        <span className="font-semibold">{getUserStat('activities_joined') || 0}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">공유 자료</span>
-                        <span className="font-semibold">{stats?.resources_count || 0}</span>
+                        <span className="font-semibold">{getUserStat('resources_count') || 0}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">활동 점수</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{profile?.activity_score || 0}</span>
-                          <Badge variant="secondary" className={`${activityLevel.color} text-xs`}>
-                            <activityLevel.icon className="h-3 w-3 mr-0.5" />
-                            {activityLevel.level}
-                          </Badge>
-                        </div>
+                        <span className="font-semibold">{getUserStat('activity_score') || profile?.activity_score || 0}</span>
                       </div>
                     </div>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* 업적 진행률 */}
-              {achievementProgress.length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2">
-                      <Trophy className="h-5 w-5" />
-                      <span>업적 진행률</span>
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
-                      {/* 완료된 업적 통계 */}
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <div className="text-2xl font-bold text-primary">
-                            {achievementProgress.filter(a => a.is_completed).length}
-                          </div>
-                          <div className="text-xs text-muted-foreground">완료된 업적</div>
-                        </div>
-                        <div className="text-center p-3 bg-muted rounded-lg">
-                          <div className="text-2xl font-bold text-primary">
-                            {achievementProgress
-                              .filter(a => a.is_completed)
-                              .reduce((sum, a) => sum + a.points, 0)}
-                          </div>
-                          <div className="text-xs text-muted-foreground">획득 포인트</div>
-                        </div>
-                      </div>
-                      
-                      {/* 카테고리별 진행률 */}
-                      {[
-                        { type: 'posts', label: '콘텐츠 작성', icon: '📝' },
-                        { type: 'activities', label: '활동 참여', icon: '🎭' },
-                        { type: 'likes', label: '인기도', icon: '❤️' },
-                        { type: 'days', label: '가입 기간', icon: '📅' }
-                      ].map(category => {
-                        const categoryAchievements = achievementProgress.filter(
-                          (a: any) => a.requirement_type === category.type
-                        )
-                        const completedCount = categoryAchievements.filter((a: any) => a.is_completed).length
-                        const totalCount = categoryAchievements.length
-                        const percentage = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
-                        
-                        return (
-                          <div key={category.type}>
-                            <div className="flex justify-between text-sm">
-                              <span>
-                                {category.icon} {category.label}
-                              </span>
-                              <span className="text-muted-foreground">
-                                {completedCount}/{totalCount} 완료
-                              </span>
-                            </div>
-                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-gray-200">
-                              <div 
-                                className="h-full bg-gradient-to-r from-kepco-blue-400 to-kepco-blue-600 transition-all"
-                                style={{ width: `${percentage}%` }}
-                              />
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </CardContent>
-                </Card>
-              )}
 
               {/* 콘텐츠 작성 현황 */}
               <Card>
@@ -839,25 +702,25 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
                   <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-2xl font-bold text-primary">
-                        {stats?.posts_count || 0}
+                        {getUserStat('total_content_count') || (stats && typeof stats === 'object' && 'content_created_count' in stats ? stats.content_created_count as number : 0) || 0}
                       </div>
-                      <div className="text-sm text-muted-foreground">게시글</div>
+                      <div className="text-sm text-muted-foreground">총 콘텐츠</div>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-2xl font-bold text-primary">
-                        {stats?.cases_count || 0}
+                        {getUserStat('cases_count') || 0}
                       </div>
                       <div className="text-sm text-muted-foreground">사례</div>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-2xl font-bold text-primary">
-                        {stats?.announcements_count || 0}
+                        {getUserStat('announcements_count') || 0}
                       </div>
                       <div className="text-sm text-muted-foreground">공지사항</div>
                     </div>
                     <div className="text-center p-4 bg-muted rounded-lg">
                       <div className="text-2xl font-bold text-primary">
-                        {stats?.resources_count || 0}
+                        {getUserStat('resources_count') || 0}
                       </div>
                       <div className="text-sm text-muted-foreground">자료</div>
                     </div>
@@ -913,7 +776,16 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
           profile={profile}
           metadata={metadata}
           onSuccess={() => {
+            // 프로필 데이터 리패치
             refetch()
+            
+            // UserLevelBadges 관련 데이터도 리패치 - 모든 관련 쿼리 무효화
+            queryClient.invalidateQueries({ queryKey: ['user-level-info', targetUserId] })
+            queryClient.invalidateQueries({ queryKey: ['user-v2', targetUserId] })
+            queryClient.invalidateQueries({ queryKey: ['user-stats-v2', targetUserId] })
+            queryClient.invalidateQueries({ queryKey: ['user-game-data-v2', targetUserId] })
+            queryClient.invalidateQueries({ queryKey: ['user-simple-rank-v2', targetUserId] })
+            
             toast.success('프로필이 업데이트되었습니다.')
           }}
         />

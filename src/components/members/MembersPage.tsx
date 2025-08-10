@@ -43,14 +43,15 @@ import {
   UserCheck,
   User,
   Activity,
-  Zap
+  Zap,
+  Clock
 } from 'lucide-react'
 import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
 // V2 시스템 사용
-import { useProfileList, useUsersSimpleStats, useUserProfilesComplete } from '@/hooks/features/useProfileV2'
+import { useProfileList, useUserProfilesComplete } from '@/hooks/features/useProfileV2'
 import { useUpdateMemberRoleV2 } from '@/hooks/features/useMembersV2'
 import type { UserMetadata } from '@/lib/types'
 import { MessageButton } from '@/components/messages'
@@ -58,7 +59,6 @@ import { getRoleConfig, getRoleLabels, getRoleColors, getRoleIcons } from '@/lib
 import { getSkillLevelConfig, getSkillLevelLabels, getSkillLevelColors, getSkillLevelIcons, calculateSkillLevel } from '@/lib/skills'
 import { getActivityLevelInfo } from '@/lib/activityLevels'
 import { getAIToolConfig } from '@/lib/aiTools'
-import { ACHIEVEMENTS } from '@/lib/achievements'
 
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
@@ -75,7 +75,6 @@ type MemberData = UserV2 & {
   skill_level?: string
   ai_expertise?: string[]
   join_date?: string
-  // achievements는 별도로 조회
 }
 
 // Get labels and configs from the new modules
@@ -92,9 +91,9 @@ function MembersPage() {
   const [activeRole, setActiveRole] = useState('all')
   const [activeSkill, setActiveSkill] = useState('all')
   
-  // V2 Hook 사용 - 페이지네이션과 필터링 지원
+  // V2 Hook 사용 - 페이지네이션과 필터링 지원 (member 이상만 표시)
   const { 
-    data: members = [], 
+    data: allMembers = [], 
     isLoading: loading 
   } = useProfileList({
     search: searchTerm,
@@ -103,6 +102,13 @@ function MembersPage() {
     order: 'desc',
     limit: 100
   })
+
+  // member 이상만 필터링
+  const members = useMemo(() => {
+    return allMembers.filter(member => 
+      ['member', 'vice-leader', 'leader', 'admin'].includes(member.role)
+    )
+  }, [allMembers])
   
   const updateMemberRoleMutation = useUpdateMemberRoleV2()
   // Note: useDeleteMember is not available in V2, remove if not needed
@@ -118,18 +124,8 @@ function MembersPage() {
     return members.map(m => m.id)
   }, [members])
   
-  // 회원들의 통계 데이터 가져오기
-  // TODO: Fix hook parameters - currently disabled due to type mismatch
-  // const { data: memberStats } = useUsersSimpleStats(memberIds)
+  // V2 시스템에서는 개별 회원 통계는 개별 컴포넌트에서 조회
   const memberStats = undefined
-  
-  // 회원들의 전체 프로필 데이터 가져오기 (업적 포함)
-  // TODO: Fix hook parameters - currently disabled due to type mismatch
-  // const { data: memberProfiles } = useUserProfilesComplete(memberIds, {
-  //   includeActivities: false,
-  //   includeAchievements: true,
-  //   activitiesLimit: 0
-  // })
   const memberProfiles = undefined
 
   // V2 시스템에서는 변환 불필요 - 직접 사용
@@ -246,24 +242,29 @@ function MembersPage() {
     })
   }
 
+  const formatRelativeTime = (dateString: string) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
+    
+    if (diffInSeconds < 60) return '방금 전'
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}분 전`
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}시간 전`
+    if (diffInSeconds < 604800) return `${Math.floor(diffInSeconds / 86400)}일 전`
+    
+    return date.toLocaleDateString('ko-KR', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    })
+  }
+
 
   const getMemberStats = (member: MemberData) => {
-    // 회원별 통계 데이터 조회
-    if (memberStats && Array.isArray(memberStats)) {
-      const stats = (memberStats as any[]).find((s: any) => s.user_id === member.id)
-      if (stats) {
-        return {
-          posts: stats.posts_count || 0,
-          comments: stats.comments_count || 0,
-          participation: stats.activities_joined || 0
-        }
-      }
-    }
-    
-    // 통계 데이터가 없으면 기본값 반환
+    // V2에서는 개별 회원 상세 통계는 프로필 페이지에서 조회
     return {
       posts: 0,
-      comments: 0,
+      comments: 0, 
       participation: 0
     }
   }
@@ -426,12 +427,11 @@ function MembersPage() {
                           <CardTitle className="text-lg truncate">
                             {member.name || '익명'}
                           </CardTitle>
-                          {/* 게임화 V2 레벨 뱃지 */}
                           <UserLevelBadges 
-                            userId={member.id} 
-                            variant="compact" 
-                            size="sm" 
-                            className="flex-shrink-0"
+                            userId={member.id}
+                            variant="minimal"
+                            size="sm"
+                            showOnlyRank={true}
                           />
                         </div>
                         <CardDescription className="truncate">
@@ -470,20 +470,12 @@ function MembersPage() {
                   <div className="mb-4">
                     <div className="mb-2 flex items-center justify-between">
                       <span className="text-sm font-medium">AI 전문분야</span>
-                      <Badge 
-                        variant="outline" 
-                        className={skillColors[member.skill_level as keyof typeof skillColors] || 'bg-gray-100 text-gray-800'}
-                      >
-                        {(() => {
-                          const SkillIcon = skillIcons[member.skill_level as keyof typeof skillIcons] || Zap
-                          return (
-                            <>
-                              <SkillIcon className="h-3 w-3 mr-1" />
-                              {skillLevels[member.skill_level as keyof typeof skillLevels] || member.skill_level || '미정'}
-                            </>
-                          )
-                        })()}
-                      </Badge>
+                      <UserLevelBadges 
+                        userId={member.id}
+                        variant="minimal"
+                        size="sm"
+                        showOnlySkill={true}
+                      />
                     </div>
                     <div className="flex flex-wrap gap-1">
                       {member.ai_expertise?.slice(0, 2).map((expertise) => {
@@ -515,73 +507,28 @@ function MembersPage() {
                       <div className="flex items-center gap-2">
                         <TrendingUp className="h-4 w-4 text-primary" />
                         <span className="font-medium">{member.activity_score || 0}</span>
-                        <Badge variant="outline" className={`text-xs ${activityLevel.color} px-1 py-0`}>
-                          <activityLevel.icon className="h-3 w-3 mr-0.5" />
-                          {activityLevel.level}
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                      <div className="text-center">
-                        <div className="font-medium text-foreground">{stats.posts}</div>
-                        <div>게시글</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-medium text-foreground">{stats.comments}</div>
-                        <div>댓글</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-medium text-foreground">{stats.participation}</div>
-                        <div>참여</div>
+                        <UserLevelBadges 
+                          userId={member.id}
+                          variant="minimal"
+                          size="sm"
+                          showOnlyActivity={true}
+                        />
                       </div>
                     </div>
                   </div>
 
-                  {/* Achievements - V2 시스템 사용 */}
-                  {(() => {
-                    const profile = (memberProfiles as any)?.find?.((p: any) => p.profile.id === member.id)
-                    const completedAchievements = profile?.achievement_progress
-                      ?.filter((a: any) => a.is_completed)
-                      ?.map((a: any) => ({
-                        id: a.achievement_id,
-                        ...ACHIEVEMENTS[a.achievement_id]
-                      }))
-                      ?.filter(Boolean) || []
-                    
-                    if (completedAchievements.length === 0) return null
-                    
-                    return (
-                      <div className="mb-4">
-                        <div className="mb-2 flex items-center space-x-1">
-                          <Award className="h-4 w-4 text-yellow-500" />
-                          <span className="text-sm font-medium">업적</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {completedAchievements.slice(0, 2).map((achievement: any) => (
-                            <Badge 
-                              key={achievement.id} 
-                              variant="secondary" 
-                              className="text-xs bg-yellow-100 text-yellow-800"
-                            >
-                              {achievement.icon} {achievement.name}
-                            </Badge>
-                          ))}
-                          {completedAchievements.length > 2 && (
-                            <Badge variant="secondary" className="text-xs">
-                              +{completedAchievements.length - 2}
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })()}
+                  {/* Achievements는 프로필 페이지에서 조회 */}
 
                   {/* Contact Info & Join Date */}
                   <div className="space-y-2 text-sm text-muted-foreground">
                     <div className="flex items-center space-x-2">
-                      <MapPin className="h-4 w-4" />
-                      <span>{member.location || '강원도 춘천시'}</span>
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {member.last_login_at ? 
+                          `${formatRelativeTime(member.last_login_at)} 마지막 로그인` : 
+                          '로그인 기록 없음'
+                        }
+                      </span>
                     </div>
                     <div className="flex items-center space-x-2">
                       <Calendar className="h-4 w-4" />

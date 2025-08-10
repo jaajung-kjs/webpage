@@ -166,20 +166,28 @@ export function useConnectionV2() {
     }
   }, [])
 
-  // 하트비트 업데이트
+  // 하트비트 업데이트 - 실제 활동 시간 업데이트는 별도 이벤트에서만 수행
   const updateHeartbeat = useCallback(async () => {
     if (!user) return
     
+    // 하트비트는 연결 상태 확인용으로만 사용
+    // users_v2 테이블 업데이트는 제거하여 realtime 이벤트 발생 방지
+    // 실제 last_login_at 업데이트는 로그인 시에만 수행
+    
+    // 대신 연결 상태만 체크
     try {
-      await supabaseClient
+      // 간단한 health check 쿼리로 대체
+      const { error } = await supabaseClient
         .from('users_v2')
-        .update({ 
-          last_login_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        })
+        .select('id')
         .eq('id', (user as any).id)
+        .single()
+      
+      if (error) {
+        console.warn('Connection check failed:', error)
+      }
     } catch (error) {
-      console.warn('Heartbeat update failed:', error)
+      console.warn('Heartbeat check failed:', error)
     }
   }, [user])
 

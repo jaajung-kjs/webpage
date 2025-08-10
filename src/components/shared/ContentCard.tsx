@@ -30,6 +30,8 @@ import {
 } from 'lucide-react'
 import { cn, extractCleanPreview } from '@/lib/utils'
 import UserLevelBadges from './UserLevelBadges'
+import { getCategoryConfig, ContentType } from '@/lib/constants/categories'
+
 interface ContentCardProps {
   content: any
   viewMode?: 'grid' | 'list'
@@ -61,10 +63,24 @@ export default function ContentCard({
   linkPrefix,
   index = 0,
 }: ContentCardProps) {
+  // 디버깅: comment_count 확인
+  if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+    console.log('[ContentCard] Rendering with comment_count:', {
+      title: content.title,
+      comment_count: content.comment_count,
+      entire_content: content
+    })
+  }
   const isPinned = (content.metadata as any)?.is_pinned
   const hasImage = (content.metadata as any)?.has_image
   const attachments = (content.metadata as any)?.attachments || []
-  const CategoryIcon = categoryIcons[content.category || '']
+  
+  // 중앙화된 카테고리 설정 사용
+  const contentType = content.content_type as ContentType
+  const categoryConfig = getCategoryConfig(contentType, content.category || '')
+  const CategoryIcon = categoryConfig?.icon || categoryIcons[content.category || '']
+  const categoryLabel = categoryConfig?.label || categoryLabels[content.category || ''] || content.category
+  const categoryColor = categoryConfig?.bgColor || categoryColors[content.category || ''] || ''
 
   // Format date
   const formatDate = (date: string | null) => {
@@ -87,10 +103,10 @@ export default function ContentCard({
               )}
               <Badge
                 variant="secondary"
-                className={categoryColors[content.category || ''] || ''}
+                className={categoryColor}
               >
                 {CategoryIcon && <CategoryIcon className="h-3 w-3 mr-1" />}
-                {categoryLabels[content.category || ''] || content.category}
+                {categoryLabel}
               </Badge>
               {hasImage && (
                 <Badge variant="outline">이미지</Badge>

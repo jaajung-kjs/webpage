@@ -1,0 +1,2000 @@
+{
+  "config": {
+    "configFile": "/Users/jsk/webpage/kepco-ai-community/playwright.config.ts",
+    "rootDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+    "forbidOnly": false,
+    "fullyParallel": true,
+    "globalSetup": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/global-setup.ts",
+    "globalTeardown": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 5
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        null
+      ],
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "test-results/results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Chrome",
+        "name": "Mobile Chrome",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Safari",
+        "name": "Mobile Safari",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 60000
+      },
+      {
+        "outputDir": "/Users/jsk/webpage/kepco-ai-community/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "setup",
+        "name": "setup",
+        "testDir": "/Users/jsk/webpage/kepco-ai-community/tests/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "/.*\\.setup\\.ts/"
+        ],
+        "timeout": 60000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.54.2",
+    "workers": 5,
+    "webServer": {
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "reuseExistingServer": true,
+      "stdout": "pipe",
+      "stderr": "pipe",
+      "timeout": 120000
+    }
+  },
+  "suites": [
+    {
+      "title": "auth.setup.ts",
+      "file": "auth.setup.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "authenticate",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 60000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "setup",
+              "projectName": "setup",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 4845,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "🔐 Starting authentication setup...\n"
+                    },
+                    {
+                      "text": "📝 Not logged in, proceeding with login...\n"
+                    },
+                    {
+                      "text": "✅ Authentication setup completed\n"
+                    }
+                  ],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2025-08-10T15:12:41.257Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "17e3fe6f4d9d8bd79c6b-60f085b113a677673906",
+          "file": "auth.setup.ts",
+          "line": 6,
+          "column": 6
+        }
+      ]
+    },
+    {
+      "title": "profile/profile-data-validation.spec.ts",
+      "file": "profile/profile-data-validation.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Profile Data Validation - No Hardcoded Data",
+          "file": "profile/profile-data-validation.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "should display user statistics from database, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 12354,
+                      "error": {
+                        "message": "Error: locator.textContent: Error: strict mode violation: locator('text=총 게시글').locator('..').locator('text=/\\\\d+/') resolved to 2 elements:\n    1) <span class=\"font-semibold\">3</span> aka locator('span').filter({ hasText: /^3$/ })\n    2) <div class=\"text-2xl font-bold text-primary\">3</div> aka locator('div').filter({ hasText: /^3$/ })\n\nCall log:\n\u001b[2m  - waiting for locator('text=총 게시글').locator('..').locator('text=/\\\\d+/')\u001b[22m\n",
+                        "stack": "Error: locator.textContent: Error: strict mode violation: locator('text=총 게시글').locator('..').locator('text=/\\\\d+/') resolved to 2 elements:\n    1) <span class=\"font-semibold\">3</span> aka locator('span').filter({ hasText: /^3$/ })\n    2) <div class=\"text-2xl font-bold text-primary\">3</div> aka locator('div').filter({ hasText: /^3$/ })\n\nCall log:\n\u001b[2m  - waiting for locator('text=총 게시글').locator('..').locator('text=/\\\\d+/')\u001b[22m\n\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:35:94",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts",
+                          "column": 94,
+                          "line": 35
+                        },
+                        "snippet": "  33 |     \n  34 |     // Verify statistics are from database\n> 35 |     const totalPosts = await page.locator('text=총 게시글').locator('..').locator('text=/\\\\d+/').textContent();\n     |                                                                                              ^\n  36 |     expect(totalPosts).toMatch(/^\\d+$/);\n  37 |     \n  38 |     const totalComments = await page.locator('text=총 댓글').locator('..').locator('text=/\\\\d+/').textContent();"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts",
+                            "column": 94,
+                            "line": 35
+                          },
+                          "message": "Error: locator.textContent: Error: strict mode violation: locator('text=총 게시글').locator('..').locator('text=/\\\\d+/') resolved to 2 elements:\n    1) <span class=\"font-semibold\">3</span> aka locator('span').filter({ hasText: /^3$/ })\n    2) <div class=\"text-2xl font-bold text-primary\">3</div> aka locator('div').filter({ hasText: /^3$/ })\n\nCall log:\n\u001b[2m  - waiting for locator('text=총 게시글').locator('..').locator('text=/\\\\d+/')\u001b[22m\n\n\n  33 |     \n  34 |     // Verify statistics are from database\n> 35 |     const totalPosts = await page.locator('text=총 게시글').locator('..').locator('text=/\\\\d+/').textContent();\n     |                                                                                              ^\n  36 |     expect(totalPosts).toMatch(/^\\d+$/);\n  37 |     \n  38 |     const totalComments = await page.locator('text=총 댓글').locator('..').locator('text=/\\\\d+/').textContent();\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:35:94"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:47.218Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts",
+                        "column": 94,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-2184af7bbf66442b77c0",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "should display achievements and badges from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 17734,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:47.224Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-18fa0be1e62509904c74",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "should display activity history from database",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 11541,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:47.218Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-3fe0e934f805a4918300",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 84,
+              "column": 7
+            },
+            {
+              "title": "should display correct user metadata",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 12359,
+                      "errors": [],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:47.231Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-31e85f3a7dcabd4539b3",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "should load profile data from API, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 21660,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:47.237Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-chromium/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-chromium/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-5548d1df9ef96fb6d77e",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 127,
+              "column": 7
+            },
+            {
+              "title": "should display user statistics from database, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 17555,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:12:59.835Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-firefox/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-a7d74a8279dbca477a2b",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "should display achievements and badges from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 17449,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:00.302Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-firefox/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-25b86f3f4abb6b303c5e",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "should display activity history from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 18597,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:00.412Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-firefox/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-73c7dc581fd768d4c7e2",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 84,
+              "column": 7
+            },
+            {
+              "title": "should display correct user metadata",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 16967,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:05.702Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-firefox/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-c9b7b39d7ae0caa4ca66",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "should load profile data from API, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 17205,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:09.717Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-firefox/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-firefox/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-f522cda4ad95ddfe337b",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 127,
+              "column": 7
+            },
+            {
+              "title": "should display user statistics from database, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 11,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 16653,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:18.792Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-webkit/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-webkit/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-297078a161675b94a10e",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "should display achievements and badges from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 12,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 16505,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:18.994Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-webkit/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-webkit/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-dff2e277b9604a277aa6",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "should display activity history from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 13,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 16766,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:20.902Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-webkit/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-webkit/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-c911209cc57859c5ffb0",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 84,
+              "column": 7
+            },
+            {
+              "title": "should display correct user metadata",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 14,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 16512,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:23.573Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-webkit/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-webkit/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-3772519b3a0dab2b46fa",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "should load profile data from API, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 15,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 16330,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:27.866Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-webkit/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-webkit/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-86c4d6aaa61d823d156f",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 127,
+              "column": 7
+            },
+            {
+              "title": "should display user statistics from database, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 16,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 16656,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:35.919Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-a8b2a017ff230c3b0524",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "should display achievements and badges from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 17,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 16817,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:35.919Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-a8c266a012a22243ae55",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "should display activity history from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 18,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 16706,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:38.326Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-d035553c293109328751",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 84,
+              "column": 7
+            },
+            {
+              "title": "should display correct user metadata",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 19,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 16114,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:40.585Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-c31ce301f440fb7c9cd6",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "should load profile data from API, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 20,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 16280,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:44.562Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Chrome/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-62ff7e7f1a30acc6f73e",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 127,
+              "column": 7
+            },
+            {
+              "title": "should display user statistics from database, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 21,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 16248,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:53.438Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-07df7-from-database-not-hardcoded-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-74f757ae3826029096be",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 9,
+              "column": 7
+            },
+            {
+              "title": "should display achievements and badges from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 22,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 16310,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:53.572Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-4697a-ts-and-badges-from-database-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-d451d357c6efc6c484d6",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 55,
+              "column": 7
+            },
+            {
+              "title": "should display activity history from database",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 23,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 16015,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:55.830Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-a37ca-ivity-history-from-database-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-93db15ded47162f02c33",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 84,
+              "column": 7
+            },
+            {
+              "title": "should display correct user metadata",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 24,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 15982,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:13:57.319Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-05580-splay-correct-user-metadata-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-a8d5be4cacb04e2e50f8",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 102,
+              "column": 7
+            },
+            {
+              "title": "should load profile data from API, not hardcoded",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 60000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 25,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 15967,
+                      "error": {
+                        "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n",
+                        "stack": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5",
+                        "location": {
+                          "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                          "column": 53,
+                          "line": 122
+                        },
+                        "snippet": "\u001b[90m   at \u001b[39mfixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                            "column": 53,
+                            "line": 122
+                          },
+                          "message": "TimeoutError: locator.click: Timeout 15000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('button', { name: '로그인' })\u001b[22m\n\n\n   at fixtures/base-test.ts:122\n\n  120 |     \n  121 |     // Click login button to open modal\n> 122 |     await page.getByRole('button', { name: '로그인' }).click();\n      |                                                     ^\n  123 |     \n  124 |     // Wait for modal\n  125 |     await page.getByRole('dialog').waitFor({ state: 'visible' });\n    at Object.login (/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts:122:53)\n    at /Users/jsk/webpage/kepco-ai-community/tests/e2e/profile/profile-data-validation.spec.ts:6:5"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-08-10T15:14:01.355Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "error-context",
+                          "contentType": "text/markdown",
+                          "path": "/Users/jsk/webpage/kepco-ai-community/test-results/profile-profile-data-valid-007e0-data-from-API-not-hardcoded-Mobile-Safari/error-context.md"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/jsk/webpage/kepco-ai-community/tests/e2e/fixtures/base-test.ts",
+                        "column": 53,
+                        "line": 122
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "f0e1cfee4b42e2b3e09d-f6ccc015313068d1e335",
+              "file": "profile/profile-data-validation.spec.ts",
+              "line": 127,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-08-10T15:12:40.198Z",
+    "duration": 97259.152,
+    "expected": 3,
+    "skipped": 0,
+    "unexpected": 23,
+    "flaky": 0
+  }
+}

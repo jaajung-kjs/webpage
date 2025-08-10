@@ -35,6 +35,7 @@ import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 import { ko } from 'date-fns/locale'
 import ContentRenderer from './ContentRenderer'
+import UserLevelBadges from './UserLevelBadges'
 
 interface DetailLayoutProps {
   // Content data
@@ -179,12 +180,22 @@ export default function DetailLayout({
                         </AvatarFallback>
                       </Avatar>
                       <div>
-                        <Link
-                          href={`/profile/${author.id}`}
-                          className="font-medium hover:underline"
-                        >
-                          {author.name}
-                        </Link>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Link
+                            href={`/profile/${author.id}`}
+                            className="font-medium hover:underline flex items-center"
+                          >
+                            {author.name}
+                          </Link>
+                          <div className="flex items-center">
+                            <UserLevelBadges 
+                              userId={author.id} 
+                              variant="minimal" 
+                              size="sm" 
+                              showAllBadges={true}
+                            />
+                          </div>
+                        </div>
                         {author.department && (
                           <p className="text-sm text-muted-foreground">
                             {author.department}
@@ -343,7 +354,17 @@ export default function DetailLayout({
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1">
-                    <p className="font-medium">{author.name}</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium flex items-center">{author.name}</p>
+                      <div className="flex items-center">
+                        <UserLevelBadges 
+                          userId={author.id} 
+                          variant="minimal" 
+                          size="sm" 
+                          showAllBadges={true}
+                        />
+                      </div>
+                    </div>
                     {author.department && (
                       <p className="text-sm text-muted-foreground">
                         {author.department}

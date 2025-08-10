@@ -23,7 +23,6 @@ export interface UserMetadata {
   ai_tools?: string[]
   
   // 성과 및 활동
-  achievements?: string[]
   certifications?: string[]
   
   // 소셜 링크
@@ -238,7 +237,6 @@ export function createDefaultUserMetadata(): UserMetadata {
   return {
     skill_level: 'beginner',
     ai_expertise: [],
-    achievements: [],
     interests: []
   }
 }

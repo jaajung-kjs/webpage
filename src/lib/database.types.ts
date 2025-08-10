@@ -14,11 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      achievement_definitions_v2: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string
+          display_order: number | null
+          icon: string
+          id: string
+          is_active: boolean
+          name: string
+          points: number
+          requirement_count: number
+          requirement_type: string
+          tier: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description: string
+          display_order?: number | null
+          icon: string
+          id: string
+          is_active?: boolean
+          name: string
+          points: number
+          requirement_count: number
+          requirement_type: string
+          tier: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string
+          display_order?: number | null
+          icon?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          points?: number
+          requirement_count?: number
+          requirement_type?: string
+          tier?: string
+        }
+        Relationships: []
+      }
       activities_v2: {
         Row: {
           content_id: string
           created_at: string
           current_participants: number
+          deleted_at: string | null
           duration_minutes: number | null
           end_date: string | null
           end_time: string | null
@@ -41,6 +87,7 @@ export type Database = {
           content_id: string
           created_at?: string
           current_participants?: number
+          deleted_at?: string | null
           duration_minutes?: number | null
           end_date?: string | null
           end_time?: string | null
@@ -63,6 +110,7 @@ export type Database = {
           content_id?: string
           created_at?: string
           current_participants?: number
+          deleted_at?: string | null
           duration_minutes?: number | null
           end_date?: string | null
           end_time?: string | null
@@ -93,7 +141,21 @@ export type Database = {
             foreignKeyName: "activities_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: true
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: true
             referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activities_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: true
+            referencedRelation: "content_with_real_comment_count"
             referencedColumns: ["id"]
           },
           {
@@ -179,6 +241,67 @@ export type Database = {
           },
           {
             foreignKeyName: "activity_participants_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_registrations_v2: {
+        Row: {
+          activity_id: string
+          attendance_date: string | null
+          cancellation_date: string | null
+          cancellation_reason: string | null
+          created_at: string
+          id: string
+          registration_date: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activity_id: string
+          attendance_date?: string | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
+          created_at?: string
+          id?: string
+          registration_date?: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activity_id?: string
+          attendance_date?: string | null
+          cancellation_date?: string | null
+          cancellation_reason?: string | null
+          created_at?: string
+          id?: string
+          registration_date?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_registrations_v2_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_registrations_v2_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_registrations_v2_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users_v2"
@@ -289,7 +412,7 @@ export type Database = {
           },
         ]
       }
-      audit_logs_v2_y2025m01: {
+      audit_logs_v2_2025_01: {
         Row: {
           action: string
           created_at: string
@@ -328,7 +451,7 @@ export type Database = {
         }
         Relationships: []
       }
-      audit_logs_v2_y2025m02: {
+      audit_logs_v2_2025_02: {
         Row: {
           action: string
           created_at: string
@@ -367,7 +490,7 @@ export type Database = {
         }
         Relationships: []
       }
-      audit_logs_v2_y2025m03: {
+      audit_logs_v2_2025_03: {
         Row: {
           action: string
           created_at: string
@@ -513,7 +636,21 @@ export type Database = {
             foreignKeyName: "comments_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
             referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_real_comment_count"
             referencedColumns: ["id"]
           },
           {
@@ -528,6 +665,13 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "comments_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments_with_interactions_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -578,6 +722,13 @@ export type Database = {
             foreignKeyName: "content_attachments_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_attachments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
             referencedRelation: "content_with_metadata_v2"
             referencedColumns: ["id"]
           },
@@ -585,88 +736,11 @@ export type Database = {
             foreignKeyName: "content_attachments_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
-            referencedRelation: "trending_content_v2"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      content_categories_v2: {
-        Row: {
-          category_id: string
-          content_id: string
-        }
-        Insert: {
-          category_id: string
-          content_id: string
-        }
-        Update: {
-          category_id?: string
-          content_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "content_categories_v2_category_id_fkey"
-            columns: ["category_id"]
-            isOneToOne: false
-            referencedRelation: "categories_v2"
+            referencedRelation: "content_with_real_comment_count"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "content_categories_v2_content_id_fkey"
-            columns: ["content_id"]
-            isOneToOne: false
-            referencedRelation: "content_v2"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_categories_v2_content_id_fkey"
-            columns: ["content_id"]
-            isOneToOne: false
-            referencedRelation: "content_with_metadata_v2"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_categories_v2_content_id_fkey"
-            columns: ["content_id"]
-            isOneToOne: false
-            referencedRelation: "trending_content_v2"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      content_metadata_v2: {
-        Row: {
-          content_id: string
-          key: string
-          value: Json
-        }
-        Insert: {
-          content_id: string
-          key: string
-          value: Json
-        }
-        Update: {
-          content_id?: string
-          key?: string
-          value?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "content_metadata_v2_content_id_fkey"
-            columns: ["content_id"]
-            isOneToOne: false
-            referencedRelation: "content_v2"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_metadata_v2_content_id_fkey"
-            columns: ["content_id"]
-            isOneToOne: false
-            referencedRelation: "content_with_metadata_v2"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "content_metadata_v2_content_id_fkey"
+            foreignKeyName: "content_attachments_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
             referencedRelation: "trending_content_v2"
@@ -699,7 +773,21 @@ export type Database = {
             foreignKeyName: "content_tags_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tags_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
             referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_tags_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_real_comment_count"
             referencedColumns: ["id"]
           },
           {
@@ -721,7 +809,7 @@ export type Database = {
       content_v2: {
         Row: {
           author_id: string
-          category: string | null
+          category: string
           comment_count: number
           content: string
           content_type: string
@@ -741,7 +829,7 @@ export type Database = {
         }
         Insert: {
           author_id: string
-          category?: string | null
+          category?: string
           comment_count?: number
           content: string
           content_type: string
@@ -761,7 +849,7 @@ export type Database = {
         }
         Update: {
           author_id?: string
-          category?: string | null
+          category?: string
           comment_count?: number
           content?: string
           content_type?: string
@@ -880,6 +968,51 @@ export type Database = {
           },
         ]
       }
+      db_health_metrics_v2: {
+        Row: {
+          active_connections: number
+          avg_query_time_ms: number | null
+          cache_hit_ratio: number | null
+          database_size_mb: number | null
+          id: string
+          idle_connections: number
+          metadata: Json
+          queries_per_second: number | null
+          recorded_at: string
+          slow_query_count: number | null
+          total_connections: number
+          total_partitions: number | null
+        }
+        Insert: {
+          active_connections: number
+          avg_query_time_ms?: number | null
+          cache_hit_ratio?: number | null
+          database_size_mb?: number | null
+          id?: string
+          idle_connections: number
+          metadata?: Json
+          queries_per_second?: number | null
+          recorded_at?: string
+          slow_query_count?: number | null
+          total_connections: number
+          total_partitions?: number | null
+        }
+        Update: {
+          active_connections?: number
+          avg_query_time_ms?: number | null
+          cache_hit_ratio?: number | null
+          database_size_mb?: number | null
+          id?: string
+          idle_connections?: number
+          metadata?: Json
+          queries_per_second?: number | null
+          recorded_at?: string
+          slow_query_count?: number | null
+          total_connections?: number
+          total_partitions?: number | null
+        }
+        Relationships: []
+      }
       email_verification_attempts_v2: {
         Row: {
           attempt_type: string
@@ -995,6 +1128,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "media_v2_comment_id_fkey"
+            columns: ["comment_id"]
+            isOneToOne: false
+            referencedRelation: "comments_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "media_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
@@ -1005,7 +1145,21 @@ export type Database = {
             foreignKeyName: "media_v2_content_id_fkey"
             columns: ["content_id"]
             isOneToOne: false
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
             referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_real_comment_count"
             referencedColumns: ["id"]
           },
           {
@@ -1569,6 +1723,336 @@ export type Database = {
         }
         Relationships: []
       }
+      user_activity_logs_v2_2025_03: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_04: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_05: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_06: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_07: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_08: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_09: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_10: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_11: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_activity_logs_v2_2025_12: {
+        Row: {
+          action_type: string
+          created_at: string
+          id: number
+          metadata: Json | null
+          points_earned: number
+          target_id: string | null
+          target_type: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          id?: number
+          metadata?: Json | null
+          points_earned?: number
+          target_id?: string | null
+          target_type?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_message_stats_v2: {
         Row: {
           last_checked_at: string
@@ -1606,42 +2090,6 @@ export type Database = {
             foreignKeyName: "user_message_stats_v2_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: true
-            referencedRelation: "users_v2"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      user_metadata_v2: {
-        Row: {
-          key: string
-          updated_at: string
-          user_id: string
-          value: Json
-        }
-        Insert: {
-          key: string
-          updated_at?: string
-          user_id: string
-          value: Json
-        }
-        Update: {
-          key?: string
-          updated_at?: string
-          user_id?: string
-          value?: Json
-        }
-        Relationships: [
-          {
-            foreignKeyName: "user_metadata_v2_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "user_stats_summary_v2"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "user_metadata_v2_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
             referencedRelation: "users_v2"
             referencedColumns: ["id"]
           },
@@ -1778,9 +2226,209 @@ export type Database = {
       }
     }
     Views: {
+      comments_with_interactions_v2: {
+        Row: {
+          author_id: string | null
+          comment_text: string | null
+          content_id: string | null
+          created_at: string | null
+          deleted_at: string | null
+          depth: number | null
+          id: string | null
+          like_count: number | null
+          parent_id: string | null
+          path: unknown | null
+          updated_at: string | null
+          user_like_count: number | null
+          user_report_count: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          comment_text?: string | null
+          content_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          depth?: number | null
+          id?: string | null
+          like_count?: number | null
+          parent_id?: string | null
+          path?: unknown | null
+          updated_at?: string | null
+          user_like_count?: never
+          user_report_count?: never
+        }
+        Update: {
+          author_id?: string | null
+          comment_text?: string | null
+          content_id?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          depth?: number | null
+          id?: string | null
+          like_count?: number | null
+          parent_id?: string | null
+          path?: unknown | null
+          updated_at?: string | null
+          user_like_count?: never
+          user_report_count?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_metadata_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "content_with_real_comment_count"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_content_id_fkey"
+            columns: ["content_id"]
+            isOneToOne: false
+            referencedRelation: "trending_content_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_v2_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments_with_interactions_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_with_interactions_v2: {
+        Row: {
+          author_id: string | null
+          category: string | null
+          comment_count: number | null
+          content: string | null
+          content_type: string | null
+          created_at: string | null
+          deleted_at: string | null
+          id: string | null
+          is_pinned: boolean | null
+          like_count: number | null
+          metadata: Json | null
+          published_at: string | null
+          status: string | null
+          summary: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+          user_download_count: number | null
+          user_like_count: number | null
+          user_report_count: number | null
+          view_count: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          category?: string | null
+          comment_count?: number | null
+          content?: string | null
+          content_type?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string | null
+          is_pinned?: boolean | null
+          like_count?: number | null
+          metadata?: Json | null
+          published_at?: string | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          user_download_count?: never
+          user_like_count?: never
+          user_report_count?: never
+          view_count?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          category?: string | null
+          comment_count?: number | null
+          content?: string | null
+          content_type?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          id?: string | null
+          is_pinned?: boolean | null
+          like_count?: number | null
+          metadata?: Json | null
+          published_at?: string | null
+          status?: string | null
+          summary?: string | null
+          tags?: string[] | null
+          title?: string | null
+          updated_at?: string | null
+          user_download_count?: never
+          user_like_count?: never
+          user_report_count?: never
+          view_count?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       content_with_metadata_v2: {
         Row: {
           author_avatar: string | null
+          author_department: string | null
           author_id: string | null
           author_name: string | null
           category: string | null
@@ -1794,6 +2442,49 @@ export type Database = {
           like_count: number | null
           metadata: Json | null
           published_at: string | null
+          relation_tags: string[] | null
+          status: string | null
+          summary: string | null
+          tags: string[] | null
+          title: string | null
+          updated_at: string | null
+          user_has_downloaded: boolean | null
+          user_has_liked: boolean | null
+          user_has_reported: boolean | null
+          view_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "user_stats_summary_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_v2_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "users_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_with_real_comment_count: {
+        Row: {
+          author_id: string | null
+          category: string | null
+          comment_count: number | null
+          content: string | null
+          content_type: string | null
+          created_at: string | null
+          deleted_at: string | null
+          id: string | null
+          is_pinned: boolean | null
+          like_count: number | null
+          metadata: Json | null
+          published_at: string | null
+          real_comment_count: number | null
           status: string | null
           summary: string | null
           tags: string[] | null
@@ -1818,18 +2509,87 @@ export type Database = {
           },
         ]
       }
+      current_db_health_v2: {
+        Row: {
+          active_connections: number | null
+          as_of_time: string | null
+          avg_query_time_ms: number | null
+          database_size_mb: number | null
+          idle_connections: number | null
+          metric_type: string | null
+        }
+        Relationships: []
+      }
+      maintenance_status_v2: {
+        Row: {
+          description: string | null
+          frequency: string | null
+          last_run: string | null
+          status: string | null
+          task_type: string | null
+        }
+        Relationships: []
+      }
+      partition_health_monitor_v2: {
+        Row: {
+          schemaname: unknown | null
+          size: string | null
+          size_bytes: number | null
+          table_type: string | null
+          tablename: unknown | null
+        }
+        Relationships: []
+      }
+      query_performance_monitor_v2: {
+        Row: {
+          calls: number | null
+          hit_percent: number | null
+          max_exec_time: number | null
+          mean_exec_time: number | null
+          min_exec_time: number | null
+          query_sample: string | null
+          queryid: number | null
+          rows: number | null
+          total_exec_time: number | null
+        }
+        Relationships: []
+      }
       trending_content_v2: {
         Row: {
           author_id: string | null
-          author_name: string | null
           comment_count: number | null
           content_type: string | null
           created_at: string | null
           id: string | null
           like_count: number | null
+          published_at: string | null
           title: string | null
           trending_score: number | null
           view_count: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          comment_count?: number | null
+          content_type?: string | null
+          created_at?: string | null
+          id?: string | null
+          like_count?: number | null
+          published_at?: string | null
+          title?: string | null
+          trending_score?: never
+          view_count?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          comment_count?: number | null
+          content_type?: string | null
+          created_at?: string | null
+          id?: string | null
+          like_count?: number | null
+          published_at?: string | null
+          title?: string | null
+          trending_score?: never
+          view_count?: number | null
         }
         Relationships: [
           {
@@ -1865,11 +2625,11 @@ export type Database = {
       }
     }
     Functions: {
-      calculate_activity_score: {
-        Args: { p_user_id: string }
-        Returns: number
+      auth_security_configuration_reminder: {
+        Args: Record<PropertyKey, never>
+        Returns: string
       }
-      calculate_user_activity_score: {
+      calculate_activity_score: {
         Args: { p_user_id: string }
         Returns: number
       }
@@ -1886,11 +2646,7 @@ export type Database = {
         Returns: boolean
       }
       cancel_activity_registration_v2: {
-        Args: { p_activity_id: string; p_user_id: string }
-        Returns: Json
-      }
-      check_and_grant_achievements: {
-        Args: { p_user_id: string }
+        Args: { p_activity_id: string; p_user_id?: string }
         Returns: Json
       }
       check_duplicate_report: {
@@ -1901,16 +2657,41 @@ export type Database = {
         }
         Returns: boolean
       }
-      check_user_achievements: {
-        Args: { p_user_id: string }
+      cleanup_old_partitions_v2: {
+        Args: { keep_months?: number }
+        Returns: {
+          result: string
+        }[]
+      }
+      cleanup_orphaned_data: {
+        Args: Record<PropertyKey, never>
         Returns: Json
       }
       cleanup_unverified_accounts: {
         Args: { age_hours?: number }
         Returns: number
       }
+      collect_db_health_metrics_v2: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       confirm_activity_attendance_v2: {
         Args: { p_activity_id: string; p_user_id: string; p_attended?: boolean }
+        Returns: Json
+      }
+      create_achievement_definition: {
+        Args: {
+          p_id: string
+          p_name: string
+          p_description: string
+          p_icon: string
+          p_tier: string
+          p_points: number
+          p_requirement_type: string
+          p_requirement_count: number
+          p_category?: string
+          p_display_order?: number
+        }
         Returns: Json
       }
       create_audit_log_v2: {
@@ -1927,17 +2708,16 @@ export type Database = {
         Returns: string
       }
       create_comment_v2: {
-        Args: {
-          p_content_id: string
-          p_author_id: string
-          p_comment_text: string
-          p_parent_id?: string
-        }
-        Returns: Json
+        Args: { p_content_id: string; p_content: string; p_parent_id?: string }
+        Returns: string
       }
       create_monthly_partition_for_activity_logs: {
         Args: Record<PropertyKey, never>
         Returns: undefined
+      }
+      create_monthly_partition_v2: {
+        Args: { table_name: string; year: number; month: number }
+        Returns: string
       }
       create_notification_v2: {
         Args: {
@@ -1962,6 +2742,24 @@ export type Database = {
       decrement_comment_likes: {
         Args: { comment_id: string }
         Returns: undefined
+      }
+      delete_comment_cascade: {
+        Args: { p_comment_id: string; p_deleted_by: string }
+        Returns: Json
+      }
+      delete_content_cascade: {
+        Args: { p_content_id: string; p_deleted_by: string }
+        Returns: Json
+      }
+      ensure_future_partitions_v2: {
+        Args: { months_ahead?: number }
+        Returns: {
+          result: string
+        }[]
+      }
+      get_achievement_leaderboard: {
+        Args: { p_limit?: number }
+        Returns: Json
       }
       get_activity_stats_v2: {
         Args: { p_activity_id: string }
@@ -1996,12 +2794,34 @@ export type Database = {
           author_id: string
           author_name: string
           author_avatar: string
+          author_role: string
           comment_text: string
           depth: number
           path: string
           like_count: number
           created_at: string
           updated_at: string
+        }[]
+      }
+      get_comment_user_interactions_v2: {
+        Args: { p_comment_ids: string[]; p_user_id: string }
+        Returns: {
+          comment_id: string
+          is_liked: boolean
+        }[]
+      }
+      get_content_list_with_interactions_v2: {
+        Args: {
+          p_content_ids: string[]
+          p_user_id?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          id: string
+          content_data: Json
+          interaction_counts: Json
+          user_interactions: Json
         }[]
       }
       get_content_stats_v2: {
@@ -2011,6 +2831,16 @@ export type Database = {
       get_content_with_relations_v2: {
         Args: { p_content_id: string; p_user_id?: string }
         Returns: Json
+      }
+      get_content_with_user_interactions_v2: {
+        Args: { p_content_id: string; p_user_id?: string }
+        Returns: {
+          content_data: Json
+          categories: Json
+          tags: Json
+          interaction_counts: Json
+          user_interactions: Json
+        }[]
       }
       get_dashboard_stats_v2: {
         Args: Record<PropertyKey, never>
@@ -2072,19 +2902,9 @@ export type Database = {
         Args: { target_user_id: string; limit_count?: number }
         Returns: Json
       }
-      get_user_comprehensive_stats: {
+      get_user_activity_summary_v2: {
         Args: { p_user_id: string }
-        Returns: {
-          total_posts: number
-          total_comments: number
-          total_likes_given: number
-          total_likes_received: number
-          total_views: number
-          most_active_category: string
-          join_date: string
-          last_active: string
-          activity_score: number
-        }[]
+        Returns: Json
       }
       get_user_content_stats: {
         Args: { p_user_id: string }
@@ -2098,23 +2918,8 @@ export type Database = {
           view_count: number
         }[]
       }
-      get_user_interactions_v2: {
-        Args: {
-          p_user_id: string
-          p_target_type?: string
-          p_interaction_type?: string
-        }
-        Returns: Json
-      }
-      get_user_profile_complete_v2: {
-        Args:
-          | { p_user_id: string }
-          | {
-              target_user_id: string
-              include_activities?: boolean
-              activities_limit?: number
-              include_achievements?: boolean
-            }
+      get_user_recent_activities_v2: {
+        Args: { p_user_id: string; p_limit?: number }
         Returns: Json
       }
       get_user_role_v2: {
@@ -2125,32 +2930,18 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: Json
       }
-      get_user_with_stats: {
-        Args: { target_user_id: string }
-        Returns: {
-          id: string
-          email: string
-          name: string
-          department: string
-          role: string
-          avatar_url: string
-          activity_score: number
-          posts_count: number
-          comments_count: number
-          likes_received: number
-        }[]
-      }
       get_users_interaction_stats_v2: {
-        Args: Record<PropertyKey, never> | { p_user_ids: string[] }
+        Args: Record<PropertyKey, never>
         Returns: {
           user_id: string
-          like_received_count: number
-          bookmark_count: number
-          view_count: number
+          likes_given: number
+          likes_received: number
+          comments_count: number
+          posts_count: number
         }[]
       }
       get_users_simple_stats: {
-        Args: Record<PropertyKey, never> | { p_user_ids: string[] }
+        Args: Record<PropertyKey, never>
         Returns: {
           total_users: number
           active_users: number
@@ -2185,27 +2976,9 @@ export type Database = {
         Returns: undefined
       }
       increment_view_count_v2: {
-        Args: { p_content_id: string; p_user_id?: string }
-        Returns: boolean
-      }
-      is_admin: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_admin_or_leader: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_admin_role: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_member: {
-        Args: { user_id?: string }
-        Returns: boolean
-      }
-      is_member_or_above: {
-        Args: { user_id?: string }
+        Args:
+          | { content_id: string }
+          | { p_content_id: string; p_user_id?: string }
         Returns: boolean
       }
       log_activity_v2: {
@@ -2258,6 +3031,14 @@ export type Database = {
         Args: { p_activity_id: string; p_user_id: string; p_note?: string }
         Returns: Json
       }
+      run_maintenance_tasks_v2: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          task: string
+          result: string
+          duration: unknown
+        }[]
+      }
       search_content_v2: {
         Args: {
           p_query: string
@@ -2297,6 +3078,18 @@ export type Database = {
         Args: { p_sender_id: string; p_recipient_id: string; p_message: string }
         Returns: Json
       }
+      sync_activity_participant_count: {
+        Args: { activity_id: string }
+        Returns: undefined
+      }
+      sync_all_comment_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
+      sync_comment_counts: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       toggle_interaction_v2: {
         Args: {
           p_user_id: string
@@ -2326,9 +3119,9 @@ export type Database = {
         }
         Returns: undefined
       }
-      update_user_achievements_v2: {
+      update_user_last_seen_only: {
         Args: { p_user_id: string }
-        Returns: Json
+        Returns: undefined
       }
       update_user_levels: {
         Args: { p_user_id: string }
@@ -2354,6 +3147,14 @@ export type Database = {
       upsert_content_metadata_v2: {
         Args: { p_content_id: string; p_key: string; p_value: Json }
         Returns: undefined
+      }
+      validate_password_strength: {
+        Args: { password: string }
+        Returns: Json
+      }
+      validate_user_session: {
+        Args: Record<PropertyKey, never>
+        Returns: boolean
       }
     }
     Enums: {

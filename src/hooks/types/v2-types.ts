@@ -62,16 +62,16 @@ export type TagV2Insert = TablesInsert<'tags_v2'>
 export type TagV2Update = TablesUpdate<'tags_v2'>
 
 // Relationship Tables
-export type ContentCategoryV2 = Tables<'content_categories_v2'>
-export type ContentCategoryV2Insert = TablesInsert<'content_categories_v2'>
+// content_categories_v2 테이블 제거됨 - content_v2.category 필드 사용
+// export type ContentCategoryV2 = Tables<'content_categories_v2'>
+// export type ContentCategoryV2Insert = TablesInsert<'content_categories_v2'>
 
 export type ContentTagV2 = Tables<'content_tags_v2'>
 export type ContentTagV2Insert = TablesInsert<'content_tags_v2'>
 
-// Metadata
-export type ContentMetadataV2 = Tables<'content_metadata_v2'>
-export type ContentMetadataV2Insert = TablesInsert<'content_metadata_v2'>
-export type ContentMetadataV2Update = TablesUpdate<'content_metadata_v2'>
+// Metadata (view types)
+export type ContentMetadataV2 = Database['public']['Views']['content_with_metadata_v2']['Row']
+// Note: Views don't support Insert/Update operations directly
 
 // Logging & Audit
 export type UserActivityLogV2 = Tables<'user_activity_logs_v2'>
@@ -183,7 +183,6 @@ export type V2TableName =
   | 'membership_applications_v2'
   | 'categories_v2'
   | 'tags_v2'
-  | 'content_categories_v2'
   | 'content_tags_v2'
   | 'content_metadata_v2'
   | 'user_activity_logs_v2'

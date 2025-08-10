@@ -13,7 +13,7 @@
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 import { useAuth } from '@/providers'
 import { supabaseClient } from '@/lib/core/connection-core'
-import { useCallback, useMemo } from 'react'
+import { useCallback, useMemo, useEffect, useRef } from 'react'
 import { 
   ContentV2, 
   ContentV2Insert, 
@@ -80,7 +80,87 @@ export function useContentV2() {
   const queryClient = useQueryClient()
 
   // 단일 콘텐츠 조회 (관계 포함)
-  const useContent = (contentId: string) => {
+  const useContent = (contentId: string, options?: { incrementView?: boolean }) => {
+    const { incrementView = true } = options || {}
+    
+    // 조회수 증가 처리 - useRef로 한 번만 실행 보장
+    const hasIncrementedRef = useRef(false)
+    
+    useEffect(() => {
+      // 서버 사이드에서는 실행하지 않음
+      if (typeof window === 'undefined') {
+        return
+      }
+      
+      if (!incrementView || !contentId || hasIncrementedRef.current) {
+        return
+      }
+      
+      const incrementViewCount = async () => {
+        try {
+          // 즉시 플래그 설정하여 중복 실행 방지
+          hasIncrementedRef.current = true
+          
+          
+          const { data, error } = await supabase.rpc('increment_view_count_v2', {
+            p_content_id: contentId,
+            p_user_id: user?.id
+          })
+          
+          if (error) {
+            console.error('View count increment error:', error)
+            hasIncrementedRef.current = false // 에러 시 재시도 가능
+          } else {
+            
+            // 조회수 증가 후 캐시의 view_count와 interaction_counts.views 모두 업데이트
+            const currentData = queryClient.getQueryData<ContentWithRelations>(['content-v2', contentId])
+            if (currentData) {
+              const newViewCount = (currentData.view_count || 0) + 1
+              queryClient.setQueryData<ContentWithRelations>(['content-v2', contentId], {
+                ...currentData,
+                view_count: newViewCount,
+                interaction_counts: {
+                  ...currentData.interaction_counts,
+                  views: newViewCount,
+                  likes: currentData.interaction_counts?.likes || 0,
+                  bookmarks: currentData.interaction_counts?.bookmarks || 0,
+                  reports: currentData.interaction_counts?.reports || 0,
+                }
+              })
+            }
+            
+            // 목록 캐시도 업데이트 (ContentCard에서 사용)
+            queryClient.setQueriesData({ queryKey: ['contents-v2'] }, (oldData: any) => {
+              if (!oldData?.pages) return oldData
+              return {
+                ...oldData,
+                pages: oldData.pages.map((page: any) => ({
+                  ...page,
+                  contents: page.contents?.map((content: any) => 
+                    content.id === contentId 
+                      ? {
+                          ...content,
+                          view_count: (content.view_count || 0) + 1,
+                          interaction_counts: {
+                            ...content.interaction_counts,
+                            views: (content.interaction_counts?.views || 0) + 1
+                          }
+                        }
+                      : content
+                  )
+                }))
+              }
+            })
+          }
+        } catch (err) {
+          console.error('View count increment failed:', err)
+        }
+      }
+      
+      incrementViewCount()
+      
+    }, [contentId]) // contentId만 의존성으로 (incrementView는 옵션이므로 제외)
+    
     return useQuery({
       queryKey: ['content-v2', contentId],
       queryFn: async () => {
@@ -97,11 +177,8 @@ export function useContentV2() {
         
         if (contentError) throw contentError
         
-        // 카테고리 조회
-        const { data: categories } = await supabase
-          .from('content_categories_v2')
-          .select('category:categories_v2(*)')
-          .eq('content_id', contentId)
+        // 카테고리는 content_v2.category 필드에서 직접 사용
+        const categories: CategoryV2[] = [] // content_categories_v2 테이블 제거됨
         
         // 태그 조회
         const { data: tags } = await supabase
@@ -121,7 +198,7 @@ export function useContentV2() {
         const interactionCounts = {
           likes: interactions?.filter(i => i.interaction_type === 'like').length || 0,
           bookmarks: interactions?.filter(i => i.interaction_type === 'bookmark').length || 0,
-          views: interactions?.filter(i => i.interaction_type === 'view').length || 0,
+          views: content.view_count || 0, // content_v2.view_count 컬럼 사용 (interactions_v2가 아님)
           reports: interactions?.filter(i => i.interaction_type === 'report').length || 0,
         }
         
@@ -147,33 +224,9 @@ export function useContentV2() {
           }
         }
         
-        // 조회수 증가 (비동기 - RPC 함수 사용)
-        if (user) {
-          // 조회수 증가 (백그라운드에서 처리)
-          supabase.rpc('increment_view_count_v2', {
-            p_content_id: contentId,
-            p_user_id: user.id
-          }).then(() => {
-            // 성공 시 로컬 캐시 업데이트
-            queryClient.setQueryData(['content-v2', contentId], (old: ContentWithRelations) => {
-              if (!old) return old
-              return {
-                ...old,
-                view_count: (old.view_count || 0) + 1,
-                interaction_counts: {
-                  ...old.interaction_counts,
-                  views: (old.interaction_counts?.views || 0) + 1
-                }
-              }
-            })
-          }).catch(err => {
-            console.error('View count increment failed:', err)
-          }) // 에러가 나도 메인 쿼리에 영향 없음
-        }
-        
         return {
           ...content,
-          categories: categories?.map(c => c.category).filter(Boolean) || [],
+          categories: [], // content_categories_v2 테이블 제거됨, content.category 직접 사용
           tag_objects: tags?.map(t => t.tag).filter(Boolean) || [],
           interaction_counts: interactionCounts,
           user_interactions: userInteractions,
@@ -211,7 +264,8 @@ export function useContentV2() {
           .from('content_v2')
           .select(`
             *,
-            author:users_v2!author_id(id, name, avatar_url)
+            author:users_v2!author_id(id, name, avatar_url),
+            comments:comments_v2!content_id(id)
           `, { count: 'exact' })
           .is('deleted_at', null)
           .eq('status', 'published')
@@ -226,25 +280,13 @@ export function useContentV2() {
           query = query.or(`title.ilike.%${filter.searchQuery}%,content.ilike.%${filter.searchQuery}%`)
         }
         
-        // 카테고리 필터
+        // 댓글 필터 - deleted_at이 null인 것만
+        query = query.is('comments.deleted_at', null)
+        
+        // 카테고리 필터 (content_v2.category 필드 사용)
         if (filter.categoryId) {
-          const { data: categoryContents } = await supabase
-            .from('content_categories_v2')
-            .select('content_id')
-            .eq('category_id', filter.categoryId)
-          
-          const contentIds = categoryContents?.map(cc => cc.content_id) || []
-          if (contentIds.length > 0) {
-            query = query.in('id', contentIds)
-          } else {
-            // 카테고리에 속한 콘텐츠가 없으면 빈 결과
-            return {
-              contents: [],
-              nextCursor: pageParam + pageSize,
-              hasMore: false,
-              totalCount: 0,
-            }
-          }
+          // categoryId가 실제로는 category slug일 가능성이 높음
+          query = query.eq('category', filter.categoryId)
         }
         
         // 태그 필터 (복수 태그 AND 조건)
@@ -275,6 +317,20 @@ export function useContentV2() {
         
         // 각 콘텐츠의 상호작용 카운트 조회
         const contents = await Promise.all((data || []).map(async (content) => {
+          // 실제 댓글 수 계산 (deleted_at이 null인 댓글만)
+          const realCommentCount = Array.isArray(content.comments) 
+            ? content.comments.filter((c: any) => c && c.id).length 
+            : 0
+          
+          // 디버깅
+          if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+            console.log('[useInfiniteContents] Real comment count:', {
+              title: content.title,
+              stored_count: content.comment_count,
+              real_count: realCommentCount,
+              comments: content.comments
+            })
+          }
           const { data: interactions } = await supabase
             .from('interactions_v2')
             .select('interaction_type')
@@ -284,7 +340,7 @@ export function useContentV2() {
           const interactionCounts = {
             likes: interactions?.filter(i => i.interaction_type === 'like').length || 0,
             bookmarks: interactions?.filter(i => i.interaction_type === 'bookmark').length || 0,
-            views: interactions?.filter(i => i.interaction_type === 'view').length || 0,
+            views: content.view_count || 0, // content_v2.view_count 컬럼 사용 (interactions_v2가 아님)
             reports: interactions?.filter(i => i.interaction_type === 'report').length || 0,
           }
           
@@ -310,11 +366,28 @@ export function useContentV2() {
             }
           }
           
-          return {
-            ...content,
+          // content.comments 배열 제거하고 실제 댓글 수 사용
+          const { comments, ...contentWithoutComments } = content
+          
+          // 최종 반환 데이터 - 실제 댓글 수로 덮어씌우기
+          const result = {
+            ...contentWithoutComments,
+            comment_count: realCommentCount,  // 실제 댓글 수 사용
             interaction_counts: interactionCounts,
             user_interactions: userInteractions,
           }
+          
+          // 디버깅
+          if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+            console.log('[useInfiniteContents] Final content:', {
+              title: content.title,
+              stored_count: content.comment_count,
+              real_count: realCommentCount,
+              final_count: result.comment_count
+            })
+          }
+          
+          return result
         }))
         
         return {
@@ -326,8 +399,10 @@ export function useContentV2() {
       },
       getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.nextCursor : undefined,
       initialPageParam: 0,
-      staleTime: 1 * 60 * 1000, // 1분
-      gcTime: 5 * 60 * 1000, // 5분 (대신 cacheTime)
+      staleTime: 1 * 60 * 1000, // 1분 (적절한 캐시 활용)
+      gcTime: 5 * 60 * 1000, // 5분
+      refetchOnWindowFocus: false, // Realtime이 처리하므로 비활성화
+      refetchOnMount: true, // 캐시 무효화 후 페이지 이동 시 새 데이터 가져오기
       retry: (failureCount, error: any) => {
         // DB 스키마 에러나 컬럼 존재하지 않음 에러는 재시도하지 않음
         if (error?.code === 'PGRST116' || error?.message?.includes('does not exist')) {
@@ -346,7 +421,7 @@ export function useContentV2() {
     mutationFn: async (input: ContentV2Insert & { categories?: string[], tags?: string[] }) => {
       const { categories, tags, ...contentData } = input
       
-      // 콘텐츠 생성
+      // 콘텐츠 생성 (author 정보 포함하여 반환)
       const { data: content, error } = await supabase
         .from('content_v2')
         .insert({
@@ -354,20 +429,16 @@ export function useContentV2() {
           author_id: user?.id!,
           status: contentData.status || 'draft',
         })
-        .select()
+        .select(`
+          *,
+          author:users_v2!author_id(id, name, avatar_url)
+        `)
         .single()
       
       if (error) throw error
       
-      // 카테고리 연결
-      if (categories && categories.length > 0) {
-        await supabase.from('content_categories_v2').insert(
-          categories.map(catId => ({
-            content_id: content.id,
-            category_id: catId,
-          }))
-        )
-      }
+      // 카테고리는 content_v2.category 필드에서 직접 관리
+      // content_categories_v2 테이블 제거됨
       
       // 태그 연결
       if (tags && tags.length > 0) {
@@ -379,12 +450,43 @@ export function useContentV2() {
         )
       }
       
-      return content
+      // 완전한 데이터 반환 (author 정보 포함)
+      return {
+        ...content,
+        interaction_counts: {
+          likes: 0,
+          bookmarks: 0,
+          views: 0,
+          reports: 0
+        },
+        user_interactions: {
+          liked: false,
+          bookmarked: false,
+          reported: false
+        }
+      } as ContentWithRelations
     },
     onSuccess: (data) => {
-      // 관련 쿼리 무효화
-      queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
-      queryClient.invalidateQueries({ queryKey: ['user-contents-v2', user?.id] })
+      console.log('[useContentV2] Content created successfully:', data.id)
+      
+      // 새로 생성된 콘텐츠의 상세 페이지를 미리 캐시
+      if (data) {
+        queryClient.setQueryData<ContentWithRelations>(['content-v2', data.id], data)
+      }
+      
+      // 간단한 캐시 무효화만 사용 (추후 Realtime이 실제 업데이트 처리)
+      queryClient.invalidateQueries({ 
+        queryKey: ['contents-v2'],
+        exact: false
+      })
+      
+      console.log('[useContentV2] Cache invalidated for contents-v2')
+      
+      // Realtime이 작동하는지 확인을 위해 약간의 지연 후 다시 확인
+      setTimeout(() => {
+        const cachedData = queryClient.getQueryData(['contents-v2'])
+        console.log('[useContentV2] Checking cache after 500ms:', cachedData ? 'Cache exists' : 'Cache empty')
+      }, 500)
     }
   })
 
@@ -427,7 +529,13 @@ export function useContentV2() {
       }
     },
     onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
+      // 모든 콘텐츠 목록 관련 쿼리 무효화 - 부분 매칭 활성화
+      queryClient.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['user-contents-v2'], exact: false })
+      
+      console.log('Content updated and cache invalidated:', data?.id)
     }
   })
 
@@ -442,8 +550,14 @@ export function useContentV2() {
       if (error) throw error
     },
     onSuccess: (_, id) => {
+      // 삭제된 콘텐츠 관련 모든 쿼리 무효화 - 부분 매칭 활성화
       queryClient.invalidateQueries({ queryKey: ['content-v2', id] })
-      queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
+      queryClient.invalidateQueries({ queryKey: ['user-contents-v2'], exact: false })
+      
+      console.log('Content deleted and cache invalidated:', id)
     }
   })
 

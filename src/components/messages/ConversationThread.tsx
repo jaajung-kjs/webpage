@@ -56,7 +56,7 @@ export function ConversationThread({
   const { user } = useAuthV2()
   const { data: messages, isLoading: loading, error, refetch } = useConversationMessagesV2(conversationId)
   const sendMessageMutation = useSendMessageV2()
-  const markAsReadMutation = useMarkAsReadV2()
+  const { mutate: markAsRead } = useMarkAsReadV2()
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [optimisticId, setOptimisticId] = useState<string | null>(null)
@@ -71,7 +71,7 @@ export function ConversationThread({
   // 자동 스크롤 (디바운스 적용)
   useEffect(() => {
     // 메시지가 추가되었을 때만 스크롤 (초기 로드 또는 새 메시지)
-    if (messages && messages.length > previousMessageCountRef.current) {
+    if (messages && messages.length > 0) {
       // 이전 타이머 취소
       if (scrollTimeoutRef.current) {
         clearTimeout(scrollTimeoutRef.current)
@@ -79,9 +79,12 @@ export function ConversationThread({
       
       // 디바운스로 스크롤 지연
       scrollTimeoutRef.current = setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ 
-          behavior: messages && messages.length > 20 ? 'auto' : 'smooth' // 많은 메시지일 때는 즉시 스크롤
-        })
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ 
+            behavior: messages.length > 20 ? 'auto' : 'smooth', // 많은 메시지일 때는 즉시 스크롤
+            block: 'end'
+          })
+        }
       }, 100)
     }
     
@@ -92,22 +95,43 @@ export function ConversationThread({
         clearTimeout(scrollTimeoutRef.current)
       }
     }
-  }, [messages?.length])
+  }, [messages])
 
   // 대화방 진입 시 메시지 읽음 처리 (V2 시스템 사용)
+  const hasMarkedAsRead = useRef(false)
+  const lastReadMessageId = useRef<string | null>(null)
+  
   useEffect(() => {
-    if (user && conversationId && messages && messages.length > 0) {
-      // V2에서는 read_status 기반으로 확인
-      const hasUnreadMessages = messages.some((msg) => 
-        msg.sender_id !== (user as any)?.id && (!msg.read_status?.is_read)
-      )
-      
-      if (hasUnreadMessages) {
-        log('📖 Marking messages as read for conversation:', conversationId)
-        markAsReadMutation.mutate({ conversation_id: conversationId })
-      }
+    if (!user || !conversationId || !messages || messages.length === 0) return
+    
+    // 가장 최근 메시지의 ID 가져오기
+    const latestMessage = messages[messages.length - 1]
+    
+    // 이미 이 메시지까지 읽음 처리했으면 스킵
+    if (lastReadMessageId.current === latestMessage?.id) {
+      return
     }
-  }, [user, conversationId, messages?.length, markAsReadMutation])
+    
+    // V2에서는 read_status 기반으로 확인 - 내가 받은 메시지 중 읽지 않은 것이 있는지
+    const hasUnreadMessages = messages.some((msg) => 
+      msg.sender_id !== (user as any)?.id && (!msg.read_status?.is_read)
+    )
+    
+    if (hasUnreadMessages) {
+      log('📖 Marking messages as read for conversation:', conversationId)
+      lastReadMessageId.current = latestMessage?.id || null
+      markAsRead({ conversation_id: conversationId })
+    } else {
+      // 읽지 않은 메시지가 없어도 마지막 읽은 메시지 ID 업데이트
+      lastReadMessageId.current = latestMessage?.id || null
+    }
+  }, [user, conversationId, messages?.length]) // messages 배열 자체가 아닌 length만 체크
+  
+  // 대화방 변경시 플래그 리셋
+  useEffect(() => {
+    hasMarkedAsRead.current = false
+    lastReadMessageId.current = null
+  }, [conversationId])
 
   // 메시지 재전송
   const handleRetryMessage = async (messageId: string) => {

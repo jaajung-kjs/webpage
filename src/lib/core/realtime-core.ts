@@ -217,6 +217,14 @@ export class RealtimeCore {
   }
 
   /**
+   * 재연결 처리 (ConnectionRecovery에서 호출)
+   */
+  handleReconnection(): void {
+    console.log('[RealtimeCore] Handling reconnection')
+    this.resubscribeAll()
+  }
+
+  /**
    * 모든 구독 정리 (채널은 유지)
    */
   private cleanupAll(): void {

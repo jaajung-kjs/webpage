@@ -29,9 +29,8 @@ export * from './useSearchV2'
 export * from './useSettingsV2'
 export * from './useStatisticsV2'
 
-// Gamification V2 Hooks
+// Gamification V2 Hooks  
 export * from './useGamificationV2'
-export * from './useAchievementsV2'
 export * from './useLeaderboardV2'
 
 // V2 Type definitions

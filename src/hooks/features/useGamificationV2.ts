@@ -3,7 +3,6 @@
  * 
  * 주요 기능:
  * - 사용자 활동 점수 및 레벨 관리
- * - 업적 시스템 통합
  * - 실시간 통계 추적
  * - 활동 기록 및 자동 점수 계산
  * - Optimistic Updates 지원
@@ -15,38 +14,9 @@ import { useAuth } from '@/providers'
 import { useCallback, useEffect } from 'react'
 import type { Tables, Json } from '@/lib/database.types'
 
-// 사용자 통계 타입 (RPC 함수 get_user_stats 반환값)
-export interface UserStats {
-  user_id: string
-  activity_score: number
-  skill_level: 'beginner' | 'intermediate' | 'advanced' | 'expert'
-  activity_level: 'beginner' | 'active' | 'enthusiast' | 'leader'
-  stats: {
-    posts_count: number
-    comments_count: number
-    total_likes_received: number
-    activities_joined: number
-    activities_attended: number
-  }
-  achievements: {
-    total_count: number
-    total_points: number
-    recent_achievements: Array<{
-      id: string
-      achievement_id: string
-      earned_at: string
-      points_earned: number
-    }>
-  }
-  progress: {
-    next_level_points?: number
-    progress_to_next_level?: number
-  }
-}
-
 // 활동 로그 타입
 export interface ActivityLogData {
-  action_type: 'content_created' | 'comment_created' | 'like_given' | 'like_received' | 'activity_joined' | 'activity_attended' | 'achievement_earned'
+  action_type: 'content_created' | 'comment_created' | 'like_given' | 'like_received' | 'activity_joined' | 'activity_attended'
   target_type?: 'content' | 'comment' | 'activity' | 'user'
   target_id?: string
   points?: number
@@ -58,7 +28,6 @@ export interface GamificationSettings {
   notifications_enabled: boolean
   show_progress_badges: boolean
   show_in_leaderboard: boolean
-  achievement_notifications: boolean
 }
 
 /**
@@ -71,7 +40,7 @@ export function useGamificationV2(userId?: string) {
   const isOwnProfile = !userId || userId === user?.id
 
   // 사용자 통계 조회
-  const { data: userStats, isLoading: isStatsLoading, error: statsError, refetch: refreshStats } = useQuery({
+  const { data: userStats, isLoading: isStatsLoading, refetch: refetchStats } = useQuery({
     queryKey: ['user-stats-v2', targetUserId],
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
@@ -80,12 +49,17 @@ export function useGamificationV2(userId?: string) {
         p_user_id: targetUserId
       })
       
-      if (error) throw error
-      return data as unknown as UserStats
+      if (error) {
+        console.error('Error fetching user stats v2:', error)
+        throw error
+      }
+      
+      return data
     },
     enabled: !!targetUserId,
-    staleTime: 2 * 60 * 1000, // 2분
-    gcTime: 5 * 60 * 1000, // 5분
+    staleTime: 3 * 60 * 1000, // 3분
+    gcTime: 8 * 60 * 1000, // 8분
+    refetchOnWindowFocus: false
   })
 
   // 사용자 기본 게임화 정보 (users_v2 테이블에서)
@@ -147,19 +121,13 @@ export function useGamificationV2(userId?: string) {
       
       if (error) throw error
       
-      // 업적 체크 및 자동 부여
-      const achievementResult = await supabaseClient.rpc('check_and_grant_achievements', {
-        p_user_id: user.id
-      })
-      
-      return { activityLogged: true, newAchievements: achievementResult.data || [] }
+      return { activityLogged: true }
     },
     onSuccess: () => {
       // 관련 쿼리들 무효화
       queryClient.invalidateQueries({ queryKey: ['user-stats-v2', user?.id] })
       queryClient.invalidateQueries({ queryKey: ['user-game-data-v2', user?.id] })
       queryClient.invalidateQueries({ queryKey: ['recent-activities-v2', user?.id] })
-      queryClient.invalidateQueries({ queryKey: ['user-achievements-v2', user?.id] })
       queryClient.invalidateQueries({ queryKey: ['leaderboard-v2'] })
       
       // 레벨 업데이트 트리거
@@ -188,7 +156,7 @@ export function useGamificationV2(userId?: string) {
   // 활동 점수 수동 재계산 (관리자 기능)
   const recalculateScore = useMutation({
     mutationFn: async (userId: string) => {
-      const { data, error } = await supabaseClient.rpc('calculate_user_activity_score', {
+      const { data, error } = await supabaseClient.rpc('calculate_activity_score', {
         p_user_id: userId
       })
       
@@ -265,15 +233,6 @@ export function useGamificationV2(userId?: string) {
     const channel = supabaseClient
       .channel(`gamification:${user.id}`)
       .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'user_achievements_v2',
-        filter: `user_id=eq.${user.id}`
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['user-stats-v2', user.id] })
-        queryClient.invalidateQueries({ queryKey: ['user-achievements-v2', user.id] })
-      })
-      .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'users_v2',
@@ -326,7 +285,7 @@ export function useGamificationV2(userId?: string) {
     isActivitiesLoading,
     
     // 에러 상태
-    error: statsError,
+    error: null, // stats error는 useAchievements에서 관리됨
     
     // 권한
     isOwnProfile,
@@ -344,7 +303,7 @@ export function useGamificationV2(userId?: string) {
     // 관리 액션
     updateUserLevels: updateUserLevels.mutate,
     recalculateScore: recalculateScore.mutate,
-    refreshStats,
+    refreshStats: refetchStats,
     
     // 상태
     isRecording: recordActivity.isPending,
@@ -361,16 +320,15 @@ export function useGamificationV2(userId?: string) {
     levelProgress: userGameData ? getLevelProgress(userGameData.activity_score, userGameData.skill_level) : null,
     
     // 통계 요약
-    totalAchievements: userStats?.achievements?.total_count || 0,
-    totalAchievementPoints: userStats?.achievements?.total_points || 0,
-    recentAchievements: userStats?.achievements?.recent_achievements || [],
+    totalAchievements: 0,
+    totalAchievementPoints: 0,
     
-    // 사용자 활동 통계  
-    postsCount: userStats?.stats?.posts_count || 0,
-    commentsCount: userStats?.stats?.comments_count || 0,
-    totalLikesReceived: userStats?.stats?.total_likes_received || 0,
-    activitiesJoined: userStats?.stats?.activities_joined || 0,
-    activitiesAttended: userStats?.stats?.activities_attended || 0,
+    // 사용자 활동 통계 (안전한 접근)
+    postsCount: (userStats && typeof userStats === 'object' && 'posts_count' in userStats ? userStats.posts_count as number : 0) || 0,
+    commentsCount: (userStats && typeof userStats === 'object' && 'comments_count' in userStats ? userStats.comments_count as number : 0) || 0,
+    totalLikesReceived: (userStats && typeof userStats === 'object' && 'total_likes_received' in userStats ? userStats.total_likes_received as number : 0) || 0,
+    activitiesJoined: (userStats && typeof userStats === 'object' && 'activities_joined' in userStats ? userStats.activities_joined as number : 0) || 0,
+    activitiesAttended: (userStats && typeof userStats === 'object' && 'activities_attended' in userStats ? userStats.activities_attended as number : 0) || 0,
   }
 }
 
@@ -378,13 +336,47 @@ export function useGamificationV2(userId?: string) {
  * 간단한 사용자 레벨 정보만 조회하는 Hook
  */
 export function useUserLevel(userId?: string) {
-  const { currentLevel, currentActivityLevel, currentScore, levelProgress } = useGamificationV2(userId)
-  
+  const { user } = useAuth()
+  const targetUserId = userId || user?.id
+
+  // 사용자 프로필에서 스킬 레벨과 활동 점수를 직접 조회
+  const { data: userProfile } = useQuery({
+    queryKey: ['user-level-info', targetUserId],
+    queryFn: async () => {
+      if (!targetUserId) throw new Error('User ID required')
+      
+      const { data, error } = await supabaseClient
+        .from('users_v2')
+        .select('skill_level, activity_score')
+        .eq('id', targetUserId)
+        .is('deleted_at', null)
+        .single()
+      
+      if (error) throw error
+      return data
+    },
+    enabled: !!targetUserId,
+    staleTime: 2 * 60 * 1000, // 2분
+    gcTime: 5 * 60 * 1000, // 5분
+  })
+
+  // 활동 점수를 기반으로 활동 레벨 계산
+  const getActivityLevelFromScore = (score: number) => {
+    if (score >= 1000) return 'leader'
+    if (score >= 500) return 'enthusiast' 
+    if (score >= 100) return 'active'
+    return 'beginner'
+  }
+
+  const activityScore = userProfile?.activity_score || 0
+  const skillLevel = userProfile?.skill_level || 'beginner'
+  const activityLevel = getActivityLevelFromScore(activityScore)
+
   return {
-    skillLevel: currentLevel,
-    activityLevel: currentActivityLevel,
-    score: currentScore,
-    progress: levelProgress
+    skillLevel, // 사용자가 직접 설정한 값
+    activityLevel, // activity_score 기반으로 계산된 값
+    score: activityScore,
+    progress: null
   }
 }
 

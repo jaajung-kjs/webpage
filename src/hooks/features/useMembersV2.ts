@@ -148,21 +148,11 @@ export function useMembersV2(
             return counts
           }),
         
-        // 상호작용 통계를 각 사용자별로 조회
-        Promise.all(
-          userIds.map(userId => 
-            supabaseClient
-              .rpc('get_user_interactions_v2', {
-                p_user_id: userId,
-                p_target_type: undefined,
-                p_interaction_type: undefined
-              })
-              .then(({ data }) => ({ 
-                user_id: userId, 
-                interactions: data || [] 
-              }))
-          )
-        )
+        // 상호작용 통계 (임시로 빈 배열 반환)
+        Promise.resolve(userIds.map(userId => ({ 
+          user_id: userId, 
+          interactions: [] 
+        })))
       ])
       
       // 댓글 통계
@@ -276,21 +266,12 @@ export function useMemberV2(userId: string, includeStats: boolean = true) {
           .is('deleted_at', null)
           .then(({ count }) => count || 0),
         
-        // 상호작용 통계
-        supabaseClient
-          .rpc('get_user_interactions_v2', {
-            p_user_id: userId,
-            p_target_type: undefined,
-            p_interaction_type: undefined
-          })
-          .then(({ data }) => {
-            const interactions = (data as any[]) || []
-            return {
-              like_received_count: interactions.filter((i: any) => i.interaction_type === 'like').length,
-              bookmark_count: interactions.filter((i: any) => i.interaction_type === 'bookmark').length,
-              view_count: interactions.filter((i: any) => i.interaction_type === 'view').length
-            }
-          })
+        // 상호작용 통계 (임시로 0 반환)
+        Promise.resolve({
+          like_received_count: 0,
+          bookmark_count: 0,
+          view_count: 0
+        })
       ])
       
       const activityScore = 

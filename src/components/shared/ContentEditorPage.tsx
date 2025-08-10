@@ -224,33 +224,44 @@ export default function ContentEditorPage({
         // Update existing content
         const updates: TablesUpdate<'content_v2'> = {
           title: values.title.trim(),
+          category: values.category, // 카테고리도 업데이트
           content: values.content.trim(),
           updated_at: new Date().toISOString()
         }
 
-        await new Promise((resolve, reject) => {
-          contentV2.updateContent({ id: editId!, updates }, { 
-            onSuccess: resolve, 
-            onError: reject 
-          })
-        })
+        // updateContentAsync를 사용하여 mutation의 기본 onSuccess (캐시 무효화)가 실행되도록 함
+        await contentV2.updateContentAsync({ id: editId!, updates })
         contentId = editId!
       } else {
         // Create new content
+        // Map contentType to DB content_type
+        const contentTypeMap = {
+          post: 'community',
+          case: 'case',
+          announcement: 'announcement',
+          resource: 'resource'
+        } as const
+        
         const newContent: TablesInsert<'content_v2'> = {
-          content_type: contentType,
+          content_type: contentTypeMap[contentType] || contentType,
+          category: values.category, // 카테고리 필드 추가
           title: values.title.trim(),
           content: values.content.trim(),
-          author_id: (user as any).id
+          author_id: (user as any).id,
+          status: 'published' // Set status to published so it appears on the board
         }
-
-        const result = await new Promise((resolve, reject) => {
-          contentV2.createContent(newContent, { 
-            onSuccess: resolve, 
-            onError: reject 
-          })
+        
+        // 디버깅: 실제 전달되는 값 확인
+        console.log('Creating content with:', {
+          content_type: newContent.content_type,
+          category: newContent.category,
+          contentType_prop: contentType,
+          category_value: values.category
         })
-        contentId = (result as any).id
+
+        // createContentAsync를 사용하여 mutation의 기본 onSuccess (캐시 무효화)가 실행되도록 함
+        const result = await contentV2.createContentAsync(newContent)
+        contentId = result.id
       }
 
       // Clear draft on successful submission
@@ -267,6 +278,8 @@ export default function ContentEditorPage({
       } as const
       
       toast.success(isEditMode ? '게시글이 수정되었습니다.' : '게시글이 작성되었습니다.')
+      
+      // 상세페이지로 이동
       router.push(`/${routeMap[contentType]}/${contentId}`)
     } catch (error: any) {
       console.error(isEditMode ? 'Error updating content:' : 'Error creating content:', error)

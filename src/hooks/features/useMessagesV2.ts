@@ -135,54 +135,85 @@ function useConversationsV2() {
     queryFn: async () => {
       if (!user) return []
       
-      // Single optimized query with JOINs
-      const { data, error } = await supabaseClient
+      // Get conversations first - error 무시하고 data만 사용
+      const { data: conversations } = await supabaseClient
         .from('conversations_v2')
-        .select(`
-          *,
-          last_message:messages_v2!conversations_v2_last_message_id_fkey (
-            id,
-            content,
-            sender_id,
-            created_at,
-            message_type,
-            sender:users_v2!messages_v2_sender_id_fkey (name)
-          ),
-          user1:users_v2!conversations_v2_user1_id_fkey (
-            id, name, avatar_url, role, department
-          ),
-          user2:users_v2!conversations_v2_user2_id_fkey (
-            id, name, avatar_url, role, department
-          )
-        `)
+        .select('*')
         .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
         .eq('is_active', true)
         .is('deleted_at', null)
         .order('last_message_at', { ascending: false, nullsFirst: false })
       
-      if (error) throw error
+      if (!conversations || conversations.length === 0) {
+        return []
+      }
+      
+      // Get last messages separately (filter out null values)
+      const lastMessageIds = conversations
+        .map(c => c.last_message_id)
+        .filter((id): id is string => id !== null)
+      
+      const { data: messages } = await supabaseClient
+        .from('messages_v2')
+        .select(`
+          id,
+          content,
+          sender_id,
+          created_at,
+          message_type
+        `)
+        .in('id', lastMessageIds.length > 0 ? lastMessageIds : ['00000000-0000-0000-0000-000000000000'])
+      
+      // Get all users
+      const userIds = [...new Set(conversations.flatMap(c => [c.user1_id, c.user2_id]))]
+      
+      const { data: users } = await supabaseClient
+        .from('users_v2')
+        .select('id, name, avatar_url, role, department')
+        .in('id', userIds)
+      
+      // Combine data
+      const data = conversations.map(conv => ({
+        ...conv,
+        last_message: messages?.find(m => m.id === conv.last_message_id) || null,
+        user1: users?.find(u => u.id === conv.user1_id) || null,
+        user2: users?.find(u => u.id === conv.user2_id) || null
+      }))
       
       // Get unread counts for all conversations in one query
       const { data: unreadCounts } = await supabaseClient
         .rpc('get_unread_count_per_conversation_v2', { p_user_id: user.id })
       
       const unreadMap = new Map(
-        (unreadCounts || []).map(item => [item.conversation_id, item.unread_count])
+        (unreadCounts || []).map((item: any) => [item.conversation_id, item.unread_count])
       )
       
       // Transform data with participant information
-      const conversations: ConversationV2[] = (data || []).map(conv => {
+      const transformedConversations: ConversationV2[] = (data || []).map(conv => {
         const isUser1 = conv.user1_id === user.id
+        const participantId = isUser1 ? conv.user2_id : conv.user1_id
         const participant = isUser1 ? (conv as any).user2 : (conv as any).user1
         
         return {
           ...conv,
-          participant,
+          participant: participant ? {
+            id: participant.id,
+            name: participant.name || 'Unknown User',
+            avatar_url: participant.avatar_url,
+            role: participant.role || 'member',
+            department: participant.department
+          } : {
+            id: participantId,
+            name: 'Unknown User',
+            avatar_url: null,
+            role: 'member',
+            department: null
+          },
           last_message: (conv as any).last_message ? {
             id: (conv as any).last_message.id,
             content: (conv as any).last_message.content,
             sender_id: (conv as any).last_message.sender_id,
-            sender_name: (conv as any).last_message.sender.name,
+            sender_name: users?.find(u => u.id === (conv as any).last_message.sender_id)?.name || 'Unknown',
             created_at: (conv as any).last_message.created_at,
             message_type: (conv as any).last_message.message_type
           } : undefined,
@@ -191,16 +222,17 @@ function useConversationsV2() {
         }
       })
       
-      return conversations
+      return transformedConversations
     },
     enabled: !!user,
     gcTime: 5 * 60 * 1000, // 5 minutes
     staleTime: 30 * 1000, // 30 seconds
-    // realtime: {
-    //   enabled: !!user,
-    //   table: 'conversations_v2',
-    //   filter: `user1_id=eq.${user?.id},user2_id=eq.${user?.id}`,
-    // }
+    realtime: {
+      enabled: true,
+      table: 'conversations_v2',
+      filter: `user1_id=eq.${user?.id},user2_id=eq.${user?.id}`,
+      updateStrategy: 'invalidate'
+    }
   })
 }
 
@@ -225,28 +257,18 @@ function useConversationMessagesV2(conversationId: string, options?: {
         .select('id')
         .eq('id', conversationId)
         .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        .single()
+        .maybeSingle()
       
-      if (!conversation) throw new Error('Conversation not found or access denied')
+      if (!conversation) {
+        return [] // Return empty array if no access
+      }
       
       // Get messages with sender info and read status in one query
+      // Get messages first
       let query = supabaseClient
         .from('messages_v2')
-        .select(`
-          *,
-          sender:users_v2!messages_v2_sender_id_fkey (
-            id, name, avatar_url, role
-          ),
-          read_status:message_read_status_v2!message_read_status_v2_message_id_fkey (
-            is_read, read_at
-          ),
-          reply_to:messages_v2!messages_v2_reply_to_id_fkey (
-            id, content,
-            sender:users_v2!messages_v2_sender_id_fkey (name)
-          )
-        `)
+        .select('*')
         .eq('conversation_id', conversationId)
-        .eq('message_read_status_v2.user_id', user.id) // Filter read status for current user
         .is('deleted_at', null)
         .order('created_at', { ascending: true })
       
@@ -258,12 +280,59 @@ function useConversationMessagesV2(conversationId: string, options?: {
         query = query.range(options.offset, options.offset + (options.limit || 50) - 1)
       }
       
-      const { data, error } = await query
+      const { data: messages, error: msgError } = await query
       
-      if (error) throw error
+      if (msgError) throw msgError
+      if (!messages || messages.length === 0) return []
+      
+      // Get all sender IDs and reply-to message IDs
+      const senderIds = [...new Set(messages.map(m => m.sender_id).filter(Boolean))]
+      const replyToIds = messages.map(m => m.reply_to_id).filter(Boolean)
+      
+      // Get users
+      const { data: users, error: userError } = await supabaseClient
+        .from('users_v2')
+        .select('id, name, avatar_url, role')
+        .in('id', senderIds.length > 0 ? senderIds : ['00000000-0000-0000-0000-000000000000'])
+      
+      if (userError) throw userError
+      
+      // Get reply-to messages if any
+      let replyToMessages: any[] = []
+      const validReplyToIds = replyToIds.filter(id => id !== null) as string[]
+      if (validReplyToIds.length > 0) {
+        const { data: replyData, error: replyError } = await supabaseClient
+          .from('messages_v2')
+          .select('id, content, sender_id')
+          .in('id', validReplyToIds)
+        
+        if (replyError) throw replyError
+        replyToMessages = replyData || []
+      }
+      
+      // Get read status for current user
+      const messageIds = messages.map(m => m.id)
+      const { data: readStatuses, error: readError } = await supabaseClient
+        .from('message_read_status_v2')
+        .select('message_id, is_read, read_at')
+        .in('message_id', messageIds)
+        .eq('user_id', user.id)
+      
+      if (readError) throw readError
+      
+      // Combine all data
+      const data = messages.map(msg => ({
+        ...msg,
+        sender: users?.find(u => u.id === msg.sender_id) || null,
+        read_status: readStatuses?.find(rs => rs.message_id === msg.id) || null,
+        reply_to: msg.reply_to_id ? {
+          ...replyToMessages.find(rm => rm.id === msg.reply_to_id),
+          sender: users?.find(u => u.id === replyToMessages.find(rm => rm.id === msg.reply_to_id)?.sender_id)
+        } : null
+      }))
       
       // Transform data
-      const messages: MessageV2[] = (data || []).map(msg => ({
+      const transformedMessages: MessageV2[] = (data || []).map(msg => ({
         ...msg,
         sender: (msg as any).sender,
         read_status: (msg as any).read_status?.[0] || { is_read: false, read_at: null },
@@ -274,16 +343,18 @@ function useConversationMessagesV2(conversationId: string, options?: {
         } : undefined
       }))
       
-      return messages
+      return transformedMessages
     },
     enabled: !!user && !!conversationId,
     gcTime: 10 * 60 * 1000, // 10 minutes
     staleTime: 30 * 1000, // 30 seconds
-    // realtime: {
-    //   enabled: !!conversationId,
-    //   table: 'messages_v2',
-    //   filter: `conversation_id=eq.${conversationId}`,
-    // }
+    realtime: {
+      enabled: true,
+      table: 'messages_v2',
+      filter: `conversation_id=eq.${conversationId}`,
+      updateStrategy: 'append'
+    }
+    // refetchOnWindowFocus와 refetchOnReconnect는 기본값(true) 사용
   })
 }
 
@@ -307,8 +378,8 @@ function useUnreadCountV2() {
     },
     enabled: !!user,
     gcTime: 2 * 60 * 1000, // 2 minutes
-    staleTime: 10 * 1000, // 10 seconds
-    refetchInterval: 30 * 1000 // Refetch every 30 seconds for accuracy
+    staleTime: 2 * 60 * 1000, // 2 minutes (Real-time handles updates)
+    refetchOnWindowFocus: false, // Real-time handles updates
   })
 }
 
@@ -450,15 +521,15 @@ function useSendMessageV2() {
       }
     },
     onSettled: (data, error, variables) => {
-      // Invalidate related queries
+      // Invalidate related queries - user?.id 포함해야 함!
       queryClient.invalidateQueries({ 
         queryKey: ['conversation-messages-v2', variables.conversation_id] 
       })
       queryClient.invalidateQueries({ 
-        queryKey: ['conversations-v2'] 
+        queryKey: ['conversations-v2', user?.id] 
       })
       queryClient.invalidateQueries({ 
-        queryKey: ['unread-count-v2'] 
+        queryKey: ['unread-count-v2', user?.id] 
       })
     }
   })
@@ -485,16 +556,23 @@ function useMarkAsReadV2() {
       return data || 0
     },
     onSuccess: (updatedCount, { conversation_id }) => {
-      // Update queries
-      queryClient.invalidateQueries({ 
-        queryKey: ['conversation-messages-v2', conversation_id] 
-      })
-      queryClient.invalidateQueries({ 
-        queryKey: ['conversations-v2'] 
-      })
-      queryClient.invalidateQueries({ 
-        queryKey: ['unread-count-v2'] 
-      })
+      // 실제로 읽음 처리된 메시지가 있을 때만 최소한의 쿼리 무효화
+      if (updatedCount > 0) {
+        // 읽지 않은 메시지 수만 즉시 업데이트
+        queryClient.invalidateQueries({ 
+          queryKey: ['unread-count-v2', user?.id] 
+        })
+        
+        // 대화 목록은 debounce로 업데이트 (무한 루프 방지)
+        setTimeout(() => {
+          queryClient.invalidateQueries({ 
+            queryKey: ['conversations-v2', user?.id] 
+          })
+        }, 300)
+        
+        // 메시지 목록은 읽음 상태만 업데이트하므로 즉시 무효화하지 않음
+        // 실시간 업데이트로 충분함
+      }
     }
   })
 }
@@ -535,7 +613,7 @@ function useCreateConversationV2() {
       return conversationId
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations-v2', user?.id] })
     }
   })
 }
@@ -564,7 +642,7 @@ function useDeleteMessageV2() {
         queryKey: ['conversation-messages-v2', conversation_id] 
       })
       queryClient.invalidateQueries({ 
-        queryKey: ['conversations-v2'] 
+        queryKey: ['conversations-v2', user?.id] 
       })
     }
   })
@@ -654,7 +732,7 @@ function useArchiveConversationV2() {
       if (error) throw error
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['conversations-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['conversations-v2', user?.id] })
     }
   })
 }

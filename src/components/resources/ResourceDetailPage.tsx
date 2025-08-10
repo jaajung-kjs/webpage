@@ -21,17 +21,10 @@ import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { toast } from 'sonner'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
+import { getCategoryConfig } from '@/lib/constants/categories'
 
 interface ResourceDetailPageProps {
   resourceId: string
-}
-
-const categoryLabels = {
-  tutorial: '튜토리얼',
-  workshop: '워크샵',
-  template: '템플릿',
-  reference: '참고자료',
-  guideline: '가이드라인'
 }
 
 const typeLabels = {
@@ -41,14 +34,6 @@ const typeLabels = {
   document: '문서',
   spreadsheet: '스프레드시트',
   template: '템플릿'
-}
-
-const categoryColors = {
-  tutorial: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  workshop: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  template: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  reference: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  guideline: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
 }
 
 const typeIcons = {
@@ -73,9 +58,9 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
   const { data: userInteractions } = interactionsV2.useUserInteractions(resourceId, 'content')
   
   // Derive interaction states
-  const isLiked = (userInteractions as any)?.user_liked || false
+  const isLiked = (userInteractions as any)?.liked || false
   const likeCount = (interactionStats as any)?.likes || 0
-  const isBookmarked = (userInteractions as any)?.user_bookmarked || false
+  const isBookmarked = (userInteractions as any)?.bookmarked || false
   
   const downloadCount = useMemo(() => {
     // V2에서는 interaction_counts에서 다운로드 수를 가져옴
@@ -264,10 +249,10 @@ export default function ResourceDetailPage({ resourceId }: ResourceDetailPagePro
       createdAt={resourceData.created_at || new Date().toISOString()}
       viewCount={resourceData.interaction_counts?.views || 0}
       category={{
-        label: categoryLabels['reference' as keyof typeof categoryLabels] || '자료',
-        value: 'resource',
-        color: categoryColors['reference' as keyof typeof categoryColors],
-        icon: BookOpen
+        label: getCategoryConfig('resource', resourceData.category || 'other')?.label || '자료',
+        value: resourceData.category || 'other',
+        color: getCategoryConfig('resource', resourceData.category || 'other')?.bgColor,
+        icon: getCategoryConfig('resource', resourceData.category || 'other')?.icon as any
       }}
       tags={resourceData.tags || []}
       likeCount={likeCount}

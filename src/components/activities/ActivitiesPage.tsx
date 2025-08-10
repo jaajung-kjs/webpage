@@ -56,6 +56,7 @@ import { getBoardCategoryData } from '@/lib/categories'
 // Shared components
 import ContentListLayout from '@/components/shared/ContentListLayout'
 import StatsCard from '@/components/shared/StatsCard'
+import UserLevelBadges from '@/components/shared/UserLevelBadges'
 
 // Get category data from centralized configuration
 const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('activities')
@@ -89,8 +90,8 @@ function ActivitiesPage() {
   const createActivityMutation = activitiesV2.createActivity
   const updateActivityMutation = activitiesV2.updateActivity
   const deleteActivityMutation = activitiesV2.deleteActivity
-  const joinActivityMutation = activitiesV2.registerForActivity
-  const leaveActivityMutation = activitiesV2.cancelRegistration
+  const joinActivityMutation = activitiesV2.registerForActivityAsync
+  const leaveActivityMutation = activitiesV2.cancelRegistrationAsync
   
   const operationLoading = 
     activitiesV2.isCreating || 
@@ -102,8 +103,10 @@ function ActivitiesPage() {
   // Admin functionality state
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [participantsDialogOpen, setParticipantsDialogOpen] = useState(false)
   const [selectedActivity, setSelectedActivity] = useState<Tables<'activities_v2'> | null>(null)
   const [participationStatus, setParticipationStatus] = useState<{ [key: string]: boolean }>({})
+  const [participants, setParticipants] = useState<any[]>([])
   
   // Form state
   const [formData, setFormData] = useState({
@@ -190,12 +193,13 @@ function ActivitiesPage() {
       if (activity.id) {
         const { data } = await supabaseClient
           .from('activity_participants_v2')
-          .select('id')
+          .select('id, status')
           .eq('activity_id', activity.id)
           .eq('user_id', user.id)
           .single()
         
-        status[activity.id] = !!data
+        // registered, confirmed, waitlisted 상태만 참가 중으로 간주
+        status[activity.id] = !!data && ['registered', 'confirmed', 'waitlisted'].includes(data.status)
       }
     }
     
@@ -372,6 +376,42 @@ function ActivitiesPage() {
   }
 
 
+  const handleShowParticipants = async (activityId: string) => {
+    if (!user || !activityId) return
+
+    try {
+      // 참가자 목록 조회
+      const { data: participantsData, error } = await supabaseClient
+        .from('activity_participants_v2')
+        .select(`
+          id,
+          user_id,
+          status,
+          registration_note,
+          registered_at,
+          user:users_v2!user_id (
+            id,
+            name,
+            email,
+            avatar_url,
+            role,
+            department
+          )
+        `)
+        .eq('activity_id', activityId)
+        .in('status', ['confirmed', 'waitlisted'])
+        .order('registered_at', { ascending: true })
+
+      if (error) throw error
+
+      setParticipants(participantsData || [])
+      setParticipantsDialogOpen(true)
+    } catch (error: any) {
+      console.error('Error fetching participants:', error)
+      toast.error('참가자 목록을 불러오는데 실패했습니다.')
+    }
+  }
+
   const handleActivityParticipation = async (activityId: string) => {
     if (!user) {
       toast.error('로그인이 필요합니다.')
@@ -386,23 +426,47 @@ function ActivitiesPage() {
 
     try {
       const isCurrentlyParticipating = participationStatus[activityId]
+      console.log('[ActivitiesPage] Participation toggle:', { 
+        activityId, 
+        isCurrentlyParticipating,
+        userId: user.id 
+      })
       
       if (isCurrentlyParticipating) {
         // Leave activity
-        await leaveActivityMutation(activityId)
+        console.log('[ActivitiesPage] Cancelling registration...')
+        const result = await leaveActivityMutation(activityId)
+        console.log('[ActivitiesPage] Cancel result:', result)
+        
+        // 즉시 상태 업데이트 (cancelled로 설정되므로 false)
+        setParticipationStatus(prev => ({
+          ...prev,
+          [activityId]: false
+        }))
         
         toast.success('활동에서 탈퇴하였습니다.')
       } else {
         // Join activity
-        await joinActivityMutation({ activityId })
+        console.log('[ActivitiesPage] Joining activity...')
+        const result = await joinActivityMutation({ activityId, note: undefined })  // note를 명시적으로 전달
+        console.log('[ActivitiesPage] Join result:', result)
         
-        toast.success('활동에 참가하였습니다.')
+        // 성공적으로 등록되면 상태 업데이트
+        if (result && typeof result === 'object' && 'success' in result && result.success) {
+          setParticipationStatus(prev => ({
+            ...prev,
+            [activityId]: true
+          }))
+          toast.success('활동에 참가하였습니다.')
+        } else {
+          toast.error('활동 참가에 실패했습니다.')
+        }
       }
       
-      await checkAllParticipationStatus()
+      // checkAllParticipationStatus() 대신 refetch만 하면 충분
       refetch()
     } catch (error: any) {
-      console.error('Error handling activity participation:', error)
+      console.error('[ActivitiesPage] Error handling activity participation:', error)
       toast.error(error.message || '참가 처리에 실패했습니다.')
     }
   }
@@ -619,8 +683,37 @@ function ActivitiesPage() {
                 <div className="mb-4 space-y-2 text-sm text-muted-foreground">
                   <div className="flex items-center space-x-2">
                     <Calendar className="h-4 w-4" />
-                    <span>{activity.event_date ? `${activity.event_date} ${activity.event_time || ''}`.trim() : '시간 미정'}</span>
+                    <span>
+                      {activity.event_date ? 
+                        `${formatActivityDate(activity.event_date)}` : 
+                        '날짜 미정'
+                      }
+                    </span>
                   </div>
+                  {activity.event_time && (
+                    <div className="flex items-center space-x-2">
+                      <Clock className="h-4 w-4" />
+                      <span>
+                        {(() => {
+                          const startTime = activity.event_time;
+                          if (!startTime) return '시간 미정';
+                          
+                          const [hours, minutes] = startTime.split(':').map(Number);
+                          const startFormatted = `${hours}시${minutes > 0 ? `${minutes}분` : ''}`;
+                          
+                          // duration 필드에서 소요시간 가져오기 (기본값: 90분)
+                          const duration = (activity as any).duration || 90;
+                          const startMinutes = hours * 60 + minutes;
+                          const endMinutes = startMinutes + duration;
+                          const endHours = Math.floor(endMinutes / 60) % 24;
+                          const endMins = endMinutes % 60;
+                          const endFormatted = `${endHours}시${endMins > 0 ? `${endMins}분` : ''}`;
+                          
+                          return `${startFormatted} ~ ${endFormatted}`;
+                        })()}
+                      </span>
+                    </div>
+                  )}
                   {activity.end_time && (
                     <div className="flex items-center space-x-2">
                       <Clock className="h-4 w-4" />
@@ -648,7 +741,16 @@ function ActivitiesPage() {
                     </AvatarFallback>
                   </Avatar>
                   <div>
-                    <div className="font-medium text-sm">{activity.content?.author?.name || '알 수 없음'}</div>
+                    <div className="flex items-center gap-1.5">
+                      <div className="font-medium text-sm">{activity.content?.author?.name || '알 수 없음'}</div>
+                      {activity.content?.author?.id && (
+                        <UserLevelBadges 
+                          userId={activity.content.author.id} 
+                          variant="minimal" 
+                          size="sm" 
+                        />
+                      )}
+                    </div>
                     <div className="text-xs text-muted-foreground">진행자</div>
                   </div>
                 </div>
@@ -675,7 +777,7 @@ function ActivitiesPage() {
                       ) : (
                         <>
                           <UserPlus className="mr-2 h-4 w-4" />
-                          참가 신청
+                          참가하기
                         </>
                       )}
                     </Button>
@@ -706,6 +808,14 @@ function ActivitiesPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => activity.id && handleShowParticipants(activity.id)}
+                          disabled={operationLoading}
+                        >
+                          <Users className="mr-2 h-4 w-4" />
+                          참가자 목록
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onClick={() => openEditDialog(activity)}
                           disabled={operationLoading}
@@ -814,8 +924,13 @@ function ActivitiesPage() {
                 <Input
                   type="number"
                   value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, duration: value === '' ? 0 : parseInt(value) || 0 })
+                  }}
                   placeholder="60"
+                  min="0"
+                  step="1"
                   className="mt-1"
                 />
               </div>
@@ -860,6 +975,70 @@ function ActivitiesPage() {
             </Button>
             <Button onClick={handleCreateActivity} disabled={operationLoading}>
               {operationLoading ? '등록 중...' : '등록 완료'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Participants Dialog */}
+      <Dialog open={participantsDialogOpen} onOpenChange={setParticipantsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>참가자 목록</DialogTitle>
+            <DialogDescription>
+              활동에 참가 신청한 회원들의 목록입니다.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 max-h-96 overflow-y-auto">
+            {participants.length > 0 ? (
+              participants.map((participant, index) => (
+                <div key={participant.id} className="flex items-center justify-between p-3 border rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <span className="text-sm font-medium text-muted-foreground min-w-[2rem]">
+                      {index + 1}
+                    </span>
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={participant.user?.avatar_url} />
+                      <AvatarFallback>
+                        {participant.user?.name?.charAt(0) || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div>
+                      <div className="font-medium">{participant.user?.name || '이름 없음'}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {participant.user?.department || '부서 없음'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Badge 
+                      variant="secondary" 
+                      className={
+                        participant.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                        participant.status === 'waitlisted' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-blue-100 text-blue-800'
+                      }
+                    >
+                      {participant.status === 'confirmed' ? '확정' :
+                       participant.status === 'waitlisted' ? '대기' : '신청'}
+                    </Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(participant.registered_at).toLocaleDateString('ko-KR')}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                참가 신청자가 없습니다.
+              </div>
+            )}
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setParticipantsDialogOpen(false)}>
+              닫기
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -946,8 +1125,13 @@ function ActivitiesPage() {
                 <Input
                   type="number"
                   value={formData.duration}
-                  onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) || 60 })}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setFormData({ ...formData, duration: value === '' ? 0 : parseInt(value) || 0 })
+                  }}
                   placeholder="60"
+                  min="0"
+                  step="1"
                   className="mt-1"
                 />
               </div>

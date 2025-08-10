@@ -16,35 +16,12 @@ import { toast } from 'sonner'
 import { ReportDialog } from '@/components/ui/report-dialog'
 import CommentSection from '@/components/shared/CommentSection'
 import DetailLayout from '@/components/shared/DetailLayout'
+import { getCategoryConfig } from '@/lib/constants/categories'
 
 
 
 interface CaseDetailPageProps {
   caseId: string
-}
-
-const categoryLabels = {
-  productivity: '생산성 향상',
-  creativity: '창의적 활용',
-  development: '개발',
-  analysis: '분석',
-  other: '기타'
-}
-
-const categoryColors = {
-  productivity: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  creativity: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  development: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  analysis: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-}
-
-const categoryIcons = {
-  productivity: Lightbulb,
-  creativity: Lightbulb,
-  development: Lightbulb,
-  analysis: Lightbulb,
-  other: Lightbulb
 }
 
 export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
@@ -60,9 +37,9 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const { data: userInteractions } = interactionsV2.useUserInteractions(caseId, 'content')
   
   // Derive interaction states
-  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const isLiked = (userInteractions as any)?.liked || false
   const likeCount = (interactionStats as any)?.likes || 0
-  const isBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
+  const isBookmarked = (userInteractions as any)?.bookmarked || false
   
   // Use mutation loading states
   const likeLoading = interactionsV2.isToggling
@@ -74,12 +51,7 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
   const [reportTarget, setReportTarget] = useState<{ type: 'content' | 'comment', id: string } | null>(null)
   const [parentContentId, setParentContentId] = useState<string | undefined>()
 
-  // Increment view count when case is loaded
-  useEffect(() => {
-    if (caseData?.id) {
-      contentV2.toggleInteraction({ targetId: caseData.id, targetType: 'content', interactionType: 'view' })
-    }
-  }, [caseData?.id, contentV2.toggleInteraction])
+  // View count is now handled automatically by useContent hook - removed duplicate increment
 
 
 
@@ -218,10 +190,10 @@ export default function CaseDetailPage({ caseId }: CaseDetailPageProps) {
         createdAt={caseData.created_at || new Date().toISOString()}
         viewCount={caseData.interaction_counts?.views || 0}
         category={{
-          label: categoryLabels[caseData.categories?.[0]?.slug as keyof typeof categoryLabels] || '기타',
-          value: caseData.categories?.[0]?.slug || 'other',
-          color: categoryColors[caseData.categories?.[0]?.slug as keyof typeof categoryColors],
-          icon: categoryIcons[caseData.categories?.[0]?.slug as keyof typeof categoryIcons] || Lightbulb
+          label: getCategoryConfig('case', caseData.category || 'other')?.label || '기타',
+          value: caseData.category || 'other',
+          color: getCategoryConfig('case', caseData.category || 'other')?.bgColor,
+          icon: getCategoryConfig('case', caseData.category || 'other')?.icon as any || Lightbulb
         }}
         tags={caseData.tags || []}
         likeCount={likeCount}

@@ -250,6 +250,14 @@ export function useInteractionsV2() {
       if (targetType === 'content') {
         queryClient.invalidateQueries({ queryKey: ['content-v2', targetId] })
         queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
+        queryClient.invalidateQueries({ queryKey: ['infinite-contents-v2'] })
+        queryClient.invalidateQueries({ queryKey: ['trending-contents-v2'] })
+      }
+      
+      // 댓글 캐시도 무효화 (댓글 좋아요의 경우)
+      if (targetType === 'comment') {
+        queryClient.invalidateQueries({ queryKey: ['comments-v2'] })
+        queryClient.invalidateQueries({ queryKey: ['comment-count-v2'] })
       }
       
       // 팔로우의 경우 사용자 관련 캐시도 무효화

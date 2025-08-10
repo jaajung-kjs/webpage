@@ -200,9 +200,9 @@ export function useNotificationsV2() {
         return data || 0
       },
       enabled: !!user?.id,
-      staleTime: 10 * 1000, // 10초 (빠른 업데이트)
-      gcTime: 1 * 60 * 1000, // 1분
-      refetchInterval: 30 * 1000, // 30초마다 자동 갱신
+      staleTime: 2 * 60 * 1000, // 2 minutes (Real-time handles updates)
+      gcTime: 5 * 60 * 1000, // 5분
+      refetchOnWindowFocus: false, // Real-time handles updates
     })
   }
 

@@ -1,12 +1,13 @@
 'use client'
+import { use } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import ContentEditorPage from '@/components/shared/ContentEditorPage'
 import { getCategoriesForSelect } from '@/lib/categories'
 
 const categories = getCategoriesForSelect('community')
 
-export default async function CommunityEditRoute({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default function CommunityEditRoute({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params)
   return (
     <MainLayout>
       <ContentEditorPage

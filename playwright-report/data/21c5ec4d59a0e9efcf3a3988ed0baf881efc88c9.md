@@ -1,0 +1,90 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "KEPCO Logo AI 학습동아리":
+    - /url: /
+    - img "KEPCO Logo"
+    - text: AI 학습동아리
+  - navigation:
+    - link "AI 활용사례":
+      - /url: /cases
+    - link "학습자료":
+      - /url: /resources
+    - link "자유게시판":
+      - /url: /community
+    - link "활동일정":
+      - /url: /activities
+    - link "공지사항":
+      - /url: /announcements
+    - link "회원목록":
+      - /url: /members
+  - button "메시지"
+  - button "사용자":
+    - img "사용자"
+- main:
+  - button "돌아가기"
+  - img "김준성"
+  - heading "김준성" [level=2]
+  - paragraph: 전력관리처 전자제어부 · 주임
+  - text: "운영진 고급 신입 #1 활동 점수 194점"
+  - paragraph: 안녕하세요. 생성형 AI 학습동아리 리더를 맡고있는 전자제어부 김준성입니다. 부족한 실력이지만 최선을 다 하겠습니다. 홈페이지 관련 문의는 저에게 메세지 부탁드립니다. 감사합니다.
+  - heading "AI 전문분야" [level=3]
+  - text: Claude Gemini +2
+  - heading "스킬 레벨" [level=3]
+  - text: 고급
+  - heading "획득 업적" [level=3]
+  - text: "2개 · 60점 👣 첫 발걸음 ✍️ 활발한 작성자 jaajung@naver.com 010-2017-9092 서울 광진구 2025년 7월 25일 가입 마지막 로그인: 방금 전"
+  - button "프로필 편집"
+  - tablist:
+    - tab "활동 내역"
+    - tab "통계" [selected]
+    - tab "설정"
+  - tabpanel "통계": 게시글 통계 총 게시글 3 총 댓글 10 받은 좋아요 6 총 조회수 4840 참여 통계 참여 활동 5 공유 자료 1 활동 점수 194 활발 업적 진행률 0 완료된 업적 0 획득 포인트 📝 콘텐츠 작성 0/3 완료 🎭 활동 참여 0/0 완료 ❤️ 인기도 0/0 완료 📅 가입 기간 0/0 완료 콘텐츠 작성 현황 3 총 게시글 1 사례 2 공지사항 1 자료
+- contentinfo:
+  - img "KEPCO Logo"
+  - text: KEPCO AI 학습동아리
+  - paragraph: 한국전력공사 강원본부 전력관리처 생성형 AI 학습동아리
+  - heading "빠른 링크" [level=3]
+  - list:
+    - listitem:
+      - link "AI 활용사례":
+        - /url: /cases
+    - listitem:
+      - link "학습자료":
+        - /url: /resources
+    - listitem:
+      - link "자유게시판":
+        - /url: /community
+    - listitem:
+      - link "활동일정":
+        - /url: /activities
+  - heading "학습자료" [level=3]
+  - list:
+    - listitem:
+      - link "튜토리얼":
+        - /url: /resources/tutorials
+    - listitem:
+      - link "가이드":
+        - /url: /resources/guides
+    - listitem:
+      - link "AI 도구":
+        - /url: /resources/tools
+    - listitem:
+      - link "자주묻는질문":
+        - /url: /faq
+  - heading "연락처" [level=3]
+  - list:
+    - listitem: 강원도 춘천시 후석로 304
+    - listitem: 033-359-2548
+    - listitem: jaajung@kepco.co.kr
+  - text: © 2025 KEPCO. All Rights Reserved.
+  - link "개인정보처리방침":
+    - /url: /privacy
+  - link "이용약관":
+    - /url: /terms
+- region "Notifications alt+T"
+- button "Open Tanstack query devtools":
+  - img
+- alert
+```

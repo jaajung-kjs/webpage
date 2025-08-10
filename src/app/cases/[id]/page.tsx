@@ -1,4 +1,5 @@
 'use client'
+import { use } from 'react'
 import MainLayout from '@/components/layout/MainLayout'
 import CaseDetailPage from '@/components/cases/CaseDetailPage'
 import PermissionGate from '@/components/shared/PermissionGate'
@@ -9,8 +10,8 @@ interface CaseDetailProps {
   }>
 }
 
-export default async function CaseDetail({ params }: CaseDetailProps) {
-  const { id } = await params
+export default function CaseDetail({ params }: CaseDetailProps) {
+  const { id } = use(params)
   return (
     <MainLayout>
       <PermissionGate requireMember={true}>

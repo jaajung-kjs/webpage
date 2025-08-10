@@ -32,7 +32,6 @@ export interface LeaderboardEntry {
   activity_level: 'beginner' | 'active' | 'enthusiast' | 'leader'
   score: number
   total_activity_score: number
-  recent_achievements_count: number
   category_stats?: {
     posts_count?: number
     comments_count?: number
@@ -139,32 +138,22 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const userIds = users.map(u => u.id)
       
       // 사용자 메타데이터 조회 (상세 통계용)
-      const { data: metadata } = await supabaseClient
-        .from('user_metadata_v2')
-        .select('user_id, key, value')
-        .in('user_id', userIds)
+      const { data: usersWithMetadata } = await supabaseClient
+        .from('users_v2')
+        .select('id, metadata')
+        .in('id', userIds)
       
-      // 최근 업적 수 조회
-      const { data: achievements } = await supabaseClient
-        .from('user_achievements_v2')
-        .select('user_id')
-        .in('user_id', userIds)
-        .gte('earned_at', start)
       
       // 메타데이터를 사용자별로 그룹화
       const userMetadata: Record<string, Record<string, any>> = {}
-      metadata?.forEach(meta => {
-        if (!userMetadata[meta.user_id]) {
-          userMetadata[meta.user_id] = {}
+      usersWithMetadata?.forEach(user => {
+        if (user.metadata && typeof user.metadata === 'object' && !Array.isArray(user.metadata)) {
+          userMetadata[user.id] = user.metadata as Record<string, any>
+        } else {
+          userMetadata[user.id] = {}
         }
-        userMetadata[meta.user_id][meta.key] = meta.value
       })
       
-      // 업적 수를 사용자별로 계산
-      const achievementCounts: Record<string, number> = {}
-      achievements?.forEach(achievement => {
-        achievementCounts[achievement.user_id] = (achievementCounts[achievement.user_id] || 0) + 1
-      })
       
       // 리더보드 엔트리 생성
       const leaderboardEntries: LeaderboardEntry[] = users.map((user, index) => {
@@ -185,7 +174,6 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
           activity_level: user.activity_level as any,
           score,
           total_activity_score: user.activity_score,
-          recent_achievements_count: achievementCounts[user.id] || 0,
           category_stats: {
             posts_count: userMeta.posts_count || 0,
             comments_count: userMeta.comments_count || 0,
@@ -213,54 +201,62 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const { start, end } = getPeriodDates(period)
       
       // 현재 사용자보다 높은 점수를 가진 사용자 수 계산
-      const userMeta = await supabaseClient
-        .from('user_metadata_v2')
-        .select('value')
-        .eq('user_id', user.id)
-        .eq('key', 
-          category === 'content_created' ? 'posts_count' :
-          category === 'comments' ? 'comments_count' :
-          category === 'likes_received' ? 'total_likes_received' :
-          category === 'activities' ? 'activities_attended' : ''
-        )
+      const { data: userData } = await supabaseClient
+        .from('users_v2')
+        .select('metadata')
+        .eq('id', user.id)
         .single()
       
+      const userMetadata = (userData?.metadata && typeof userData.metadata === 'object' && !Array.isArray(userData.metadata)) 
+        ? userData.metadata as Record<string, any> 
+        : {}
+      
+      const metadataKey = category === 'content_created' ? 'posts_count' :
+                          category === 'comments' ? 'comments_count' :
+                          category === 'likes_received' ? 'total_likes_received' :
+                          category === 'activities' ? 'activities_attended' : ''
+                          
+      const userValue = metadataKey ? userMetadata[metadataKey] || 0 : 0
+      
       if (category === 'total_score') {
-        const { data: userData } = await supabaseClient
+        const { data: activityScoreData } = await supabaseClient
           .from('users_v2')
           .select('activity_score')
           .eq('id', user.id)
           .single()
         
-        if (!userData) return null
+        if (!activityScoreData) return null
         
         const { count } = await supabaseClient
           .from('users_v2')
           .select('*', { count: 'exact', head: true })
-          .gt('activity_score', userData.activity_score)
+          .gt('activity_score', activityScoreData.activity_score)
           .is('deleted_at', null)
         
         return {
           rank: (count || 0) + 1,
-          score: userData.activity_score
+          score: activityScoreData.activity_score
         }
       } else {
-        if (!userMeta.data) return null
+        if (userValue === 0) return null
         
-        const currentScore = userMeta.data.value || 0
+        const currentScore = userValue
         
         // 다른 사용자들의 해당 카테고리 점수와 비교
-        const { data: allUserMeta } = await supabaseClient
-          .from('user_metadata_v2')
-          .select('value')
-          .eq('key',
-            category === 'content_created' ? 'posts_count' :
-            category === 'comments' ? 'comments_count' :
-            category === 'likes_received' ? 'total_likes_received' :
-            'activities_attended'
-          )
+        const { data: allUsersData } = await supabaseClient
+          .from('users_v2')
+          .select('metadata')
+          .is('deleted_at', null)
         
-        const higherScores = allUserMeta?.filter(meta => (meta.value || 0) > currentScore).length || 0
+        // Count users with higher scores in the same category
+        const higherScores = allUsersData?.filter(user => {
+          if (!user.metadata || typeof user.metadata !== 'object' || Array.isArray(user.metadata)) {
+            return false
+          }
+          const otherUserMetadata = user.metadata as Record<string, any>
+          const otherUserValue = otherUserMetadata[metadataKey] || 0
+          return otherUserValue > currentScore
+        }).length || 0
         
         return {
           rank: higherScores + 1,

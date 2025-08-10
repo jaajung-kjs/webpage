@@ -1,5 +1,6 @@
 'use client'
 
+import { use } from 'react'
 import dynamicImport from 'next/dynamic'
 
 export const dynamic = 'force-dynamic'
@@ -15,8 +16,8 @@ const UnifiedProfilePage = dynamicImport(
   }
 )
 
-export default async function ProfileDetail({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
+export default function ProfileDetail({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = use(params)
   
   return (
     <MainLayout>

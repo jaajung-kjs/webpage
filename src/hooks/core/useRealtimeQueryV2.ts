@@ -21,8 +21,9 @@ import type { RealtimePostgresChangesPayload, RealtimeChannel } from '@supabase/
 import { Database } from '@/lib/database.types'
 
 type Tables = Database['public']['Tables']
+type Views = Database['public']['Views']
 
-// V2 테이블 이름 타입
+// V2 기본 테이블 이름 타입 (mutations 가능)
 export type TableNameV2 = 
   | 'users_v2'
   | 'content_v2' 
@@ -33,8 +34,13 @@ export type TableNameV2 =
   | 'tags_v2'
   | 'activities_v2'
   | 'activity_participants_v2'
-  | 'content_metadata_v2'
   | 'audit_logs_v2'
+  | 'conversations_v2'
+  | 'messages_v2'
+  | 'message_read_status_v2'
+
+// V2 뷰 이름 타입 (read-only)
+export type ViewNameV2 = keyof Views
 
 // 실시간 이벤트 타입
 export type RealtimeEventV2 = 'INSERT' | 'UPDATE' | 'DELETE' | '*'
@@ -228,7 +234,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     // 큐 처리 후 쿼리 무효화
     queryClient.invalidateQueries({ queryKey: options.queryKey })
-  }, [isConnected, queryClient, options.queryKey])
+  }, [isConnected, queryClient]) // queryKey를 dependency에서 제거
 
   // 실시간 채널 설정
   useEffect(() => {
@@ -237,8 +243,9 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     const { table, event = '*', filter, updateStrategy = 'invalidate', schema = 'public' } = options.realtime
 
-    // 채널 생성
-    const channelName = `realtime-v2-${table}-${JSON.stringify(options.queryKey)}`
+    // 채널 생성 - queryKey의 안정적인 부분만 사용
+    const stableKey = Array.isArray(options.queryKey) ? options.queryKey[0] : String(options.queryKey)
+    const channelName = `realtime-v2-${table}-${stableKey}`
     channelRef.current = supabaseClient.channel(channelName)
 
     // 필터 적용
@@ -278,10 +285,38 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
           }
         }
 
-        // 관련 쿼리들도 무효화 (cascading updates)
+        // 관련 쿼리들도 무효화 (cascading updates) - 무한 루프 방지를 위한 강화된 조건부 무효화
         if (table === 'users_v2') {
-          queryClient.invalidateQueries({ queryKey: ['members-v2'] })
-          queryClient.invalidateQueries({ queryKey: ['profile-v2'] })
+          // 🚨 강화된 필터링: Supabase heartbeat 감지 및 차단
+          const newData = (payload as any).new || {}
+          const oldData = (payload as any).old || {}
+          
+          // Supabase 내장 heartbeat으로 인한 단순 updated_at 변경 감지
+          const isHeartbeatUpdate = (
+            newData.updated_at !== oldData.updated_at &&
+            newData.last_seen_at === oldData.last_seen_at &&
+            newData.last_login_at === oldData.last_login_at &&
+            newData.activity_score === oldData.activity_score &&
+            newData.name === oldData.name &&
+            newData.role === oldData.role &&
+            newData.department === oldData.department
+          )
+          
+          // 메시지 관련 작업으로 인한 users_v2 업데이트는 cascade 무효화하지 않음
+          // activity_score, last_seen_at 같은 자동 업데이트 필드는 관련 쿼리 무효화 생략
+          const isMessageRelatedUpdate = payload.new?.last_seen_at || payload.new?.activity_score !== undefined
+          
+          // 🔥 핵심 수정: Heartbeat 업데이트는 완전히 무시
+          if (isHeartbeatUpdate) {
+            console.log('[RealtimeQueryV2] 🚫 Ignoring Supabase heartbeat update for users_v2')
+            return // 즉시 리턴하여 아무 처리도 하지 않음
+          }
+          
+          if (!isMessageRelatedUpdate) {
+            // 실제 프로필 변경이나 중요한 변경사항만 cascade 무효화
+            queryClient.invalidateQueries({ queryKey: ['members-v2'] })
+            queryClient.invalidateQueries({ queryKey: ['profile-v2'] })
+          }
         } else if (table === 'content_v2') {
           queryClient.invalidateQueries({ queryKey: ['content-v2'] })
           queryClient.invalidateQueries({ queryKey: ['activities-v2'] })
@@ -312,8 +347,12 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
     }
   }, [
     isConnected,
-    options.realtime,
-    options.queryKey,
+    options.realtime?.enabled,
+    options.realtime?.table,
+    options.realtime?.event,
+    options.realtime?.filter,
+    options.realtime?.updateStrategy,
+    options.realtime?.schema,
     networkQuality,
     queryClient,
     smartUpdate

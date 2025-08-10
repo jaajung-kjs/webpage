@@ -164,7 +164,7 @@ export function useActivitiesV2() {
           .from('activity_participants_v2')
           .select('*', { count: 'exact', head: true })
           .eq('activity_id', activityId)
-          .in('status', ['registered', 'confirmed'])
+          .in('status', ['confirmed'])
 
         const activity = activityData
         const current_participants = participantCount || 0
@@ -223,7 +223,7 @@ export function useActivitiesV2() {
               .from('activity_participants_v2')
               .select('*', { count: 'exact', head: true })
               .eq('activity_id', activity.id)
-              .in('status', ['registered', 'confirmed'])
+              .in('status', ['confirmed'])
 
             const current_participants = participantCount || 0
             const available_spots = activity.max_participants 
@@ -440,14 +440,35 @@ export function useActivitiesV2() {
     }) => {
       if (!user?.id) throw new Error('User not authenticated')
 
+      console.log('[useActivitiesV2] Calling register_for_activity_v2:', {
+        activityId,
+        userId: user.id,
+        note
+      })
+
+      // RPC 호출 시 undefined 대신 파라미터를 생략하거나 null 전달
+      const params: any = {
+        p_activity_id: activityId,
+        p_user_id: user.id
+      }
+      
+      // note가 있을 때만 파라미터에 추가
+      if (note) {
+        params.p_note = note
+      }
+      
       const { data, error } = await supabase
-        .rpc('register_for_activity_v2', {
-          p_activity_id: activityId,
-          p_user_id: user.id,
-          p_note: note
-        })
+        .rpc('register_for_activity_v2', params)
+
+      console.log('[useActivitiesV2] Register for activity response:', { data, error })
 
       if (error) throw error
+      
+      // RPC 함수가 { success: boolean, participant?: {...} } 형태로 반환
+      if (data && typeof data === 'object' && 'success' in data && !data.success) {
+        throw new Error((data as any).error || '참가 신청에 실패했습니다.')
+      }
+      
       return data
     },
     onMutate: async ({ activityId }) => {
@@ -467,12 +488,12 @@ export function useActivitiesV2() {
         })
       }
 
-      // 임시 참가 상태 설정
+      // 임시 참가 상태 설정 (confirmed로 설정)
       queryClient.setQueryData(['my-participation-v2', user?.id, activityId], {
         id: 'temp',
         activity_id: activityId,
         user_id: user?.id,
-        status: 'registered',
+        status: 'confirmed',  // 바로 confirmed로 설정
         attended: false,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -502,13 +523,26 @@ export function useActivitiesV2() {
     mutationFn: async (activityId: string) => {
       if (!user?.id) throw new Error('User not authenticated')
 
+      console.log('[useActivitiesV2] Calling cancel_activity_registration_v2:', {
+        activityId,
+        userId: user.id
+      })
+
       const { data, error } = await supabase
         .rpc('cancel_activity_registration_v2', {
           p_activity_id: activityId,
           p_user_id: user.id
         })
 
+      console.log('[useActivitiesV2] Cancel registration response:', { data, error })
+
       if (error) throw error
+      
+      // RPC 함수가 { success: boolean } 형태로 반환
+      if (data && typeof data === 'object' && 'success' in data && !data.success) {
+        throw new Error((data as any).error || '참가 취소에 실패했습니다.')
+      }
+      
       return data
     },
     onMutate: async (activityId) => {
@@ -673,6 +707,7 @@ export function useActivitiesV2() {
       queryClient.invalidateQueries({ queryKey: ['activities-v2'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-activities-v2'] })
       queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['infinite-contents-v2'] })
     }
   })
 
@@ -708,6 +743,7 @@ export function useActivitiesV2() {
       queryClient.invalidateQueries({ queryKey: ['activities-v2'] })
       queryClient.invalidateQueries({ queryKey: ['upcoming-activities-v2'] })
       queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['infinite-contents-v2'] })
     }
   })
 
@@ -778,17 +814,11 @@ export const EVENT_TYPE_CONFIG = {
 
 // 참가 상태별 설정
 export const PARTICIPANT_STATUS_CONFIG = {
-  registered: {
-    label: '참가 신청',
-    color: 'text-blue-600',
-    bgColor: 'bg-blue-100',
-    icon: '✅'
-  },
   confirmed: {
-    label: '참가 확정',
+    label: '참가중',
     color: 'text-green-600',
     bgColor: 'bg-green-100',
-    icon: '🎯'
+    icon: '✅'
   },
   waitlisted: {
     label: '대기 중',

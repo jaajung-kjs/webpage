@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { useContentV2 } from '@/hooks/features/useContentV2'
 
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
-import { getBoardCategoryData } from '@/lib/categories'
+import { CATEGORY_CONFIG } from '@/lib/constants/categories'
 import { 
   Plus,
   Tag,
@@ -26,7 +26,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
 // 카테고리 정보 가져오기
-const { categoryLabels, categoryColors, categoryIcons } = getBoardCategoryData('community')
+const categoryLabels = Object.fromEntries(
+  Object.entries(CATEGORY_CONFIG.community).map(([k, v]) => [k, v.label])
+)
+const categoryColors = Object.fromEntries(
+  Object.entries(CATEGORY_CONFIG.community).map(([k, v]) => [k, v.bgColor])
+)
+const categoryIcons = Object.fromEntries(
+  Object.entries(CATEGORY_CONFIG.community).map(([k, v]) => [k, v.icon])
+)
 
 const sortOptions = [
   { value: 'latest', label: '최신순' },
@@ -56,7 +64,12 @@ export default function CommunityPage() {
     }
   }
   
-  const { data: postsData, isLoading: loading } = contentV2.useInfiniteContents(
+  const { 
+    data: postsData, 
+    isLoading: loading,
+    isFetching,
+    refetch
+  } = contentV2.useInfiniteContents(
     {
       type: 'community',
       categoryId: activeCategory === 'all' ? undefined : activeCategory,
@@ -70,6 +83,22 @@ export default function CommunityPage() {
   const posts = useMemo(() => {
     return postsData?.pages.flatMap(page => page.contents) || []
   }, [postsData])
+
+  // 디버깅: 데이터 변경 감지
+  useEffect(() => {
+    console.log('[CommunityPage] Posts data updated:', {
+      totalPosts: posts.length,
+      isFetching,
+      timestamp: new Date().toISOString()
+    })
+    if (posts.length > 0) {
+      console.log('[CommunityPage] Latest post:', {
+        id: posts[0].id,
+        title: posts[0].title,
+        created_at: posts[0].created_at
+      })
+    }
+  }, [posts, isFetching])
 
   // V2 hooks handle filtering and sorting server-side, so we just need final client-side adjustments
   const filteredPosts = useMemo(() => {
@@ -132,8 +161,11 @@ export default function CommunityPage() {
     ))
   }
 
-  // Categories for tabs
-  const categories = Object.entries(categoryLabels).map(([value, label]) => ({ value, label }))
+  // Categories for tabs - '전체' 탭을 맨 왼쪽에 추가
+  const categories = [
+    { value: 'all', label: '전체' },
+    ...Object.entries(categoryLabels).map(([value, label]) => ({ value, label }))
+  ]
 
   // Stats Section
   const statsSection = (

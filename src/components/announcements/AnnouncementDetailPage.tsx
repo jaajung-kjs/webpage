@@ -73,9 +73,9 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const { data: userInteractions } = interactionsV2.useUserInteractions(announcementId, 'content')
   
   // Derive interaction states
-  const isLiked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'like') : false
+  const isLiked = (userInteractions as any)?.liked || false
   const likeCount = (interactionStats as any)?.likes || 0
-  const isBookmarked = Array.isArray(userInteractions) ? userInteractions.some((interaction: any) => interaction.interaction_type === 'bookmark') : false
+  const isBookmarked = (userInteractions as any)?.bookmarked || false
   
   // UI state
   const [reportDialogOpen, setReportDialogOpen] = useState(false)
@@ -87,12 +87,7 @@ export default function AnnouncementDetailPage({ announcementId }: AnnouncementD
   const bookmarkLoading = interactionsV2.isToggling
   const deleteLoading = contentV2.isDeleting
 
-  // Increment view count when announcement is loaded
-  useEffect(() => {
-    if (announcementData?.id) {
-      contentV2.toggleInteraction({ targetId: announcementData.id, targetType: 'content', interactionType: 'view' })
-    }
-  }, [announcementData?.id, contentV2.toggleInteraction])
+  // View count is now handled automatically by useContent hook - removed duplicate increment
 
 
 

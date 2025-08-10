@@ -51,6 +51,13 @@ export default function CasesListPage() {
     
     let filtered = [...cases]
     
+    // Category filter (V2 uses single category field)
+    if (activeCategory !== 'all') {
+      filtered = filtered.filter(caseItem => 
+        caseItem.category === activeCategory
+      )
+    }
+    
     // Search filter
     if (searchTerm) {
       const lowerSearch = searchTerm.toLowerCase()
@@ -77,7 +84,7 @@ export default function CasesListPage() {
     })
     
     return filtered
-  }, [cases, searchTerm, sortBy])
+  }, [cases, activeCategory, searchTerm, sortBy])
 
 
   // Handle delete
