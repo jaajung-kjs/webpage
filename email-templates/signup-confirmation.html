@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>이메일 인증 - KEPCO AI 학습동아리</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8fafc;
+    }
+    .container {
+      background-color: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+    .header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .logo {
+      font-size: 24px;
+      font-weight: bold;
+      color: #0066cc;
+      margin-bottom: 10px;
+    }
+    h2 {
+      color: #1a202c;
+      margin-bottom: 20px;
+      font-size: 20px;
+    }
+    .welcome-box {
+      background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: center;
+      border: 1px solid #90caf9;
+    }
+    .welcome-box h3 {
+      color: #0d47a1;
+      margin: 0 0 10px 0;
+      font-size: 18px;
+    }
+    .welcome-box p {
+      color: #1565c0;
+      margin: 0;
+      font-size: 14px;
+    }
+    .confirm-button {
+      display: inline-block;
+      padding: 14px 28px;
+      background: linear-gradient(135deg, #0066cc 0%, #004499 100%);
+      color: white;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: bold;
+      font-size: 16px;
+      text-align: center;
+      margin: 20px 0;
+      transition: all 0.3s ease;
+    }
+    .confirm-button:hover {
+      background: linear-gradient(135deg, #0052a3 0%, #003366 100%);
+      transform: translateY(-1px);
+    }
+    .benefits-box {
+      background-color: #f0f9ff;
+      border: 1px solid #bae6fd;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .benefits-box h4 {
+      color: #0369a1;
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+    .benefits-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+    .benefits-list li {
+      color: #0c4a6e;
+      font-size: 14px;
+      margin: 8px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    .benefits-list li:before {
+      content: "✓";
+      color: #10b981;
+      font-weight: bold;
+      position: absolute;
+      left: 0;
+    }
+    .warning-box {
+      background-color: #fffbeb;
+      border: 1px solid #fde68a;
+      border-radius: 4px;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .warning-text {
+      color: #92400e;
+      font-size: 14px;
+      margin: 0;
+    }
+    .footer {
+      margin-top: 30px;
+      padding-top: 20px;
+      border-top: 1px solid #eee;
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+    }
+    .button-container {
+      text-align: center;
+      margin: 30px 0;
+    }
+    .expiry-info {
+      text-align: center;
+      color: #666;
+      font-size: 14px;
+      margin-top: 15px;
+    }
+    .community-info {
+      background-color: #fef7ff;
+      border: 1px solid #e9d5ff;
+      border-radius: 6px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .community-info h4 {
+      color: #7c3aed;
+      margin: 0 0 15px 0;
+      font-size: 16px;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .stat-item {
+      flex: 1;
+      min-width: 100px;
+      text-align: center;
+      background-color: white;
+      padding: 10px;
+      border-radius: 4px;
+      border: 1px solid #ddd6fe;
+    }
+    .stat-number {
+      font-size: 20px;
+      font-weight: bold;
+      color: #7c3aed;
+    }
+    .stat-label {
+      font-size: 12px;
+      color: #6b46c1;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- 헤더 -->
+    <div class="header">
+      <div class="logo">⚡ KEPCO AI 학습동아리</div>
+      <p style="color: #666; margin: 0;">한국전력공사 인공지능 학습 커뮤니티</p>
+    </div>
+
+    <!-- 환영 메시지 -->
+    <div class="welcome-box">
+      <h3>🎉 회원가입을 환영합니다!</h3>
+      <p>KEPCO AI 학습동아리에 가입해 주셔서 진심으로 감사합니다.</p>
+    </div>
+
+    <!-- 메인 콘텐츠 -->
+    <h2>📧 이메일 인증 안내</h2>
+
+    <p>안녕하세요!</p>
+    <p>계정 보안을 위해 <strong>이메일 인증</strong>이 필요합니다.</p>
+    <p>아래 버튼을 클릭하여 이메일 인증을 완료해주세요:</p>
+
+    <!-- 인증 버튼 -->
+    <div class="button-container">
+      <a href="{{ .ConfirmationURL }}" class="confirm-button">
+        ✅ 이메일 인증하기
+      </a>
+    </div>
+
+    <div class="expiry-info">
+      <p>⏰ <strong>인증 링크는 24시간 동안 유효합니다</strong></p>
+    </div>
+
+    <!-- 커뮤니티 정보 -->
+    <div class="community-info">
+      <h4>🏢 KEPCO AI 학습동아리 소개</h4>
+      <p style="margin: 0 0 15px 0; color: #6b46c1; font-size: 14px;">
+        한국전력공사 임직원들을 위한 AI 기술 학습 및 경험 공유 플랫폼입니다.
+      </p>
+      
+      <div class="stats">
+        <div class="stat-item">
+          <div class="stat-number">500+</div>
+          <div class="stat-label">활성 회원</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">50+</div>
+          <div class="stat-label">AI 프로젝트</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-number">100+</div>
+          <div class="stat-label">학습 자료</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 혜택 안내 -->
+    <div class="benefits-box">
+      <h4>🎯 회원 혜택</h4>
+      <ul class="benefits-list">
+        <li>AI 전문가들과의 실시간 소통 및 멘토링</li>
+        <li>최신 AI 기술 트렌드 및 업계 동향 공유</li>
+        <li>다양한 AI 프로젝트 참여 기회 제공</li>
+        <li>오프라인 워크샵 및 세미나 참석 우선권</li>
+        <li>AI 관련 자료 및 도구 무료 제공</li>
+        <li>동료들과의 네트워킹 및 협업 기회</li>
+      </ul>
+    </div>
+
+    <!-- 다음 단계 안내 -->
+    <div style="background-color: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px; padding: 20px; margin: 20px 0;">
+      <h4 style="color: #047857; margin: 0 0 15px 0;">🚀 인증 완료 후 다음 단계</h4>
+      <ol style="color: #065f46; font-size: 14px; margin: 0; padding-left: 20px;">
+        <li>프로필 정보 완성하기</li>
+        <li>관심 있는 AI 분야 선택하기</li>
+        <li>커뮤니티 게시글 둘러보기</li>
+        <li>첫 번째 프로젝트 참여하기</li>
+      </ol>
+    </div>
+
+    <!-- 경고 박스 -->
+    <div class="warning-box">
+      <p class="warning-text">
+        <strong>⚠️ 주의사항:</strong><br>
+        • 회원가입을 신청하지 않으셨다면 이 메일을 무시해주세요<br>
+        • 의심스러운 활동이 발견되면 즉시 관리자에게 연락해주세요<br>
+        • 이 링크를 다른 사람과 공유하지 마세요
+      </p>
+    </div>
+
+    <!-- 링크가 작동하지 않는 경우 -->
+    <p style="color: #666; font-size: 14px; border-top: 1px solid #eee; padding-top: 20px;">
+      <strong>버튼이 작동하지 않는 경우:</strong><br>
+      아래 링크를 복사하여 브라우저 주소창에 붙여넣기 하세요:<br>
+      <span style="word-break: break-all; background-color: #f1f5f9; padding: 5px; border-radius: 3px; font-family: monospace; font-size: 12px;">{{ .ConfirmationURL }}</span>
+    </p>
+
+    <!-- 푸터 -->
+    <div class="footer">
+      <p>본 메일은 KEPCO AI 학습동아리 회원가입을 위한 인증 메일입니다.</p>
+      <p>만약 가입 신청을 하지 않으셨다면 이 메일을 무시해주세요.</p>
+      <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+      <p style="margin: 0;">
+        © 2024 KEPCO AI 학습동아리 | 한국전력공사<br>
+        <a href="mailto:support@kepco-ai-community.com" style="color: #0066cc;">지원팀 문의</a> |
+        <a href="https://your-domain.com/privacy" style="color: #0066cc;">개인정보처리방침</a> |
+        <a href="https://your-domain.com/terms" style="color: #0066cc;">이용약관</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
