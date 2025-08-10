@@ -12,7 +12,7 @@ import { toast } from 'sonner'
 /**
  * 사용자 완전 삭제 Hook (Admin 전용)
  * 
- * Edge Function을 통해 Auth와 Database에서 사용자를 완전히 삭제
+ * RPC 함수를 통해 Database에서 사용자를 완전히 삭제
  */
 export function useDeleteUserCompletely() {
   const queryClient = useQueryClient()
@@ -29,35 +29,45 @@ export function useDeleteUserCompletely() {
         throw new Error('관리자만 사용자를 완전히 삭제할 수 있습니다.')
       }
       
-      // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
-      if (!session) {
-        throw new Error('인증 세션이 없습니다.')
+      // RPC 함수 호출 (Database 삭제)
+      const { data, error } = await supabaseClient
+        .rpc('admin_delete_user', { 
+          target_user_id: userId 
+        })
+      
+      if (error) {
+        throw new Error(`Database 삭제 실패: ${error.message}`)
       }
       
-      // API Route 호출 (Service Role을 사용하여 Auth와 DB 모두 삭제)
-      const response = await fetch(
-        '/api/admin/delete-user',
-        {
+      const result = data as any
+      if (!result?.success) {
+        throw new Error(result?.error || '사용자 삭제에 실패했습니다.')
+      }
+      
+      // Service Role을 사용해 Auth에서도 삭제 (별도 처리 필요)
+      try {
+        const authResponse = await fetch('/api/auth/admin-delete-user', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ userId })
+        })
+        
+        if (!authResponse.ok) {
+          console.warn('Auth 삭제 실패했지만 DB는 삭제됨:', userId)
         }
-      )
-      
-      const result = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(result.error || '사용자 삭제에 실패했습니다.')
+      } catch (authError) {
+        console.warn('Auth 삭제 중 오류 (DB는 삭제됨):', authError)
       }
       
-      return result
+      return {
+        success: true,
+        message: result?.message || '사용자가 성공적으로 삭제되었습니다.'
+      }
     },
     onSuccess: (data, variables) => {
-      // 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: ['members'] })
+      // 캐시 무효화 - V2 스키마 키 사용
+      queryClient.invalidateQueries({ queryKey: ['members-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['members-v2-stats'] })
       queryClient.invalidateQueries({ queryKey: ['users'] })
       
       toast.success(

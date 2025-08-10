@@ -276,23 +276,22 @@ export default function MembershipApplicationManager() {
           </div>
           
           {/* Table */}
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>신청자</TableHead>
-                  <TableHead>부서</TableHead>
-                  <TableHead>가입 동기</TableHead>
-                  <TableHead>경험</TableHead>
-                  <TableHead>신청일</TableHead>
-                  <TableHead>상태</TableHead>
-                  <TableHead className="text-right">작업</TableHead>
-                </TableRow>
-              </TableHeader>
+          <div className="rounded-md border overflow-hidden">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="min-w-[160px]">신청자</TableHead>
+                    <TableHead className="min-w-[60px] w-[80px]">부서</TableHead>
+                    <TableHead className="min-w-[70px] w-[80px]">신청일</TableHead>
+                    <TableHead className="min-w-[70px] w-[80px]">상태</TableHead>
+                    <TableHead className="text-right min-w-[80px] w-[100px]">작업</TableHead>
+                  </TableRow>
+                </TableHeader>
               <TableBody>
                 {filteredApplications.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       {searchQuery || statusFilter !== 'all' 
                         ? '검색 결과가 없습니다.' 
                         : '가입 신청이 없습니다.'}
@@ -303,42 +302,43 @@ export default function MembershipApplicationManager() {
                     <TableRow key={application.id}>
                       <TableCell>
                         <div className="flex items-center space-x-3">
-                          <Avatar className="h-8 w-8">
+                          <Avatar className="h-8 w-8 shrink-0">
                             <AvatarImage src={application.user.avatar_url || undefined} />
                             <AvatarFallback>
                               {application.user.name.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
-                          <div>
-                            <div className="font-medium">{application.user.name}</div>
-                            <div className="text-sm text-muted-foreground">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium truncate">{application.user.name}</div>
+                            <div className="text-sm text-muted-foreground truncate">
                               {application.user.email}
                             </div>
                           </div>
                         </div>
                       </TableCell>
-                      <TableCell>{application.user.department || '-'}</TableCell>
-                      <TableCell>
-                        <div className="text-sm text-muted-foreground">
-                          {application.motivation?.slice(0, 50) || '-'}
-                          {(application.motivation?.length || 0) > 50 ? '...' : ''}
+                      <TableCell className="max-w-[80px]">
+                        <div className="text-xs leading-tight break-words">
+                          {application.user.department ? 
+                            application.user.department.length > 8 ? 
+                              application.user.department.substring(0, 6) + '...' 
+                              : application.user.department
+                            : '-'
+                          }
                         </div>
                       </TableCell>
                       <TableCell>
-                        {application.experience 
-                          ? application.experience.slice(0, 30) + ((application.experience.length > 30) ? '...' : '')
-                          : '-'}
-                      </TableCell>
-                      <TableCell>
-                        {application.created_at ? format(new Date(application.created_at), 'yyyy.MM.dd', { locale: ko }) : '-'}
+                        <div className="text-sm">
+                          {application.created_at ? format(new Date(application.created_at), 'yy.MM.dd', { locale: ko }) : '-'}
+                        </div>
                       </TableCell>
                       <TableCell>{getStatusBadge(application.status)}</TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setSelectedApplication(application)}
+                            className="h-8 w-8 p-0"
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -347,7 +347,7 @@ export default function MembershipApplicationManager() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-green-600 hover:text-green-700"
+                                className="text-green-600 hover:text-green-700 h-8 w-8 p-0"
                                 onClick={() => openReviewDialog(application, 'approved')}
                               >
                                 <Check className="h-4 w-4" />
@@ -355,7 +355,7 @@ export default function MembershipApplicationManager() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-red-600 hover:text-red-700"
+                                className="text-red-600 hover:text-red-700 h-8 w-8 p-0"
                                 onClick={() => openReviewDialog(application, 'rejected')}
                               >
                                 <X className="h-4 w-4" />
@@ -368,7 +368,8 @@ export default function MembershipApplicationManager() {
                   ))
                 )}
               </TableBody>
-            </Table>
+              </Table>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -376,136 +377,146 @@ export default function MembershipApplicationManager() {
       {/* Application Detail Dialog */}
       {selectedApplication && !reviewDialogOpen && (
         <Dialog open={!!selectedApplication} onOpenChange={() => setSelectedApplication(null)}>
-          <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
+          <DialogContent className="max-w-4xl w-[95vw] h-[90vh] flex flex-col p-0">
+            <DialogHeader className="px-6 py-4 border-b shrink-0">
               <DialogTitle className="text-xl">가입 신청서</DialogTitle>
               <DialogDescription>
                 {format(new Date(selectedApplication.created_at || Date.now()), 'yyyy년 MM월 dd일 HH:mm', { locale: ko })}에 제출됨
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6">
-              {/* Applicant Info Card */}
-              <Card>
-                <CardHeader className="pb-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <Avatar className="h-16 w-16">
-                        <AvatarImage src={selectedApplication.user.avatar_url || undefined} />
-                        <AvatarFallback className="text-lg">
-                          {selectedApplication.user.name.charAt(0)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <h3 className="text-lg font-semibold">{selectedApplication.user.name}</h3>
-                        <p className="text-sm text-muted-foreground">{selectedApplication.user.email}</p>
-                        <p className="text-sm text-muted-foreground">
-                          {selectedApplication.user.department || '부서 미지정'}
-                        </p>
-                      </div>
-                    </div>
-                    <div>
-                      {getStatusBadge(selectedApplication.status)}
-                    </div>
-                  </div>
-                </CardHeader>
-              </Card>
-              
-              {/* Application Content */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">신청 내용</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {/* 가입 동기 */}
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      <Label className="text-sm font-medium">가입 동기</Label>
-                    </div>
-                    <Card className="bg-muted/50">
-                      <CardContent className="pt-4">
-                        <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                          {selectedApplication.motivation}
-                        </p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  
-                  {/* 경험 */}
-                  {selectedApplication.experience && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <Label className="text-sm font-medium">경험</Label>
-                      </div>
-                      <Card className="bg-muted/50">
-                        <CardContent className="pt-4">
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {selectedApplication.experience}
+            <div className="flex-1 overflow-y-auto px-6">
+              <div className="space-y-6 py-6">
+                {/* Applicant Info Card */}
+                <Card>
+                  <CardHeader className="pb-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center space-x-4">
+                        <Avatar className="h-12 w-12 sm:h-16 sm:w-16 shrink-0">
+                          <AvatarImage src={selectedApplication.user.avatar_url || undefined} />
+                          <AvatarFallback className="text-sm sm:text-lg">
+                            {selectedApplication.user.name.charAt(0)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-base sm:text-lg font-semibold truncate">{selectedApplication.user.name}</h3>
+                          <p className="text-sm text-muted-foreground truncate">{selectedApplication.user.email}</p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {selectedApplication.user.department || '부서 미지정'}
                           </p>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  )}
-                  
-                  {/* 목표 */}
-                  {selectedApplication.goals && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <Label className="text-sm font-medium">목표</Label>
+                        </div>
                       </div>
-                      <Card className="bg-muted/50">
-                        <CardContent className="pt-4">
-                          <p className="text-sm whitespace-pre-wrap leading-relaxed">
-                            {selectedApplication.goals}
-                          </p>
-                        </CardContent>
-                      </Card>
+                      <div className="shrink-0">
+                        {getStatusBadge(selectedApplication.status)}
+                      </div>
                     </div>
-                  )}
-                </CardContent>
-              </Card>
-              {/* 검토 정보 */}
-              {selectedApplication.reviewed_at && (
-                <Card className="border-blue-200 dark:border-blue-900">
-                  <CardHeader>
-                    <CardTitle className="text-base">검토 정보</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">검토자</span>
-                      <span className="font-medium">{selectedApplication.reviewer?.name || '알 수 없음'}</span>
+                </Card>
+              
+                {/* Application Content */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">신청 내용</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* 가입 동기 */}
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <Label className="text-sm font-medium">가입 동기</Label>
+                      </div>
+                      <Card className="bg-muted/50">
+                        <CardContent className="pt-4">
+                          <div className="max-h-32 overflow-y-auto">
+                            <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">
+                              {selectedApplication.motivation}
+                            </p>
+                          </div>
+                        </CardContent>
+                      </Card>
                     </div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-muted-foreground">검토 일시</span>
-                      <span>{format(new Date(selectedApplication.reviewed_at), 'yyyy년 MM월 dd일 HH:mm', { locale: ko })}</span>
-                    </div>
-                    {selectedApplication.review_comment && (
-                      <div className="pt-2">
-                        <Label className="text-sm text-muted-foreground">검토 메모</Label>
-                        <Card className="mt-2 bg-muted/50">
-                          <CardContent className="pt-3">
-                            <p className="text-sm">{selectedApplication.review_comment}</p>
+                    
+                    {/* 경험 */}
+                    {selectedApplication.experience && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Label className="text-sm font-medium">경험</Label>
+                        </div>
+                        <Card className="bg-muted/50">
+                          <CardContent className="pt-4">
+                            <div className="max-h-32 overflow-y-auto">
+                              <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">
+                                {selectedApplication.experience}
+                              </p>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </div>
+                    )}
+                    
+                    {/* 목표 */}
+                    {selectedApplication.goals && (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <Label className="text-sm font-medium">목표</Label>
+                        </div>
+                        <Card className="bg-muted/50">
+                          <CardContent className="pt-4">
+                            <div className="max-h-32 overflow-y-auto">
+                              <p className="text-sm whitespace-pre-wrap leading-relaxed break-words">
+                                {selectedApplication.goals}
+                              </p>
+                            </div>
                           </CardContent>
                         </Card>
                       </div>
                     )}
                   </CardContent>
                 </Card>
-              )}
+                {/* 검토 정보 */}
+                {selectedApplication.reviewed_at && (
+                  <Card className="border-blue-200 dark:border-blue-900">
+                    <CardHeader>
+                      <CardTitle className="text-base">검토 정보</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
+                        <span className="text-muted-foreground">검토자</span>
+                        <span className="font-medium break-words">{selectedApplication.reviewer?.name || '알 수 없음'}</span>
+                      </div>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-sm">
+                        <span className="text-muted-foreground">검토 일시</span>
+                        <span className="text-xs sm:text-sm">{format(new Date(selectedApplication.reviewed_at), 'yyyy.MM.dd HH:mm', { locale: ko })}</span>
+                      </div>
+                      {selectedApplication.review_comment && (
+                        <div className="pt-2">
+                          <Label className="text-sm text-muted-foreground">검토 메모</Label>
+                          <Card className="mt-2 bg-muted/50">
+                            <CardContent className="pt-3">
+                              <div className="max-h-24 overflow-y-auto">
+                                <p className="text-sm break-words whitespace-pre-wrap">{selectedApplication.review_comment}</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
             </div>
-            <DialogFooter className="flex-col sm:flex-row gap-2">
+            <DialogFooter className="px-6 py-4 border-t shrink-0 flex-col sm:flex-row gap-2">
               {selectedApplication.status === 'pending' ? (
                 <>
                   <Button
                     variant="ghost"
                     onClick={() => setSelectedApplication(null)}
-                    className="sm:mr-auto"
+                    className="sm:mr-auto order-2 sm:order-1"
                   >
                     닫기
                   </Button>
-                  <div className="flex gap-2 w-full sm:w-auto">
+                  <div className="flex gap-2 w-full sm:w-auto order-1 sm:order-2">
                     <Button
                       variant="outline"
                       onClick={() => openReviewDialog(selectedApplication, 'rejected')}
@@ -524,7 +535,7 @@ export default function MembershipApplicationManager() {
                   </div>
                 </>
               ) : (
-                <Button variant="outline" onClick={() => setSelectedApplication(null)}>
+                <Button variant="outline" onClick={() => setSelectedApplication(null)} className="w-full sm:w-auto">
                   닫기
                 </Button>
               )}
@@ -535,19 +546,19 @@ export default function MembershipApplicationManager() {
       
       {/* Review Confirmation Dialog */}
       <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
-        <DialogContent>
+        <DialogContent className="w-[95vw] max-w-md">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-lg">
               {reviewDecision === 'approved' ? '가입 승인' : '가입 거절'}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               {selectedApplication?.user.name}님의 가입 신청을{' '}
               {reviewDecision === 'approved' ? '승인' : '거절'}하시겠습니까?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="review-notes">
+              <Label htmlFor="review-notes" className="text-sm">
                 {reviewDecision === 'approved' ? '승인 메모 (선택)' : '거절 사유'}
               </Label>
               <Textarea
@@ -560,18 +571,18 @@ export default function MembershipApplicationManager() {
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
                 rows={4}
-                className="mt-1"
+                className="mt-1 text-sm resize-none"
               />
             </div>
             {reviewDecision === 'rejected' && !reviewNotes && (
               <Alert>
-                <AlertDescription>
+                <AlertDescription className="text-sm">
                   거절 시에는 사유를 반드시 입력해주세요.
                 </AlertDescription>
               </Alert>
             )}
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-col sm:flex-row gap-2">
             <Button
               variant="outline"
               onClick={() => {
@@ -580,11 +591,12 @@ export default function MembershipApplicationManager() {
                 setReviewNotes('')
               }}
               disabled={processing}
+              className="w-full sm:w-auto order-2 sm:order-1"
             >
               취소
             </Button>
             <Button
-              className={reviewDecision === 'approved' ? 'kepco-gradient' : ''}
+              className={`w-full sm:w-auto order-1 sm:order-2 ${reviewDecision === 'approved' ? 'kepco-gradient' : ''}`}
               variant={reviewDecision === 'rejected' ? 'destructive' : 'default'}
               onClick={handleReview}
               disabled={processing || (reviewDecision === 'rejected' && !reviewNotes)}

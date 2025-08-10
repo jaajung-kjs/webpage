@@ -48,9 +48,7 @@ interface MemberData {
   role: string
   department: string | null
   created_at: string
-  activity_score: number
-  post_count: number
-  comment_count: number
+  avatar_url: string | null
   metadata?: UserMetadata
 }
 
@@ -95,9 +93,7 @@ export default function MemberManagement() {
           role: userData.role || 'guest',
           department: userData.department === '미지정' ? null : userData.department,
           created_at: userData.created_at || '',
-          activity_score: userData.stats?.activity_score || 0,
-          post_count: userData.stats?.content_count || 0,
-          comment_count: userData.stats?.comment_count || 0
+          avatar_url: userData.avatar_url || null
         }))
       : []
   }, [membersData])
@@ -115,7 +111,7 @@ export default function MemberManagement() {
       )
     }
 
-    // Sort by role hierarchy then by activity score
+    // Sort by role hierarchy then by created date
     const roleOrder = ['leader', 'vice-leader', 'admin', 'member', 'pending', 'guest']
     const sorted = [...filtered].sort((a, b) => {
       const roleIndexA = roleOrder.indexOf(a.role)
@@ -123,7 +119,7 @@ export default function MemberManagement() {
       if (roleIndexA !== roleIndexB) {
         return roleIndexA - roleIndexB
       }
-      return b.activity_score - a.activity_score
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     })
 
     return sorted
@@ -270,7 +266,6 @@ export default function MemberManagement() {
                   <TableHead>회원</TableHead>
                   <TableHead>역할</TableHead>
                   <TableHead>부서</TableHead>
-                  <TableHead>활동</TableHead>
                   <TableHead>가입일</TableHead>
                   <TableHead className="text-right">작업</TableHead>
                 </TableRow>
@@ -278,13 +273,13 @@ export default function MemberManagement() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={5} className="text-center">
                       로딩 중...
                     </TableCell>
                   </TableRow>
                 ) : filteredMembers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={5} className="text-center">
                       검색 결과가 없습니다.
                     </TableCell>
                   </TableRow>
@@ -294,6 +289,7 @@ export default function MemberManagement() {
                       <TableCell>
                         <div className="flex items-center gap-3">
                           <Avatar className="h-8 w-8">
+                            <AvatarImage src={member.avatar_url || undefined} />
                             <AvatarFallback>
                               {member.name.charAt(0)}
                             </AvatarFallback>
@@ -315,12 +311,6 @@ export default function MemberManagement() {
                         </Badge>
                       </TableCell>
                       <TableCell>{member.department || '-'}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          <div>게시글: {member.post_count}</div>
-                          <div>댓글: {member.comment_count}</div>
-                        </div>
-                      </TableCell>
                       <TableCell>{formatDate(member.created_at)}</TableCell>
                       <TableCell className="text-right">
                         {user && member.id !== user.id && (

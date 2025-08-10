@@ -2625,6 +2625,10 @@ export type Database = {
       }
     }
     Functions: {
+      admin_delete_user: {
+        Args: { target_user_id: string }
+        Returns: Json
+      }
       auth_security_configuration_reminder: {
         Args: Record<PropertyKey, never>
         Returns: string

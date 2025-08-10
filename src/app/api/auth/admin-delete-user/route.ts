@@ -15,34 +15,16 @@ const supabaseAdmin = createClient(
 
 export async function POST(request: NextRequest) {
   try {
-
-    // 요청 본문에서 userId 가져오기
     const { userId } = await request.json()
     
     if (!userId) {
       return NextResponse.json({ error: 'userId가 필요합니다.' }, { status: 400 })
     }
 
-    console.log('Deleting user:', userId)
-
-    // 1. Public 테이블에서 사용자 관련 데이터 삭제 (CASCADE로 자동 삭제되지 않는 것들)
-    // Note: Foreign Key가 ON DELETE CASCADE로 설정되어 있으면 자동 삭제됨
-    
-    // 2. users 테이블에서 사용자 삭제
-    const { error: dbError } = await supabaseAdmin
-      .from('users')
-      .delete()
-      .eq('id', userId)
-    
-    if (dbError) {
-      console.error('Database deletion error:', dbError)
-      // users 테이블 삭제 실패해도 Auth는 시도
-    }
-
-    // 3. Auth에서 사용자 삭제
+    // Auth에서 사용자 삭제 (Service Role 권한으로)
     const { error: authError } = await supabaseAdmin.auth.admin.deleteUser(userId)
     
-    if (authError) {
+    if (authError && !authError.message?.includes('User not found')) {
       console.error('Auth deletion error:', authError)
       return NextResponse.json({ 
         error: `Auth 사용자 삭제 실패: ${authError.message}`,
@@ -50,16 +32,14 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    console.log('User deleted successfully:', userId)
-    
     return NextResponse.json({ 
       success: true,
-      message: '사용자가 완전히 삭제되었습니다.'
+      message: 'Auth 사용자 삭제 완료'
     })
   } catch (error) {
-    console.error('Delete user error:', error)
+    console.error('Delete auth user error:', error)
     return NextResponse.json({ 
-      error: error instanceof Error ? error.message : '사용자 삭제 중 오류가 발생했습니다.'
+      error: error instanceof Error ? error.message : 'Auth 사용자 삭제 중 오류가 발생했습니다.'
     }, { status: 500 })
   }
 }

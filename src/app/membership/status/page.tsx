@@ -131,18 +131,27 @@ export default function MembershipStatusPage() {
           <CardContent className="space-y-4">
             <div>
               <h3 className="font-semibold mb-2">신청 내용</h3>
-              <div className="space-y-2 text-sm">
-                <div>
-                  <span className="text-muted-foreground">지원 동기:</span> {application.motivation}
+              <div className="space-y-3 text-sm">
+                <div className="space-y-1">
+                  <div className="text-muted-foreground font-medium">지원 동기:</div>
+                  <div className="bg-muted/50 p-3 rounded-lg break-words whitespace-pre-wrap">
+                    {application.motivation}
+                  </div>
                 </div>
                 {application.experience && (
-                  <div>
-                    <span className="text-muted-foreground">경험:</span> {application.experience}
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground font-medium">경험:</div>
+                    <div className="bg-muted/50 p-3 rounded-lg break-words whitespace-pre-wrap">
+                      {application.experience}
+                    </div>
                   </div>
                 )}
                 {application.goals && (
-                  <div>
-                    <span className="text-muted-foreground">목표:</span> {application.goals}
+                  <div className="space-y-1">
+                    <div className="text-muted-foreground font-medium">목표:</div>
+                    <div className="bg-muted/50 p-3 rounded-lg break-words whitespace-pre-wrap">
+                      {application.goals}
+                    </div>
                   </div>
                 )}
               </div>
@@ -151,7 +160,12 @@ export default function MembershipStatusPage() {
             {application.status === 'rejected' && application.review_comment && (
               <Alert variant="destructive">
                 <AlertDescription>
-                  <strong>거절 사유:</strong> {application.review_comment}
+                  <div className="space-y-1">
+                    <div className="font-semibold">거절 사유:</div>
+                    <div className="break-words whitespace-pre-wrap">
+                      {application.review_comment}
+                    </div>
+                  </div>
                 </AlertDescription>
               </Alert>
             )}

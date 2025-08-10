@@ -90,8 +90,8 @@ export default function MembershipApplicationPage() {
     if (!user) return
     
     // Validation
-    if (applicationReason.length < 100) {
-      toast.error('가입 동기를 최소 100자 이상 작성해주세요.')
+    if (applicationReason.length < 10) {
+      toast.error('가입 동기를 최소 10자 이상 작성해주세요.')
       return
     }
     
@@ -273,7 +273,7 @@ export default function MembershipApplicationPage() {
             <div className="space-y-2">
               <Label htmlFor="reason" className="flex items-center gap-2">
                 <FileText className="h-4 w-4" />
-                가입 동기 (필수, 최소 100자)
+                가입 동기 (필수, 최소 10자)
               </Label>
               <Textarea
                 id="reason"
@@ -284,7 +284,7 @@ export default function MembershipApplicationPage() {
                 className="resize-none"
               />
               <p className="text-xs text-muted-foreground text-right">
-                {applicationReason.length} / 100자 이상
+                {applicationReason.length} / 10자 이상
               </p>
             </div>
             
