@@ -32,19 +32,25 @@ function PasswordResetContent() {
         console.log('Hash:', window.location.hash)
         console.log('Search:', window.location.search)
         
-        // Supabase는 URL fragment(#) 형태로 토큰을 전달합니다
+        // URL 파라미터 확인 (query parameters와 hash fragments 모두 확인)
         const hashParams = new URLSearchParams(window.location.hash.substring(1))
         
-        // Query parameters도 확인 (fallback)
+        // 비밀번호 재설정의 두 가지 방식:
+        // 1. 기존 방식: access_token, refresh_token, type 사용
+        // 2. 새로운 방식: code 파라미터 사용
         const accessToken = hashParams.get('access_token') || searchParams.get('access_token')
         const refreshToken = hashParams.get('refresh_token') || searchParams.get('refresh_token')
         const type = hashParams.get('type') || searchParams.get('type')
         const error = hashParams.get('error') || searchParams.get('error')
         const errorDescription = hashParams.get('error_description') || searchParams.get('error_description')
+        
+        // Supabase 새로운 방식: code parameter 사용
+        const code = hashParams.get('code') || searchParams.get('code')
 
         console.log('Password reset parameters:', { 
           accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
           refreshToken: refreshToken ? `${refreshToken.substring(0, 10)}...` : null,
+          code: code ? `${code.substring(0, 10)}...` : null,
           type,
           error,
           errorDescription
@@ -61,46 +67,84 @@ function PasswordResetContent() {
           return
         }
 
+        // 새로운 방식: code 파라미터가 있는 경우 처리
+        if (code) {
+          console.log('Using new code-based password reset flow')
+          try {
+            // exchangeCodeForSession을 사용하여 code를 세션으로 교환
+            const { data, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(code)
+            
+            if (exchangeError) {
+              console.error('Code exchange error:', exchangeError)
+              if (exchangeError.message.includes('expired')) {
+                setResetState('expired')
+              } else {
+                setResetState('invalid')
+              }
+              return
+            }
+            
+            if (data.session && data.user) {
+              console.log('Code exchange successful, session established')
+              setResetState('valid')
+              setShowNewPasswordModal(true)
+              return
+            } else {
+              setResetState('invalid')
+              return
+            }
+          } catch (codeError) {
+            console.error('Code processing error:', codeError)
+            setResetState('invalid')
+            return
+          }
+        }
+
         // URL 파라미터가 전혀 없는 경우 - 직접 접근
-        if (!accessToken && !refreshToken && !type && !error) {
+        if (!accessToken && !refreshToken && !type && !error && !code) {
           console.log('No parameters found - direct access to reset page')
           setResetState('invalid')
           return
         }
 
-        if (type !== 'recovery') {
+        // 기존 방식: access_token과 refresh_token 사용
+        if (type !== 'recovery' && !code) {
           console.warn('Invalid type parameter:', type)
           setResetState('invalid')
           return
         }
 
         if (!accessToken || !refreshToken) {
-          console.warn('Missing tokens:', { accessToken: !!accessToken, refreshToken: !!refreshToken })
-          setResetState('invalid')
-          return
+          if (!code) {
+            console.warn('Missing tokens and no code:', { accessToken: !!accessToken, refreshToken: !!refreshToken, code: !!code })
+            setResetState('invalid')
+            return
+          }
         }
 
-        // Supabase 세션 설정
-        const { data, error: sessionError } = await supabaseClient.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken
-        })
+        // 기존 방식: Supabase 세션 설정 (code가 없을 때만 실행)
+        if (!code && accessToken && refreshToken) {
+          const { data, error: sessionError } = await supabaseClient.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          })
 
-        if (sessionError) {
-          console.error('Session error:', sessionError)
-          if (sessionError.message.includes('expired') || sessionError.message.includes('invalid')) {
-            setResetState('expired')
+          if (sessionError) {
+            console.error('Session error:', sessionError)
+            if (sessionError.message.includes('expired') || sessionError.message.includes('invalid')) {
+              setResetState('expired')
+            } else {
+              setResetState('invalid')
+            }
+            return
+          }
+
+          if (data.session && data.user) {
+            setResetState('valid')
+            setShowNewPasswordModal(true)
           } else {
             setResetState('invalid')
           }
-          return
-        }
-
-        if (data.session && data.user) {
-          setResetState('valid')
-          setShowNewPasswordModal(true)
-        } else {
-          setResetState('invalid')
         }
 
       } catch (error) {

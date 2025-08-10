@@ -63,11 +63,15 @@ export function PasswordResetModal({ open, onOpenChange }: PasswordResetModalPro
   const onSubmit = async (values: z.infer<typeof passwordResetSchema>) => {
     setLoading(true)
     try {
+      // 리다이렉트 URL 로깅
+      const redirectUrl = `${window.location.origin}/auth/reset-password`
+      console.log('Password reset redirect URL:', redirectUrl)
+      
       // Supabase에서 비밀번호 재설정 이메일 전송
       const { error } = await supabaseClient.auth.resetPasswordForEmail(
         values.email,
         {
-          redirectTo: `${window.location.origin}/auth/reset-password`
+          redirectTo: redirectUrl
         }
       )
 
