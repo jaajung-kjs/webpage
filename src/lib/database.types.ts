@@ -809,7 +809,7 @@ export type Database = {
       content_v2: {
         Row: {
           author_id: string
-          category: string
+          category: string | null
           comment_count: number
           content: string
           content_type: string
@@ -829,7 +829,7 @@ export type Database = {
         }
         Insert: {
           author_id: string
-          category?: string
+          category?: string | null
           comment_count?: number
           content: string
           content_type: string
@@ -849,7 +849,7 @@ export type Database = {
         }
         Update: {
           author_id?: string
-          category?: string
+          category?: string | null
           comment_count?: number
           content?: string
           content_type?: string

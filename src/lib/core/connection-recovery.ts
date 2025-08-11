@@ -52,9 +52,9 @@ export class ConnectionRecoveryManager {
   private readonly BACKGROUND_THRESHOLD = 300000 // 5분 이상 백그라운드에 있었으면 전체 갱신
   
   // 배치 처리 설정
-  private readonly BATCH_SIZE = 10 // 기본 배치 크기 - 증가
-  private readonly MAX_CONCURRENT_BATCHES = 5 // 최대 동시 실행 배치 수 - 증가
-  private readonly BATCH_DELAY = 20 // 배치 간 대기 시간 (ms) - 단축
+  private readonly BATCH_SIZE = 5 // 기본 배치 크기 - 감소하여 타임아웃 방지
+  private readonly MAX_CONCURRENT_BATCHES = 3 // 최대 동시 실행 배치 수 - 감소하여 서버 부하 완화
+  private readonly BATCH_DELAY = 50 // 배치 간 대기 시간 (ms) - 증가하여 안정성 향상
   private readonly MAX_RETRIES = 1 // 최대 재시도 횟수
   
   // 모니터링 데이터
