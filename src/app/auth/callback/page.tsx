@@ -41,12 +41,15 @@ export default function AuthCallbackPage() {
         
         // PKCE 토큰 처리 추가
         const token = urlParams.get('token') || hashParams.get('token')
+        // OAuth code 파라미터 추가
+        const code = urlParams.get('code') || hashParams.get('code')
         
         console.log('Auth callback parameters:', { 
           type,
           accessToken: accessToken ? `${accessToken.substring(0, 10)}...` : null,
           refreshToken: refreshToken ? `${refreshToken.substring(0, 10)}...` : null,
           token: token ? `${token.substring(0, 10)}...` : null,
+          code: code ? `${code.substring(0, 10)}...` : null,
           error,
           errorDescription
         })
@@ -63,6 +66,58 @@ export default function AuthCallbackPage() {
             setMessage(`인증 중 오류가 발생했습니다: ${errorDescription || error}`)
           }
           return
+        }
+        
+        // OAuth code 처리 (비밀번호 재설정 등)
+        if (code && !token) {
+          console.log('Using OAuth code-based authentication flow')
+          try {
+            // exchangeCodeForSession을 사용하여 code를 세션으로 교환
+            const { data, error: codeError } = await supabaseClient.auth.exchangeCodeForSession(code)
+            
+            if (codeError) {
+              console.error('Code exchange error:', codeError)
+              setStatus('error')
+              if (codeError.message.includes('expired')) {
+                setMessage('인증 링크가 만료되었습니다. 새로운 인증 이메일을 요청해주세요.')
+              } else {
+                setMessage(`인증 중 오류가 발생했습니다: ${codeError.message}`)
+              }
+              return
+            }
+            
+            // 비밀번호 재설정인지 확인 (세션의 사용자 메타데이터나 recovery_token 확인)
+            if (data.session && data.user) {
+              // 비밀번호 재설정 흐름인지 체크
+              const isPasswordReset = data.session.access_token && data.user.recovery_sent_at
+              
+              if (isPasswordReset) {
+                console.log('✅ Password reset code verified, redirecting to reset page')
+                // 비밀번호 재설정 페이지로 리다이렉트
+                router.push('/auth/reset-password')
+                return
+              } else {
+                // 일반 로그인 또는 회원가입 완료
+                setStatus('success')
+                setMessage('인증이 완료되었습니다!')
+                
+                toast.success('인증 성공!', {
+                  description: '성공적으로 인증되었습니다.',
+                  duration: 3000
+                })
+                
+                setTimeout(() => {
+                  router.push('/')
+                }, 3000)
+                return
+              }
+            }
+          } catch (error) {
+            console.error('Code processing error:', error)
+            setStatus('error')
+            setMessage('인증 코드 처리 중 오류가 발생했습니다.')
+            return
+          }
         }
         
         // PKCE 토큰 처리 (우선순위 높음)
