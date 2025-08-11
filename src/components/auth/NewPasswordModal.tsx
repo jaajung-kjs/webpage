@@ -128,21 +128,23 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
 
       // 성공 - 실제로 성공했으므로 success 화면 표시
       console.log('Password update successful!')
+      
+      // 먼저 로딩 상태 해제
+      setLoading(false)
+      
+      // 그 다음 success 화면으로 전환
       setCurrentStep('success')
       form.reset()
       
       toast.success('비밀번호 변경 완료', {
-        description: '새 비밀번호로 로그인할 수 있습니다.',
+        description: '비밀번호가 성공적으로 변경되었습니다.',
         duration: 5000
       })
       
-      // 성공 후 로딩 상태 해제
-      setLoading(false)
-      
-      // 2초 후 자동으로 완료 처리
+      // 3초 후 자동으로 완료 처리 (사용자가 성공 메시지를 볼 시간 제공)
       setTimeout(() => {
         handleComplete()
-      }, 2000)
+      }, 3000)
       
     } catch (error) {
       console.error('Password update exception:', error)
@@ -163,10 +165,15 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
   }
 
   const handleComplete = () => {
+    console.log('Password reset complete, closing modal and redirecting...')
     handleClose()
-    onComplete?.()
-    // 로그인 페이지로 리다이렉트하거나 홈페이지로 이동
-    router.push('/')
+    // onComplete는 parent component에서 처리하도록 함
+    if (onComplete) {
+      onComplete()
+    } else {
+      // onComplete가 없으면 직접 홈으로 이동
+      router.push('/')
+    }
   }
 
   return (

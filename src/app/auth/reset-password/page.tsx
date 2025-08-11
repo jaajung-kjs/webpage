@@ -271,20 +271,20 @@ function PasswordResetContent() {
   }, [searchParams])
 
   const handleComplete = async () => {
+    console.log('Password reset complete callback triggered')
     setResetState('completed')
     setShowNewPasswordModal(false)
     
-    // 🔒 보안: 비밀번호 변경 완료 후 세션 제거
-    // 사용자가 새 비밀번호로 다시 로그인하도록 강제
-    console.log('Password changed successfully, clearing session for security')
-    await supabaseClient.auth.signOut()
+    // 비밀번호 변경 후 Supabase가 자동으로 로그인시킴
+    // 세션을 유지하고 바로 홈으로 이동
+    console.log('Password changed successfully, user is already logged in with new password')
     
-    // 로그인 페이지로 리다이렉트
-    toast.success('비밀번호가 성공적으로 변경되었습니다. 새 비밀번호로 로그인해주세요.')
+    toast.success('비밀번호가 성공적으로 변경되었습니다!')
     
+    // 바로 홈으로 이동 (이미 로그인되어 있으므로)
     setTimeout(() => {
       router.push('/')
-    }, 2000)
+    }, 1000)
   }
 
   const handleRetryReset = async () => {
