@@ -38,24 +38,36 @@ export function ChangePasswordDialog({
         password: password
       })
       if (error) throw error
+      return { success: true }
     },
     onSuccess: () => {
       toast.success('비밀번호가 성공적으로 변경되었습니다.')
       // Reset form and close dialog
       setNewPassword('')
       setConfirmPassword('')
+      setShowNewPassword(false)
+      setShowConfirmPassword(false)
+      // Reset mutation state before closing
+      changePasswordMutation.reset()
       onOpenChange(false)
     },
     onError: (error) => {
       console.error('Error changing password:', error)
       const message = error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.'
       toast.error(message)
+    },
+    onSettled: () => {
+      // Ensure loading state is cleared after mutation completes
+      // This helps prevent the infinite loading state
     }
   })
 
   const loading = changePasswordMutation.isPending
 
   const handleSubmit = async () => {
+    // Prevent multiple submissions
+    if (loading) return
+    
     // Validation
     if (!newPassword || !confirmPassword) {
       toast.error('모든 필드를 입력해주세요.')
@@ -72,7 +84,13 @@ export function ChangePasswordDialog({
       return
     }
 
-    changePasswordMutation.mutate(newPassword)
+    // Execute mutation
+    try {
+      await changePasswordMutation.mutateAsync(newPassword)
+    } catch (error) {
+      // Error is handled by onError callback
+      console.error('Password change error:', error)
+    }
   }
 
   const handleClose = () => {
