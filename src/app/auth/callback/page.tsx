@@ -93,8 +93,8 @@ export default function AuthCallbackPage() {
               return
             }
             
-            // 회원가입의 경우
-            if (data.user && data.user.email_confirmed_at) {
+            // 회원가입의 경우 (recovery가 아닐 때만)
+            if (type !== 'recovery' && data.user && data.user.email_confirmed_at) {
               // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
               const { error: profileError } = await supabaseClient
                 .from('users_v2')
