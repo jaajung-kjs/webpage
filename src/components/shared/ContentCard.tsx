@@ -251,7 +251,11 @@ export default function ContentCard({
 
           {/* Stats */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
+            {/* Hide views on mobile grid view */}
+            <div className={cn(
+              "flex items-center gap-1",
+              viewMode === 'grid' && "hidden sm:flex"
+            )}>
               <Eye className="h-3.5 w-3.5" />
               <span>{content.interaction_counts?.views || 0}</span>
             </div>
