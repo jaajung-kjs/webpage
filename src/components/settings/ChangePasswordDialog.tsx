@@ -93,12 +93,6 @@ export function ChangePasswordDialog({
     // Prevent multiple submissions
     if (loading) return
     
-    // 다중 탭 환경에서 백그라운드 탭에서는 비밀번호 변경 방지
-    if (document.hidden) {
-      toast.error('현재 탭이 활성화되어 있지 않습니다. 활성 탭에서 다시 시도해주세요.')
-      return
-    }
-    
     // Validation
     if (!newPassword || !confirmPassword) {
       toast.error('모든 필드를 입력해주세요.')
