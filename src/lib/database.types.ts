@@ -3056,10 +3056,22 @@ export type Database = {
           id: string
           content_type: string
           title: string
+          content: string
           summary: string
+          category: string
+          tags: string[]
+          author_id: string
           author_name: string
+          author_avatar: string
+          author_department: string
+          view_count: number
+          like_count: number
+          comment_count: number
+          has_image: boolean
+          attachments: Json
           relevance: number
           created_at: string
+          updated_at: string
         }[]
       }
       search_messages_v2: {

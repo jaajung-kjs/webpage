@@ -10,6 +10,7 @@
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { QueryClient } from '@tanstack/react-query'
 import { connectionCore } from '@/lib/core/connection-core'
+import { realtimeCore } from '@/lib/core/realtime-core'
 import { PromiseManager } from '@/lib/utils/promise-manager'
 
 // Realtime 이벤트 페이로드 타입
@@ -53,6 +54,7 @@ export class GlobalRealtimeManager {
   private queryClient: QueryClient | null = null
   private channels: Map<string, RealtimeChannel> = new Map() // 메모리 추적용
   private channelRefs: Map<string, RealtimeChannel> = new Map()
+  private unsubscribers: Map<string, () => void> = new Map() // RealtimeCore unsubscribe functions
   private subscriptionStates: Map<string, SubscriptionState> = new Map()
   private performanceMetrics: Map<string, PerformanceMetrics> = new Map()
   private circuitBreaker: Map<string, CircuitBreakerState> = new Map()
@@ -246,118 +248,142 @@ export class GlobalRealtimeManager {
   }
   
   /**
-   * content_v2 테이블 구독 - 개선된 버전
+   * content_v2 테이블 구독 - RealtimeCore 사용
    */
   private async subscribeToContentTable(): Promise<void> {
-    const client = connectionCore.getClient()
     const channelName = 'content_v2'
     
-    const channel = client
-      .channel('content_v2_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'content_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, 'INSERT', () => {
-            this.handleContentInsert(payload)
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'content_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, 'UPDATE', () => {
-            this.handleContentUpdate(payload)
-          })
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'DELETE',
-          schema: 'public',
-          table: 'content_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, 'DELETE', () => {
-            this.handleContentDelete(payload)
-          })
-        }
-      )
-      .subscribe((status) => {
-        this.handleSubscriptionStatus(channelName, status)
-      })
+    // INSERT 이벤트 구독
+    const unsubscribeInsert = realtimeCore.subscribe({
+      id: 'global-content-v2-insert',
+      table: 'content_v2',
+      event: 'INSERT',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, 'INSERT', () => {
+          this.handleContentInsert(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Content INSERT subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
     
-    this.channelRefs.set(channelName, channel)
+    // UPDATE 이벤트 구독
+    const unsubscribeUpdate = realtimeCore.subscribe({
+      id: 'global-content-v2-update',
+      table: 'content_v2',
+      event: 'UPDATE',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, 'UPDATE', () => {
+          this.handleContentUpdate(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Content UPDATE subscription error:', error)
+      }
+    })
+    
+    // DELETE 이벤트 구독
+    const unsubscribeDelete = realtimeCore.subscribe({
+      id: 'global-content-v2-delete',
+      table: 'content_v2',
+      event: 'DELETE',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, 'DELETE', () => {
+          this.handleContentDelete(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Content DELETE subscription error:', error)
+      }
+    })
+    
+    // Unsubscribe 함수들 저장
+    this.unsubscribers.set('content-v2-insert', unsubscribeInsert)
+    this.unsubscribers.set('content-v2-update', unsubscribeUpdate)
+    this.unsubscribers.set('content-v2-delete', unsubscribeDelete)
+    
+    // 상태 업데이트
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
     this.initializeMetrics(channelName)
   }
   
   /**
-   * users_v2 테이블 구독 - 개선된 버전
+   * users_v2 테이블 구독 - RealtimeCore 사용
    */
   private async subscribeToUsersTable(): Promise<void> {
-    const client = connectionCore.getClient()
     const channelName = 'users_v2'
     
-    const channel = client
-      .channel('users_v2_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'users_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, payload.eventType, () => {
-            this.handleUsersChange(payload)
-          })
-        }
-      )
-      .subscribe((status) => {
-        this.handleSubscriptionStatus(channelName, status)
-      })
+    const unsubscribe = realtimeCore.subscribe({
+      id: 'global-users-v2',
+      table: 'users_v2',
+      event: '*',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, payload.eventType, () => {
+          this.handleUsersChange(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Users subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
     
-    this.channelRefs.set(channelName, channel)
+    this.unsubscribers.set('users-v2', unsubscribe)
+    
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
     this.initializeMetrics(channelName)
   }
   
   /**
-   * comments_v2 테이블 구독 - 개선된 버전
+   * comments_v2 테이블 구독 - RealtimeCore 사용
    */
   private async subscribeToCommentsTable(): Promise<void> {
-    const client = connectionCore.getClient()
     const channelName = 'comments_v2'
     
-    const channel = client
-      .channel('comments_v2_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'comments_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, payload.eventType, () => {
-            this.handleCommentsChange(payload)
-          })
-        }
-      )
-      .subscribe((status) => {
-        this.handleSubscriptionStatus(channelName, status)
-      })
+    const unsubscribe = realtimeCore.subscribe({
+      id: 'global-comments-v2',
+      table: 'comments_v2',
+      event: '*',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, payload.eventType, () => {
+          this.handleCommentsChange(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Comments subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
     
-    this.channelRefs.set(channelName, channel)
+    this.unsubscribers.set('comments-v2', unsubscribe)
+    
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
     this.initializeMetrics(channelName)
   }
   
@@ -746,32 +772,37 @@ export class GlobalRealtimeManager {
   }
   
   /**
-   * activity_participants_v2 테이블 구독 - 개선된 버전
+   * activity_participants_v2 테이블 구독 - RealtimeCore 사용
    */
   private async subscribeToActivityParticipantsTable(): Promise<void> {
-    const client = connectionCore.getClient()
     const channelName = 'activity_participants_v2'
     
-    const channel = client
-      .channel('activity_participants_v2_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'activity_participants_v2'
-        },
-        (payload) => {
-          this.processEventWithMetrics(channelName, payload.eventType, () => {
-            this.handleActivityParticipantsChange(payload)
-          })
-        }
-      )
-      .subscribe((status) => {
-        this.handleSubscriptionStatus(channelName, status)
-      })
+    const unsubscribe = realtimeCore.subscribe({
+      id: 'global-activity-participants-v2',
+      table: 'activity_participants_v2',
+      event: '*',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, payload.eventType, () => {
+          this.handleActivityParticipantsChange(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Activity participants subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
     
-    this.channelRefs.set(channelName, channel)
+    this.unsubscribers.set('activity-participants-v2', unsubscribe)
+    
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
     this.initializeMetrics(channelName)
   }
   
@@ -913,17 +944,28 @@ export class GlobalRealtimeManager {
     // 배치 업데이트 정리
     this.batchUpdates.clear()
     
-    // 채널 구독 해제
-    this.channelRefs.forEach((channel, name) => {
+    // RealtimeCore 구독 해제
+    this.unsubscribers.forEach((unsubscribe, name) => {
       try {
         console.log(`[GlobalRealtime] Unsubscribing from ${name}`)
-        client.removeChannel(channel)
+        unsubscribe()
       } catch (error) {
         console.error(`[GlobalRealtime] Error unsubscribing from ${name}:`, error)
       }
     })
     
+    // 기존 채널 구독 해제 (남아있을 수 있는 경우를 위해)
+    this.channelRefs.forEach((channel, name) => {
+      try {
+        console.log(`[GlobalRealtime] Removing old channel ${name}`)
+        client.removeChannel(channel)
+      } catch (error) {
+        console.error(`[GlobalRealtime] Error removing channel ${name}:`, error)
+      }
+    })
+    
     // 모든 상태 초기화
+    this.unsubscribers.clear()
     this.channelRefs.clear()
     this.subscriptionStates.clear()
     this.performanceMetrics.clear()

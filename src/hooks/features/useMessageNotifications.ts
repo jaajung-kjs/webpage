@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthV2 } from './useAuthV2'
 import { supabaseClient } from '@/lib/core/connection-core'
+import { realtimeCore } from '@/lib/core/realtime-core'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -42,7 +43,6 @@ export function useMessageNotifications() {
   const router = useRouter()
   const [permission, setPermission] = useState<NotificationPermission>('default')
   const [settings, setSettings] = useState<NotificationSettings>(DEFAULT_SETTINGS)
-  const channelRef = useRef<any>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // 알림 권한 요청
@@ -142,14 +142,12 @@ export function useMessageNotifications() {
   useEffect(() => {
     if (!user) return
 
-    // 새 메시지 알림 구독
-    const channel = supabaseClient
-      .channel('message-notifications')
-      .on('postgres_changes' as any, {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'messages_v2'
-      }, async (payload: any) => {
+    // RealtimeCore를 사용한 메시지 알림 구독
+    const unsubscribe = realtimeCore.subscribe({
+      id: `message-notifications-${user.id}`,
+      table: 'messages_v2',
+      event: 'INSERT',
+      callback: async (payload: any) => {
         const newMessage = payload.new
 
         // 내가 보낸 메시지는 알림 표시 안함
@@ -193,16 +191,14 @@ export function useMessageNotifications() {
         
         // 사운드 재생
         playSound()
-      })
-      .subscribe()
-
-    channelRef.current = channel
+      },
+      onError: (error) => {
+        console.error('[useMessageNotifications] Subscription error:', error)
+      }
+    })
 
     return () => {
-      if (channelRef.current) {
-        supabaseClient.removeChannel(channelRef.current)
-        channelRef.current = null
-      }
+      unsubscribe()
     }
   }, [user?.id, settings, permission])
 

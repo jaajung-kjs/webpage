@@ -23,6 +23,11 @@ const navigation = [
   { name: '회원목록', href: '/members' },
 ]
 
+// RPA 메뉴는 별도로 관리 (member 이상만 표시)
+const memberOnlyNavigation = [
+  { name: 'RPA 도구', href: '/rpa' },
+]
+
 export default function Header() {
   const [loginDialogOpen, setLoginDialogOpen] = useState(false)
   const [loginDialogTab, setLoginDialogTab] = useState('login')
@@ -106,6 +111,16 @@ export default function Header() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex md:items-center md:space-x-6">
             {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="text-sm font-medium transition-colors hover:text-primary"
+              >
+                {item.name}
+              </Link>
+            ))}
+            {/* Member only navigation */}
+            {isMember && memberOnlyNavigation.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
@@ -309,6 +324,16 @@ function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMes
         {/* Navigation Links */}
         <nav className="space-y-1">
         {navigation.map((item) => (
+          <Link
+            key={item.name}
+            href={item.href}
+            className="block py-3 px-3 -mx-3 text-sm font-medium transition-colors hover:text-primary hover:bg-accent rounded-lg touch-manipulation sheet-nav-item"
+          >
+            {item.name}
+          </Link>
+        ))}
+        {/* Member only navigation */}
+        {isMember && memberOnlyNavigation.map((item) => (
           <Link
             key={item.name}
             href={item.href}

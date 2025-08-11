@@ -86,7 +86,7 @@ export type AuditLogV2Insert = TablesInsert<'audit_logs_v2'>
 // =============================================================================
 
 export type UserRole = 'guest' | 'pending' | 'member' | 'vice-leader' | 'leader' | 'admin'
-export type ContentType = 'community' | 'resource' | 'case' | 'notice' | 'news' | 'activity' | 'announcement'
+export type ContentType = 'community' | 'resource' | 'case' | 'notice' | 'news' | 'activity' | 'announcement' | 'rpa'
 export type InteractionType = 'like' | 'bookmark' | 'follow' | 'report' | 'view'
 export type NotificationType = 'comment' | 'like' | 'mention' | 'activity' | 'system'
 export type MembershipStatus = 'pending' | 'approved' | 'rejected'

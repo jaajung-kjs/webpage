@@ -26,6 +26,7 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
+import { realtimeCore } from '@/lib/core/realtime-core'
 import { useRealtimeQueryV2 } from '@/hooks/core/useRealtimeQueryV2'
 import { useAuth } from '@/providers'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
@@ -136,38 +137,37 @@ function useConversationsV2() {
   useEffect(() => {
     if (!user) return
 
-    // 고유한 채널 이름으로 충돌 방지
-    const uniqueId = Math.random().toString(36).substr(2, 9)
-    
-    // 메시지 변경사항 구독
-    const messagesChannel = supabaseClient
-      .channel(`messages-conversations-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public',
-        table: 'messages_v2'
-      }, () => {
+    // 메시지 변경사항 구독 (RealtimeCore 사용)
+    const unsubscribeMessages = realtimeCore.subscribe({
+      id: `messages-conversations-${user.id}`,
+      table: 'messages_v2',
+      event: '*',
+      callback: () => {
         queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
         queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      })
-      .subscribe()
+      },
+      onError: (error) => {
+        console.error('[useConversationsV2] Messages subscription error:', error)
+      }
+    })
 
-    // 읽음상태 변경사항 구독  
-    const readStatusChannel = supabaseClient
-      .channel(`read-status-conversations-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public', 
-        table: 'message_read_status_v2'
-      }, () => {
+    // 읽음상태 변경사항 구독 (RealtimeCore 사용)
+    const unsubscribeReadStatus = realtimeCore.subscribe({
+      id: `read-status-conversations-${user.id}`,
+      table: 'message_read_status_v2',
+      event: '*',
+      callback: () => {
         queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
         queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      })
-      .subscribe()
+      },
+      onError: (error) => {
+        console.error('[useConversationsV2] Read status subscription error:', error)
+      }
+    })
 
     return () => {
-      supabaseClient.removeChannel(messagesChannel)
-      supabaseClient.removeChannel(readStatusChannel)
+      unsubscribeMessages()
+      unsubscribeReadStatus()
     }
   }, [user?.id, queryClient])
   
@@ -293,32 +293,29 @@ function useConversationMessagesV2(conversationId: string, options?: {
   useEffect(() => {
     if (!user || !conversationId) return
 
-    const uniqueId = Math.random().toString(36).substr(2, 9)
-    
-    // 메시지 변경사항 직접 구독
-    const messagesChannel = supabaseClient
-      .channel(`messages-direct-${conversationId}-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public',
-        table: 'messages_v2',
-        filter: `conversation_id=eq.${conversationId}`
-      }, () => {
+    // 메시지 변경사항 구독 (RealtimeCore 사용)
+    const unsubscribeMessages = realtimeCore.subscribe({
+      id: `messages-direct-${conversationId}-${user.id}`,
+      table: 'messages_v2',
+      event: '*',
+      filter: `conversation_id=eq.${conversationId}`,
+      callback: () => {
         console.log('[ConversationMessages] 실시간 메시지 변경 감지, 무효화 실행')
         queryClient.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
         })
-      })
-      .subscribe()
+      },
+      onError: (error) => {
+        console.error('[ConversationMessages] Messages subscription error:', error)
+      }
+    })
 
-    // 읽음 상태 변경사항 구독
-    const readStatusChannel = supabaseClient
-      .channel(`read-status-messages-${conversationId}-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public',
-        table: 'message_read_status_v2'
-      }, (payload) => {
+    // 읽음 상태 변경사항 구독 (RealtimeCore 사용)
+    const unsubscribeReadStatus = realtimeCore.subscribe({
+      id: `read-status-messages-${conversationId}-${user.id}`,
+      table: 'message_read_status_v2',
+      event: '*',
+      callback: (payload) => {
         console.log('[ConversationMessages] 실시간 읽음상태 변경 감지:', payload)
         console.log('Payload event type:', payload.eventType)
         console.log('Payload new data:', payload.new)
@@ -326,14 +323,15 @@ function useConversationMessagesV2(conversationId: string, options?: {
         queryClient.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
         })
-      })
-      .subscribe((status) => {
-        console.log('[ReadStatus Channel] Subscription status:', status)
-      })
+      },
+      onError: (error) => {
+        console.error('[ConversationMessages] Read status subscription error:', error)
+      }
+    })
 
     return () => {
-      supabaseClient.removeChannel(messagesChannel)
-      supabaseClient.removeChannel(readStatusChannel)
+      unsubscribeMessages()
+      unsubscribeReadStatus()
     }
   }, [user?.id, conversationId, options, queryClient])
   
@@ -491,36 +489,35 @@ function useUnreadCountV2() {
   useEffect(() => {
     if (!user) return
 
-    // 고유한 채널 이름으로 충돌 방지
-    const uniqueId = Math.random().toString(36).substr(2, 9)
-
-    // 메시지 변경사항 구독 (새 메시지 등)
-    const messagesChannel = supabaseClient
-      .channel(`messages-unread-count-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public',
-        table: 'messages_v2'
-      }, () => {
+    // 메시지 변경사항 구독 (새 메시지 등) - RealtimeCore 사용
+    const unsubscribeMessages = realtimeCore.subscribe({
+      id: `messages-unread-count-${user.id}`,
+      table: 'messages_v2',
+      event: '*',
+      callback: () => {
         queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      })
-      .subscribe()
+      },
+      onError: (error) => {
+        console.error('[useUnreadMessageCount] Messages subscription error:', error)
+      }
+    })
 
-    // 읽음상태 변경사항 구독 (읽음 처리 등)
-    const readStatusChannel = supabaseClient
-      .channel(`read-status-unread-count-${user.id}-${uniqueId}`)
-      .on('postgres_changes' as any, {
-        event: '*',
-        schema: 'public', 
-        table: 'message_read_status_v2'
-      }, () => {
+    // 읽음상태 변경사항 구독 (읽음 처리 등) - RealtimeCore 사용
+    const unsubscribeReadStatus = realtimeCore.subscribe({
+      id: `read-status-unread-count-${user.id}`,
+      table: 'message_read_status_v2',
+      event: '*',
+      callback: () => {
         queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      })
-      .subscribe()
+      },
+      onError: (error) => {
+        console.error('[useUnreadMessageCount] Read status subscription error:', error)
+      }
+    })
 
     return () => {
-      supabaseClient.removeChannel(messagesChannel)
-      supabaseClient.removeChannel(readStatusChannel)
+      unsubscribeMessages()
+      unsubscribeReadStatus()
     }
   }, [user?.id, queryClient])
   
