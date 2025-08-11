@@ -63,8 +63,13 @@ export class PromiseManager {
     // Listen for visibility changes
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        console.log('[PromiseManager] Tab backgrounded - cancelling all pending promises');
-        this.cancelAll('background_transition');
+        console.log('[PromiseManager] Tab backgrounded - cancelling non-recovery promises');
+        // Connection Recovery 관련 Promise는 취소하지 않음
+        this.cancelAll('background_transition', [
+          'recovery-',           // Connection Recovery 관련
+          'batch-invalidation-', // Batch invalidation 관련
+          'recovery_'            // Recovery 관련 일반
+        ]);
       }
     });
     
@@ -189,23 +194,35 @@ export class PromiseManager {
    * Cancel all pending promises
    * 
    * @param reason - Reason for cancellation (for logging)
+   * @param excludePatterns - Array of key patterns to exclude from cancellation
    */
-  static cancelAll(reason = 'manual'): void {
+  static cancelAll(reason = 'manual', excludePatterns: string[] = []): void {
     const count = this.pendingPromises.size;
     
     if (count === 0) {
       return;
     }
     
+    let cancelledCount = 0;
+    const toDelete: string[] = [];
+    
     this.pendingPromises.forEach((managedPromise, key) => {
-      managedPromise.controller.abort();
-      clearTimeout(managedPromise.timeoutId);
+      // Check if this key should be excluded
+      const shouldExclude = excludePatterns.some(pattern => key.includes(pattern));
+      
+      if (!shouldExclude) {
+        managedPromise.controller.abort();
+        clearTimeout(managedPromise.timeoutId);
+        toDelete.push(key);
+        cancelledCount++;
+      }
     });
     
-    this.pendingPromises.clear();
+    // Remove cancelled promises
+    toDelete.forEach(key => this.pendingPromises.delete(key));
     
     if (process.env.NODE_ENV === 'development') {
-      console.log(`[PromiseManager] Cancelled ${count} promises (reason: ${reason})`);
+      console.log(`[PromiseManager] Cancelled ${cancelledCount}/${count} promises (reason: ${reason})`);
     }
   }
   

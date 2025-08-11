@@ -2637,10 +2637,6 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
-      calculate_user_level_v2: {
-        Args: { p_user_id: string }
-        Returns: number
-      }
       can_access_content: {
         Args: { user_id: string; content_id: string }
         Returns: boolean
@@ -2680,7 +2676,13 @@ export type Database = {
         Returns: undefined
       }
       confirm_activity_attendance_v2: {
-        Args: { p_activity_id: string; p_user_id: string; p_attended?: boolean }
+        Args:
+          | { p_activity_id: string; p_user_id: string; p_attended?: boolean }
+          | {
+              p_activity_id: string
+              p_user_id: string
+              p_confirmed_by?: string
+            }
         Returns: Json
       }
       create_achievement_definition: {

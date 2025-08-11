@@ -309,7 +309,7 @@ export class ConnectionRecoveryManager {
             refetchType
           }),
           {
-            timeout: priority === QueryPriority.CRITICAL ? 5000 : 10000,
+            timeout: priority === QueryPriority.CRITICAL ? 10000 : 15000, // 타임아웃 시간 증가
             key: `batch-invalidation-${priority}-${batchIndex}-${attempt}`,
             errorMessage: `Batch invalidation timeout for Priority ${priority}`
           }
@@ -516,7 +516,8 @@ export class ConnectionRecoveryManager {
    */
   private handleBlur = () => {
     console.log('[ConnectionRecovery] Window blurred')
-    // 필요시 처리
+    // blur 이벤트 시에는 특별한 처리 없음
+    // PromiseManager가 recovery 관련 Promise를 제외하고 취소함
   }
   
   /**

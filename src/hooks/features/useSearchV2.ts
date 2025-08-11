@@ -206,7 +206,7 @@ export function useSearchV2() {
           })
         }
       }
-    }, [result.isSuccess, result.data, query, filter, saveSearchHistory])
+    }, [result.isSuccess, result.data, query])
 
     return result
   }
