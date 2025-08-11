@@ -55,7 +55,7 @@ export class ConnectionRecoveryManager {
   private readonly BATCH_SIZE = 5 // 기본 배치 크기 - 감소하여 타임아웃 방지
   private readonly MAX_CONCURRENT_BATCHES = 3 // 최대 동시 실행 배치 수 - 감소하여 서버 부하 완화
   private readonly BATCH_DELAY = 50 // 배치 간 대기 시간 (ms) - 증가하여 안정성 향상
-  private readonly MAX_RETRIES = 1 // 최대 재시도 횟수
+  private readonly MAX_RETRIES = 3 // 최대 재시도 횟수 - 증가하여 네트워크 불안정 대응
   
   // 모니터링 데이터
   private batchMetrics = {
@@ -309,7 +309,7 @@ export class ConnectionRecoveryManager {
             refetchType
           }),
           {
-            timeout: priority === QueryPriority.CRITICAL ? 3000 : 5000, // 타임아웃 시간 단축
+            timeout: priority === QueryPriority.CRITICAL ? 8000 : 10000, // 타임아웃 시간 증가
             key: `batch-invalidation-${priority}-${batchIndex}-${attempt}`,
             errorMessage: `Batch invalidation timeout for Priority ${priority}`
           }
@@ -323,8 +323,10 @@ export class ConnectionRecoveryManager {
         console.warn(`[ConnectionRecovery] Batch ${batchIndex} attempt ${attempt + 1} failed:`, error)
         
         if (attempt < this.MAX_RETRIES) {
-          // 재시도 전 짧은 대기
-          await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)))
+          // 재시도 전 지수 백오프 대기 (100ms, 200ms, 400ms, 800ms)
+          const backoffDelay = 100 * Math.pow(2, attempt)
+          console.log(`[ConnectionRecovery] Retrying batch ${batchIndex} after ${backoffDelay}ms delay (attempt ${attempt + 1}/${this.MAX_RETRIES})`)
+          await new Promise(resolve => setTimeout(resolve, backoffDelay))
         }
       }
     }
