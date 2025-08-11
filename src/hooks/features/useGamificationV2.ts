@@ -248,16 +248,16 @@ export function useGamificationV2(userId?: string) {
     }
   }, [user?.id, isOwnProfile, queryClient])
 
-  // 레벨 진행률 계산
-  const getLevelProgress = useCallback((currentScore: number, skillLevel: string) => {
+  // 레벨 진행률 계산 (activity_level 기준)
+  const getLevelProgress = useCallback((currentScore: number, activityLevel: string) => {
     const levelThresholds = {
       beginner: { min: 0, max: 99 },
-      intermediate: { min: 100, max: 499 },
-      advanced: { min: 500, max: 999 },
-      expert: { min: 1000, max: Infinity }
+      active: { min: 100, max: 299 },
+      enthusiast: { min: 300, max: 499 },
+      leader: { min: 500, max: Infinity }
     }
     
-    const currentLevel = levelThresholds[skillLevel as keyof typeof levelThresholds]
+    const currentLevel = levelThresholds[activityLevel as keyof typeof levelThresholds]
     if (!currentLevel) return { progress: 100, nextLevelPoints: 0 }
     
     if (currentLevel.max === Infinity) {
@@ -317,7 +317,7 @@ export function useGamificationV2(userId?: string) {
     currentLevel: userGameData?.skill_level || 'beginner',
     currentActivityLevel: userGameData?.activity_level || 'beginner',
     currentScore: userGameData?.activity_score || 0,
-    levelProgress: userGameData ? getLevelProgress(userGameData.activity_score, userGameData.skill_level) : null,
+    levelProgress: userGameData ? getLevelProgress(userGameData.activity_score, userGameData.activity_level) : null,
     
     // 통계 요약
     totalAchievements: 0,
@@ -339,7 +339,7 @@ export function useUserLevel(userId?: string) {
   const { user } = useAuth()
   const targetUserId = userId || user?.id
 
-  // 사용자 프로필에서 스킬 레벨과 활동 점수를 직접 조회
+  // 사용자 프로필에서 스킬 레벨, 활동 레벨, 활동 점수를 직접 조회
   const { data: userProfile } = useQuery({
     queryKey: ['user-level-info', targetUserId],
     queryFn: async () => {
@@ -347,7 +347,7 @@ export function useUserLevel(userId?: string) {
       
       const { data, error } = await supabaseClient
         .from('users_v2')
-        .select('skill_level, activity_score')
+        .select('skill_level, activity_level, activity_score')
         .eq('id', targetUserId)
         .is('deleted_at', null)
         .single()
@@ -360,21 +360,13 @@ export function useUserLevel(userId?: string) {
     gcTime: 5 * 60 * 1000, // 5분
   })
 
-  // 활동 점수를 기반으로 활동 레벨 계산
-  const getActivityLevelFromScore = (score: number) => {
-    if (score >= 1000) return 'leader'
-    if (score >= 500) return 'enthusiast' 
-    if (score >= 100) return 'active'
-    return 'beginner'
-  }
-
   const activityScore = userProfile?.activity_score || 0
   const skillLevel = userProfile?.skill_level || 'beginner'
-  const activityLevel = getActivityLevelFromScore(activityScore)
+  const activityLevel = userProfile?.activity_level || 'beginner' // DB에서 직접 가져옴
 
   return {
     skillLevel, // 사용자가 직접 설정한 값
-    activityLevel, // activity_score 기반으로 계산된 값
+    activityLevel, // DB에 저장된 값 (activity_score 변경시 자동 업데이트)
     score: activityScore,
     progress: null
   }

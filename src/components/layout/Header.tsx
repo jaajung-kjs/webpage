@@ -341,18 +341,6 @@ function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMes
                 프로필
               </Link>
             </Button>
-            {isMember && (
-              <Button 
-                variant="outline" 
-                size="default" 
-                onClick={handleMessageClick} 
-                className="w-full justify-start h-11 relative"
-              >
-                <MessageCircle className="h-4 w-4 mr-2" />
-                메시지
-                <MessageNotificationBadge className="absolute top-2 left-8" />
-              </Button>
-            )}
             {['admin', 'leader', 'vice-leader'].includes(profile?.role || '') && (
               <Button 
                 variant="outline" 

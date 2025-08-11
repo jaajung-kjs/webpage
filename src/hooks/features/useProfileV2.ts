@@ -60,36 +60,14 @@ export function useUserProfileV2(userId?: string) {
 
 
 /**
- * 사용자 레벨 계산 Hook
+ * @deprecated calculate_user_level_v2 함수가 삭제되었습니다.
  * 
- * calculate_user_level_v2 RPC를 사용하여 레벨 계산
+ * 레벨 시스템이 개선되었습니다:
+ * - skill_level: 사용자가 프로필에서 직접 설정
+ * - activity_level: activity_score 기반 자동 계산 (DB 트리거)
+ * 
+ * useUserLevel Hook (useGamificationV2.ts)을 사용하세요.
  */
-export function useUserLevelV2(userId?: string) {
-  const { user } = useAuth()
-  const targetUserId = userId || user?.id
-
-  return useQuery<number, Error>({
-    queryKey: ['user-level-v2', targetUserId],
-    queryFn: async () => {
-      if (!targetUserId) return 0
-
-      const { data, error } = await supabaseClient
-        .rpc('calculate_user_level_v2', {
-          p_user_id: targetUserId
-        })
-
-      if (error) {
-        console.error('Error calculating user level:', error)
-        throw error
-      }
-
-      return data || 0
-    },
-    enabled: !!targetUserId,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000
-  })
-}
 
 /**
  * 사용자 활동 점수 계산 Hook

@@ -318,13 +318,18 @@ function useConversationMessagesV2(conversationId: string, options?: {
         event: '*',
         schema: 'public',
         table: 'message_read_status_v2'
-      }, () => {
-        console.log('[ConversationMessages] 실시간 읽음상태 변경 감지, 무효화 실행')
+      }, (payload) => {
+        console.log('[ConversationMessages] 실시간 읽음상태 변경 감지:', payload)
+        console.log('Payload event type:', payload.eventType)
+        console.log('Payload new data:', payload.new)
+        console.log('Payload old data:', payload.old)
         queryClient.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
         })
       })
-      .subscribe()
+      .subscribe((status) => {
+        console.log('[ReadStatus Channel] Subscription status:', status)
+      })
 
     return () => {
       supabaseClient.removeChannel(messagesChannel)
@@ -409,22 +414,30 @@ function useConversationMessagesV2(conversationId: string, options?: {
       const data = messages.map(msg => {
         const sender = users?.find(u => u.id === msg.sender_id)
         
-        // 읽음상태 로직 개선:
-        // - 내가 보낸 메시지: 상대방이 읽었는지 확인
-        // - 상대방이 보낸 메시지: 내가 읽었는지 확인
+        // 읽음상태 로직 수정:
+        // 내가 보낸 메시지일 때만 상대방의 읽음상태를 확인해서 표시
         const isMyMessage = msg.sender_id === user.id
         
-        let readStatus
+        let readStatus = null
         if (isMyMessage) {
           // 내가 보낸 메시지: 상대방의 읽음상태 확인
-          readStatus = readStatuses?.find(rs => 
+          const otherUserStatus = readStatuses?.find(rs => 
             rs.message_id === msg.id && rs.user_id !== user.id
           )
+          // 상대방의 읽음상태를 그대로 사용
+          readStatus = otherUserStatus ? {
+            is_read: otherUserStatus.is_read,
+            read_at: otherUserStatus.read_at
+          } : { is_read: false, read_at: null }
         } else {
-          // 상대방이 보낸 메시지: 내 읽음상태 확인
-          readStatus = readStatuses?.find(rs => 
+          // 상대방이 보낸 메시지: 읽음상태 표시하지 않음 (UI에서 처리)
+          const myStatus = readStatuses?.find(rs => 
             rs.message_id === msg.id && rs.user_id === user.id
           )
+          readStatus = myStatus ? {
+            is_read: myStatus.is_read,
+            read_at: myStatus.read_at
+          } : { is_read: false, read_at: null }
         }
         
         return {
@@ -435,7 +448,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
             avatar_url: null,
             role: 'member'
           },
-          read_status: readStatus || { is_read: false, read_at: null },
+          read_status: readStatus,
           reply_to: msg.reply_to_id ? {
             ...replyToMessages.find(rm => rm.id === msg.reply_to_id),
             sender: users?.find(u => u.id === replyToMessages.find(rm => rm.id === msg.reply_to_id)?.sender_id)
@@ -701,18 +714,32 @@ function useMarkAsReadV2() {
     mutationFn: async ({ conversation_id }) => {
       if (!user) throw new Error('Authentication required')
       
+      console.log('[useMarkAsReadV2] Marking messages as read for conversation:', conversation_id)
+      
       const { data, error } = await supabaseClient
         .rpc('mark_messages_as_read_v2', {
           p_user_id: user.id,
           p_conversation_id: conversation_id
         })
       
-      if (error) throw error
+      if (error) {
+        console.error('[useMarkAsReadV2] Error marking messages as read:', error)
+        throw error
+      }
+      
+      console.log('[useMarkAsReadV2] Messages marked as read, count:', data)
       return data || 0
     },
     onSuccess: (updatedCount, { conversation_id }) => {
+      console.log('[useMarkAsReadV2] onSuccess - Updated count:', updatedCount)
+      
       // 실제로 읽음 처리된 메시지가 있을 때만 최소한의 쿼리 무효화
       if (updatedCount > 0) {
+        // 메시지 목록 즉시 무효화 (읽음 상태 업데이트를 위해)
+        queryClient.invalidateQueries({ 
+          queryKey: ['conversation-messages-v2', conversation_id] 
+        })
+        
         // 읽지 않은 메시지 수만 즉시 업데이트
         queryClient.invalidateQueries({ 
           queryKey: ['unread-count-v2', user?.id] 
@@ -724,9 +751,6 @@ function useMarkAsReadV2() {
             queryKey: ['conversations-v2', user?.id] 
           })
         }, 300)
-        
-        // 메시지 목록은 읽음 상태만 업데이트하므로 즉시 무효화하지 않음
-        // 실시간 업데이트로 충분함
       }
     }
   })

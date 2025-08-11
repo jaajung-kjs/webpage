@@ -562,18 +562,29 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
                   animate={{ scale: 1, opacity: 1 }}
                   transition={{ duration: 0.2 }}
                 >
-                  {message.read_status?.is_read ? (
-                    <motion.div
-                      initial={{ scale: 0.8 }}
-                      animate={{ scale: 1 }}
-                      transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
-                      title="읽음"
-                    >
-                      <CheckCheck className="h-4 w-4 text-blue-500" />
-                    </motion.div>
-                  ) : (
-                    <Check className="h-4 w-4 text-muted-foreground" />
-                  )}
+                  {(() => {
+                    // 디버깅을 위한 로그
+                    if (isDev) {
+                      console.log(`[Message ${message.id}] Read status:`, {
+                        is_read: message.read_status?.is_read,
+                        read_at: message.read_status?.read_at,
+                        sender_id: message.sender_id,
+                        isOwn
+                      })
+                    }
+                    
+                    return message.read_status?.is_read ? (
+                      <motion.div
+                        initial={{ scale: 0.8 }}
+                        animate={{ scale: 1 }}
+                        transition={{ duration: 0.3, type: "spring", stiffness: 300 }}
+                      >
+                        <CheckCheck className="h-4 w-4 text-blue-500" />
+                      </motion.div>
+                    ) : (
+                      <Check className="h-4 w-4 text-muted-foreground" />
+                    )
+                  })()}
                 </motion.div>
               </div>
             )}

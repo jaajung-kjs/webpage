@@ -49,7 +49,6 @@ import { useGamificationV2, useUserRank } from '@/hooks/features'
 // Configs
 import { getRoleConfig } from '@/lib/roles'
 import { getSkillLevelConfig } from '@/lib/skills'
-import { getActivityLevelInfo, calculateLevelProgress } from '@/lib/activityLevels'
 import { getAIToolConfig } from '@/lib/aiTools'
 
 // Profile Edit Dialog
@@ -338,8 +337,6 @@ export default function UnifiedProfilePage({ userId }: UnifiedProfilePageProps) 
   }
 
   const userActivityScore = getUserStat('activity_score') || profile?.activity_score || 0
-  const activityLevel = getActivityLevelInfo(userActivityScore)
-  const activityProgress = calculateLevelProgress(userActivityScore)
   const roleConfig = getRoleConfig(profile?.role || 'member')
   const skillConfig = getSkillLevelConfig(metadata.skill_level)
   
