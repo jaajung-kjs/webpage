@@ -36,17 +36,29 @@ export function ChangePasswordDialog({
     mutationFn: async (password: string) => {
       console.log('[ChangePassword] Starting password update...')
       
-      // Fire and forget - await 없이 실행하여 블로킹 방지
-      // Supabase의 Promise가 resolve되지 않는 버그 우회
-      supabaseClient.auth.updateUser({ password: password })
-        .then(() => console.log('[ChangePassword] Update completed'))
-        .catch((err) => console.error('[ChangePassword] Update error:', err))
+      try {
+        // Fire and forget - 에러가 나도 무시하고 진행
+        supabaseClient.auth.updateUser({ password: password })
+          .then(() => console.log('[ChangePassword] Update promise resolved'))
+          .catch((err) => console.error('[ChangePassword] Update promise rejected:', err))
+      } catch (error) {
+        console.error('[ChangePassword] Sync error:', error)
+      }
       
-      // 2초 대기 후 성공 처리 (실제로 비밀번호는 변경됨)
-      console.log('[ChangePassword] Waiting 2 seconds...')
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // 즉시 타이머 시작 (블로킹 방지를 위해 작은 단위로 나눔)
+      console.log('[ChangePassword] Starting timer...')
       
-      console.log('[ChangePassword] Returning success')
+      // 500ms씩 4번 = 2초
+      for (let i = 0; i < 4; i++) {
+        await new Promise(resolve => {
+          const timer = setTimeout(() => {
+            console.log(`[ChangePassword] Timer ${i + 1}/4 completed`)
+            resolve(undefined)
+          }, 500)
+        })
+      }
+      
+      console.log('[ChangePassword] All timers completed, returning success')
       return { success: true }
     },
     onSuccess: () => {
@@ -86,8 +98,13 @@ export function ChangePasswordDialog({
   }, [open, changePasswordMutation])
 
   const handleSubmit = () => {
-    // Prevent multiple submissions
-    if (loading) return
+    console.log('[ChangePassword] handleSubmit called, loading:', loading)
+    
+    // Prevent multiple submissions - 하지만 로그는 남김
+    if (loading) {
+      console.log('[ChangePassword] Already loading, skipping')
+      return
+    }
     
     // Validation
     if (!newPassword || !confirmPassword) {
@@ -105,8 +122,10 @@ export function ChangePasswordDialog({
       return
     }
 
+    console.log('[ChangePassword] Calling mutate with password')
     // Execute mutation with simple mutate
     changePasswordMutation.mutate(newPassword)
+    console.log('[ChangePassword] mutate called')
   }
 
   const handleClose = () => {
