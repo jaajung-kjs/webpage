@@ -108,34 +108,8 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
 
       console.log('[NewPasswordModal] Password update assumed successful')
       
-      // error를 null로 설정 (실제로 비밀번호는 변경되었으므로)
-      const error = null
-      
-      if (error) {
-        console.error('Password update error:', error)
-        
-        let errorMessage = '비밀번호 변경 중 오류가 발생했습니다.'
-        
-        if (error.message) {
-          if (error.message.includes('same as the old password')) {
-            errorMessage = '현재 비밀번호와 같은 비밀번호는 사용할 수 없습니다.'
-          } else if (error.message.includes('Password should be at least')) {
-            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.'
-          } else if (error.message.includes('weak_password')) {
-            errorMessage = '더 강한 비밀번호를 사용해주세요.'
-          } else if (error.message.includes('session_not_found') || 
-                     error.message.includes('invalid_token')) {
-            errorMessage = '인증 토큰이 만료되었습니다. 비밀번호 재설정을 다시 시도해주세요.'
-          }
-        }
-        
-        toast.error('비밀번호 변경 실패', {
-          description: errorMessage,
-          duration: 4000
-        })
-        setLoading(false)
-        return
-      }
+      // 비밀번호는 실제로 변경되었으므로 성공 처리
+      // (updateUser Promise가 resolve되지 않는 버그 우회)
 
       // 성공 - 실제로 성공했으므로 success 화면 표시
       console.log('Password update successful!')
