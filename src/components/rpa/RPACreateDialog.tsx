@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,40 +14,76 @@ interface RPACreateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onCreated: (program: RPAProgram) => void
+  editingProgram?: RPAProgram | null
 }
 
-export default function RPACreateDialog({ open, onOpenChange, onCreated }: RPACreateDialogProps) {
+export default function RPACreateDialog({ open, onOpenChange, onCreated, editingProgram }: RPACreateDialogProps) {
   const [loading, setLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    title: string
+    description: string
+    icon: 'excel' | 'pdf' | 'data' | 'bot'
+    path: string
+    inputTypes: string
+    outputTypes: string
+  }>({
     title: '',
     description: '',
-    icon: 'bot' as const,
+    icon: 'bot',
     path: '',
     inputTypes: '',
     outputTypes: ''
   })
+
+  // 수정 모드일 때 기존 데이터 로드
+  useEffect(() => {
+    if (editingProgram) {
+      setFormData({
+        title: editingProgram.title,
+        description: editingProgram.description,
+        icon: editingProgram.icon,
+        path: editingProgram.path,
+        inputTypes: editingProgram.inputTypes.join(', '),
+        outputTypes: editingProgram.outputTypes.join(', ')
+      })
+    } else {
+      // 새로 생성할 때는 폼 초기화
+      setFormData({
+        title: '',
+        description: '',
+        icon: 'bot',
+        path: '',
+        inputTypes: '',
+        outputTypes: ''
+      })
+    }
+  }, [editingProgram, open])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
 
     try {
-      const newProgram: RPAProgram = {
-        id: `rpa-${Date.now()}`,
+      const program: RPAProgram = {
+        id: editingProgram?.id || `rpa-${Date.now()}`,
         title: formData.title,
         description: formData.description,
         icon: formData.icon,
         path: formData.path || `/rpa/programs/${formData.title.toLowerCase().replace(/\s+/g, '-')}`,
-        inputTypes: formData.inputTypes.split(',').map(s => s.trim()),
-        outputTypes: formData.outputTypes.split(',').map(s => s.trim()),
+        inputTypes: formData.inputTypes.split(',').map(s => s.trim()).filter(s => s),
+        outputTypes: formData.outputTypes.split(',').map(s => s.trim()).filter(s => s),
         isActive: true,
-        createdAt: new Date().toISOString()
+        createdAt: editingProgram?.createdAt || new Date().toISOString()
       }
 
       // 성공 알림
-      toast.success(`${newProgram.title}이(가) 성공적으로 추가되었습니다.`)
+      if (editingProgram) {
+        toast.success(`${program.title}이(가) 성공적으로 수정되었습니다.`)
+      } else {
+        toast.success(`${program.title}이(가) 성공적으로 추가되었습니다.`)
+      }
       
-      onCreated(newProgram)
+      onCreated(program)
       
       // 폼 초기화
       setFormData({
@@ -70,9 +106,11 @@ export default function RPACreateDialog({ open, onOpenChange, onCreated }: RPACr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[525px]">
         <DialogHeader>
-          <DialogTitle>새 RPA 프로그램 추가</DialogTitle>
+          <DialogTitle>{editingProgram ? 'RPA 프로그램 수정' : '새 RPA 프로그램 추가'}</DialogTitle>
           <DialogDescription>
-            새로운 RPA 자동화 프로그램을 추가합니다. Admin만 이 기능을 사용할 수 있습니다.
+            {editingProgram 
+              ? 'RPA 프로그램 정보를 수정합니다.'
+              : '새로운 RPA 자동화 프로그램을 추가합니다. Admin만 이 기능을 사용할 수 있습니다.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -172,7 +210,7 @@ export default function RPACreateDialog({ open, onOpenChange, onCreated }: RPACr
               취소
             </Button>
             <Button type="submit" disabled={loading} className="kepco-gradient">
-              {loading ? '추가 중...' : '추가하기'}
+              {loading ? (editingProgram ? '수정 중...' : '추가 중...') : (editingProgram ? '수정하기' : '추가하기')}
             </Button>
           </DialogFooter>
         </form>

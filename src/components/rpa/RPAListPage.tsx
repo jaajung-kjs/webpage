@@ -25,7 +25,8 @@ export interface RPAProgram {
 export default function RPAListPage() {
   const { user, profile } = useAuth()
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
-  const { useInfiniteContents, createContentAsync } = useContentV2()
+  const [editingProgram, setEditingProgram] = useState<RPAProgram | null>(null)
+  const { useInfiniteContents, createContentAsync, updateContentAsync, deleteContentAsync } = useContentV2()
 
   const isAdmin = profile?.role === 'admin'
 
@@ -61,6 +62,49 @@ export default function RPAListPage() {
 
   // 활성화된 프로그램만 표시
   const activePrograms = programs.filter(p => p.isActive)
+
+  // 프로그램 삭제 핸들러
+  const handleDelete = async (programId: string) => {
+    if (!user?.id) return
+    
+    try {
+      await deleteContentAsync(programId)
+      refetch()
+    } catch (error) {
+      console.error('Failed to delete RPA program:', error)
+    }
+  }
+
+  // 프로그램 수정 핸들러
+  const handleEdit = (program: RPAProgram) => {
+    setEditingProgram(program)
+  }
+
+  // 프로그램 업데이트 핸들러
+  const handleUpdate = async (updatedProgram: RPAProgram) => {
+    if (!user?.id || !editingProgram) return
+    
+    try {
+      await updateContentAsync({
+        id: editingProgram.id,
+        updates: {
+          title: updatedProgram.title,
+          content: updatedProgram.description,
+          metadata: {
+            icon: updatedProgram.icon,
+            path: updatedProgram.path,
+            inputTypes: updatedProgram.inputTypes,
+            outputTypes: updatedProgram.outputTypes,
+            isActive: true
+          }
+        }
+      })
+      refetch()
+      setEditingProgram(null)
+    } catch (error) {
+      console.error('Failed to update RPA program:', error)
+    }
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -110,7 +154,13 @@ export default function RPAListPage() {
           {/* RPA 프로그램 그리드 */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {activePrograms.map((program) => (
-              <RPACard key={program.id} program={program} />
+              <RPACard 
+                key={program.id} 
+                program={program}
+                isAdmin={isAdmin}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
             ))}
           </div>
 
@@ -127,35 +177,48 @@ export default function RPAListPage() {
         </>
       )}
 
-      {/* Admin용 RPA 추가 다이얼로그 */}
+      {/* Admin용 RPA 추가/수정 다이얼로그 */}
       {isAdmin && (
-        <RPACreateDialog 
-          open={createDialogOpen} 
-          onOpenChange={setCreateDialogOpen}
-          onCreated={async (newProgram) => {
-            // DB에 저장
-            if (!user?.id) return
-            
-            await createContentAsync({
-              author_id: user.id,
-              content_type: 'rpa',
-              title: newProgram.title,
-              content: newProgram.description,
-              status: 'published',
-              category: null, // RPA doesn't use categories
-              metadata: {
-                icon: newProgram.icon,
-                path: newProgram.path,
-                inputTypes: newProgram.inputTypes,
-                outputTypes: newProgram.outputTypes,
-                isActive: true
-              }
-            } as any)
+        <>
+          {/* 추가 다이얼로그 */}
+          <RPACreateDialog 
+            open={createDialogOpen} 
+            onOpenChange={setCreateDialogOpen}
+            onCreated={async (newProgram) => {
+              // DB에 저장
+              if (!user?.id) return
+              
+              await createContentAsync({
+                author_id: user.id,
+                content_type: 'rpa',
+                title: newProgram.title,
+                content: newProgram.description,
+                status: 'published',
+                category: null, // RPA doesn't use categories
+                metadata: {
+                  icon: newProgram.icon,
+                  path: newProgram.path,
+                  inputTypes: newProgram.inputTypes,
+                  outputTypes: newProgram.outputTypes,
+                  isActive: true
+                }
+              } as any)
 
-            refetch() // 목록 새로고침
-            setCreateDialogOpen(false)
-          }}
-        />
+              refetch() // 목록 새로고침
+              setCreateDialogOpen(false)
+            }}
+          />
+
+          {/* 수정 다이얼로그 */}
+          <RPACreateDialog
+            open={!!editingProgram}
+            onOpenChange={(open) => {
+              if (!open) setEditingProgram(null)
+            }}
+            editingProgram={editingProgram}
+            onCreated={handleUpdate}
+          />
+        </>
       )}
     </div>
   )
