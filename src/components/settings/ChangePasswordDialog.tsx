@@ -43,6 +43,11 @@ export function ChangePasswordDialog({
       toast.success('비밀번호가 성공적으로 변경되었습니다.')
       // Close dialog - form will be reset by useEffect
       onOpenChange(false)
+      // 다중 탭 환경에서 auth 동기화 문제 해결을 위해 페이지 새로고침
+      // 비밀번호 변경 후 새로운 auth token으로 재초기화 필요
+      setTimeout(() => {
+        window.location.reload()
+      }, 500)
     },
     onError: (error) => {
       console.error('Error changing password:', error)
@@ -67,6 +72,12 @@ export function ChangePasswordDialog({
   const handleSubmit = () => {
     // Prevent multiple submissions
     if (loading) return
+    
+    // 다중 탭 환경에서 백그라운드 탭에서는 비밀번호 변경 방지
+    if (document.hidden) {
+      toast.error('현재 탭이 활성화되어 있지 않습니다. 활성 탭에서 다시 시도해주세요.')
+      return
+    }
     
     // Validation
     if (!newPassword || !confirmPassword) {
