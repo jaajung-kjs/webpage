@@ -248,35 +248,16 @@ export function useUpdateProfileV2() {
 }
 
 /**
- * 활동 점수 증가 Hook
+ * @deprecated 활동 점수는 이제 DB 트리거에서 자동으로 처리됩니다.
  * 
- * increment_activity_score_v2 RPC 사용
+ * 모든 활동 점수 증가/차감은 DB 레벨에서 다음과 같이 자동 처리됩니다:
+ * - 게시글 작성/삭제: content_v2 트리거
+ * - 댓글 작성/삭제: comments_v2 함수 및 트리거
+ * - 좋아요/북마크: interactions_v2 트리거
+ * - 활동 참가/취소/출석: activity_participants_v2 함수
+ * 
+ * 프론트엔드에서 직접 호출할 필요가 없습니다.
  */
-export function useIncrementActivityScore() {
-  const queryClient = useQueryClient()
-  const { user } = useAuth()
-
-  return useMutation<any, Error, { points?: number; action_type?: string }>({
-    mutationFn: async ({ points = 1, action_type = 'generic' }) => {
-      if (!user) throw new Error('User is not authenticated')
-
-      const { data, error } = await supabaseClient
-        .rpc('increment_activity_score_v2', {
-          p_user_id: user.id,
-          p_action_type: action_type,
-          p_points: points
-        })
-
-      if (error) throw error
-      return data
-    },
-    onSuccess: () => {
-      // 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: ['user-v2'] })
-      queryClient.invalidateQueries({ queryKey: ['user-stats-v3'] })
-    }
-  })
-}
 
 /**
  * 사용자 상호작용 통계 조회 Hook

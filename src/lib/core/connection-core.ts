@@ -10,9 +10,11 @@
 import { createClient, SupabaseClient, Session } from '@supabase/supabase-js'
 import type { Database } from '../database.types'
 import { getEnvConfig } from '../config/environment'
+import { PromiseManager } from '../utils/promise-manager'
+import { CircuitBreaker, CircuitBreakerPresets } from '../utils/circuit-breaker'
 
 // 연결 상태 타입
-export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error'
+export type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'error' | 'suspended'
 
 // 연결 이벤트 타입
 export type ConnectionEvent = 
@@ -29,6 +31,12 @@ export interface ConnectionStatus {
   lastError: Error | null
   reconnectAttempts: number
   isVisible: boolean
+  circuitBreakerState?: string
+  circuitBreakerMetrics?: {
+    failureRate: number
+    consecutiveFailures: number
+    totalRequests: number
+  }
 }
 
 // 설정 옵션
@@ -37,6 +45,12 @@ export interface ConnectionConfig {
   reconnectInterval?: number
   heartbeatInterval?: number
   enableAutoReconnect?: boolean
+  enableCircuitBreaker?: boolean
+  circuitBreakerConfig?: {
+    failureThreshold?: number
+    resetTimeout?: number
+    monitoringWindow?: number
+  }
 }
 
 /**
@@ -48,10 +62,20 @@ export class ConnectionCore {
   private client: SupabaseClient<Database>
   private status: ConnectionStatus
   private listeners: Set<(status: ConnectionStatus) => void>
-  private config: Required<ConnectionConfig>
+  private config: Required<ConnectionConfig> & { 
+    circuitBreakerConfig: Required<NonNullable<ConnectionConfig['circuitBreakerConfig']>> 
+  }
   private reconnectTimer: NodeJS.Timeout | null = null
   private heartbeatTimer: NodeJS.Timeout | null = null
   private visibilityHandler: (() => void) | null = null
+  private focusHandler: (() => void) | null = null
+  private blurHandler: (() => void) | null = null
+  private pageshowHandler: ((event: PageTransitionEvent) => void) | null = null
+  private pagehideHandler: (() => void) | null = null
+  private heartbeatFailures: number = 0
+  private readonly MAX_HEARTBEAT_FAILURES = 3
+  private heartbeatCircuitBreaker: CircuitBreaker | null = null
+  private connectionCircuitBreaker: CircuitBreaker | null = null
 
   private constructor() {
     // 환경 설정 가져오기
@@ -96,13 +120,56 @@ export class ConnectionCore {
       maxReconnectAttempts: 5,
       reconnectInterval: 3000,
       heartbeatInterval: 30000,
-      enableAutoReconnect: true
+      enableAutoReconnect: true,
+      enableCircuitBreaker: true,
+      circuitBreakerConfig: {
+        failureThreshold: 3,
+        resetTimeout: 30000, // 30초
+        monitoringWindow: 60000 // 1분
+      }
     }
 
     this.listeners = new Set()
     
+    // Circuit Breaker 초기화
+    this.initializeCircuitBreakers()
+    
     // 초기화
     this.initialize()
+  }
+
+  /**
+   * Circuit Breaker 초기화
+   */
+  private initializeCircuitBreakers(): void {
+    if (!this.config.enableCircuitBreaker) {
+      console.log('[ConnectionCore] Circuit Breaker disabled')
+      return
+    }
+
+    // Heartbeat용 Circuit Breaker (더 민감하게)
+    this.heartbeatCircuitBreaker = new CircuitBreaker({
+      ...CircuitBreakerPresets.network,
+      failureThreshold: 2, // heartbeat는 더 민감하게
+      resetTimeout: 15000, // 15초
+      monitoringWindow: 30000
+    }).fallback((error) => {
+      console.warn('[ConnectionCore] Heartbeat circuit breaker triggered, using cached status')
+      // Heartbeat 실패 시 캐시된 상태 사용
+      return { data: null, error: null }
+    })
+
+    // 연결용 Circuit Breaker
+    this.connectionCircuitBreaker = new CircuitBreaker({
+      ...this.config.circuitBreakerConfig,
+      enableMetrics: true
+    }).fallback((error) => {
+      console.warn('[ConnectionCore] Connection circuit breaker triggered, using offline mode')
+      // 연결 실패 시 오프라인 모드로 전환
+      return { data: { session: null }, error: null }
+    })
+
+    console.log('[ConnectionCore] Circuit Breakers initialized')
   }
 
   /**
@@ -148,23 +215,39 @@ export class ConnectionCore {
    * Visibility 변경 감지 설정
    */
   private setupVisibilityHandling(): void {
-    if (typeof document === 'undefined') return
+    if (typeof document === 'undefined' || typeof window === 'undefined') return
 
+    // Named functions으로 정의 (메모리 누수 방지를 위한 적절한 cleanup을 위해)
     this.visibilityHandler = () => {
       const visible = document.visibilityState === 'visible'
       this.handleEvent({ type: 'VISIBILITY_CHANGE', visible })
     }
 
-    document.addEventListener('visibilitychange', this.visibilityHandler)
-    
-    // 추가로 focus 이벤트도 감지
-    window.addEventListener('focus', () => {
+    this.focusHandler = () => {
       this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: true })
-    })
-    
-    window.addEventListener('blur', () => {
+    }
+
+    this.blurHandler = () => {
       this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
-    })
+    }
+
+    this.pageshowHandler = (event: PageTransitionEvent) => {
+      // 캐시에서 복원된 경우에도 visibility 체크
+      if (event.persisted || document.visibilityState === 'visible') {
+        this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: true })
+      }
+    }
+
+    this.pagehideHandler = () => {
+      this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
+    }
+
+    // 이벤트 리스너 등록
+    document.addEventListener('visibilitychange', this.visibilityHandler)
+    window.addEventListener('focus', this.focusHandler)
+    window.addEventListener('blur', this.blurHandler)
+    window.addEventListener('pageshow', this.pageshowHandler)
+    window.addEventListener('pagehide', this.pagehideHandler)
   }
 
   /**
@@ -216,12 +299,12 @@ export class ConnectionCore {
 
       case 'VISIBILITY_CHANGE':
         this.updateStatus({ isVisible: event.visible })
-        if (event.visible && this.status.state !== 'connected') {
-          // 페이지가 다시 보이면 재연결 시도
-          this.handleEvent({ type: 'RECONNECT' })
-        } else if (!event.visible && this.status.state === 'connected') {
-          // 페이지가 숨겨지면 heartbeat 중지
-          this.stopHeartbeat()
+        if (event.visible) {
+          // 포그라운드 복귀 시 점진적 복구
+          this.resumeConnection()
+        } else {
+          // 백그라운드 전환 시 suspended 상태로 변경
+          this.suspendConnection()
         }
         break
     }
@@ -237,8 +320,25 @@ export class ConnectionCore {
    */
   private async establishConnection(): Promise<void> {
     try {
-      // 세션 확인
-      const { data: { session }, error } = await this.client.auth.getSession()
+      // Circuit Breaker를 통한 세션 확인
+      const sessionRequest = async () => {
+        return await PromiseManager.withTimeout(
+          (async () => {
+            return await this.client.auth.getSession()
+          })(),
+          {
+            timeout: 5000,
+            key: 'connection-core-get-session',
+            errorMessage: 'Session retrieval timeout after 5 seconds'
+          }
+        )
+      }
+
+      const result = this.connectionCircuitBreaker 
+        ? await this.connectionCircuitBreaker.execute(sessionRequest)
+        : await sessionRequest()
+      
+      const { data: { session }, error } = result
       
       if (error) throw error
       
@@ -276,9 +376,17 @@ export class ConnectionCore {
   }
 
   /**
-   * 재연결 스케줄링 (exponential backoff)
+   * 재연결 스케줄링 (exponential backoff with max retry limit)
+   * 무한 루프 방지: 최대 재시도 횟수 제한 및 점진적 백오프
    */
   private scheduleReconnect(): void {
+    // 최대 재시도 횟수 확인
+    if (this.status.reconnectAttempts >= this.config.maxReconnectAttempts) {
+      console.log(`[ConnectionCore] Max reconnection attempts (${this.config.maxReconnectAttempts}) reached. Stopping auto-reconnect.`)
+      this.updateStatus({ state: 'error', lastError: new Error('Max reconnection attempts exceeded') })
+      return
+    }
+    
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
     }
@@ -301,22 +409,82 @@ export class ConnectionCore {
    */
   private startHeartbeat(): void {
     this.stopHeartbeat()
+    this.heartbeatFailures = 0
 
     this.heartbeatTimer = setInterval(async () => {
-      try {
-        // 간단한 세션 체크로 heartbeat
-        const { error } = await this.client.auth.getSession()
-        if (error) throw error
-        
-        console.log('[ConnectionCore] Heartbeat successful')
-      } catch (error) {
-        console.error('[ConnectionCore] Heartbeat failed:', error)
-        this.handleEvent({ 
-          type: 'ERROR', 
-          error: error instanceof Error ? error : new Error('Heartbeat failed')
-        })
-      }
+      await this.performHeartbeat()
     }, this.config.heartbeatInterval)
+  }
+
+  /**
+   * Heartbeat 수행
+   */
+  private async performHeartbeat(): Promise<void> {
+    // suspended 상태에서는 heartbeat 수행하지 않음
+    if (this.status.state === 'suspended') {
+      return
+    }
+
+    try {
+      // Circuit Breaker를 통한 heartbeat 수행
+      const heartbeatRequest = async () => {
+        return await PromiseManager.withTimeout(
+          (async () => {
+            return await this.client.auth.getSession()
+          })(),
+          {
+            timeout: 3000,
+            key: 'connection-core-heartbeat',
+            errorMessage: 'Heartbeat timeout after 3 seconds'
+          }
+        )
+      }
+
+      const result = this.heartbeatCircuitBreaker 
+        ? await this.heartbeatCircuitBreaker.execute(heartbeatRequest)
+        : await heartbeatRequest()
+      
+      const { error } = result
+      if (error) throw error
+      
+      // 성공 시 실패 카운터 리셋
+      this.heartbeatFailures = 0
+      
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[ConnectionCore] Heartbeat successful')
+      }
+    } catch (error) {
+      this.heartbeatFailures++
+      
+      // 무한 루프 방지: heartbeat 실패는 조용히 처리
+      if (error instanceof Error) {
+        const isTimeoutError = error.name === 'TimeoutError' || error.message.includes('timeout')
+        const isAbortError = error.name === 'AbortError' || error.message.includes('abort')
+        
+        if (isTimeoutError || isAbortError) {
+          // 타임아웃/취소 에러는 디버그 로그만
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('[ConnectionCore] Heartbeat timeout/abort (ignored):', error.message)
+          }
+          return // ERROR 이벤트 발생시키지 않음
+        }
+      }
+      
+      // 연속 실패 횟수가 임계값에 도달하면 자동 재연결
+      if (this.heartbeatFailures >= this.MAX_HEARTBEAT_FAILURES) {
+        console.warn(`[ConnectionCore] Heartbeat failed ${this.heartbeatFailures} times, triggering reconnection`)
+        this.heartbeatFailures = 0
+        this.handleEvent({ type: 'RECONNECT' })
+        return
+      }
+      
+      // 기타 진짜 에러만 ERROR 이벤트 발생
+      console.warn(`[ConnectionCore] Heartbeat failed (${this.heartbeatFailures}/${this.MAX_HEARTBEAT_FAILURES}):`, error)
+      this.handleEvent({ 
+        type: 'ERROR', 
+        error: error instanceof Error ? error : new Error('Heartbeat failed')
+      })
+    }
   }
 
   /**
@@ -333,7 +501,20 @@ export class ConnectionCore {
    * 상태 업데이트
    */
   private updateStatus(updates: Partial<ConnectionStatus>): void {
-    this.status = { ...this.status, ...updates }
+    // Circuit Breaker 상태 정보 추가
+    const circuitBreakerInfo: Partial<ConnectionStatus> = {}
+    
+    if (this.config.enableCircuitBreaker && this.connectionCircuitBreaker) {
+      const metrics = this.connectionCircuitBreaker.getMetrics()
+      circuitBreakerInfo.circuitBreakerState = this.connectionCircuitBreaker.getState()
+      circuitBreakerInfo.circuitBreakerMetrics = {
+        failureRate: metrics.failureRate,
+        consecutiveFailures: metrics.consecutiveFailures,
+        totalRequests: metrics.totalRequests
+      }
+    }
+    
+    this.status = { ...this.status, ...updates, ...circuitBreakerInfo }
     this.notifyListeners()
   }
 
@@ -362,20 +543,94 @@ export class ConnectionCore {
     }
   }
 
+  /**
+   * 백그라운드 전환 시 연결 일시정지
+   */
+  private suspendConnection(): void {
+    console.log('[ConnectionCore] Suspending connection (background transition)')
+    
+    // 현재 connected 상태일 때만 suspended로 변경
+    if (this.status.state === 'connected') {
+      this.updateStatus({ state: 'suspended' })
+      
+      // heartbeat 중지 (백그라운드에서 불필요한 작업 중단)
+      this.stopHeartbeat()
+      
+      // 진행 중인 visibility_change 관련 Promise들 취소
+      PromiseManager.cancelAll('visibility_change')
+      
+      // 백그라운드에서는 재연결 타이머도 중지
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer)
+        this.reconnectTimer = null
+      }
+    }
+  }
+
+  /**
+   * 포그라운드 복귀 시 연결 점진적 복구
+   */
+  private resumeConnection(): void {
+    console.log('[ConnectionCore] Resuming connection (foreground return)')
+    
+    // suspended 상태에서만 복구 진행
+    if (this.status.state === 'suspended') {
+      // 먼저 connecting 상태로 변경
+      this.updateStatus({ state: 'connecting' })
+      
+      // 누적된 Promise들 정리 (새로운 시작을 위해)
+      PromiseManager.cancelAll('visibility_change')
+      
+      // 점진적 연결 복구 시작
+      this.handleEvent({ type: 'RECONNECT' })
+    } else if (this.status.state === 'disconnected' || this.status.state === 'error') {
+      // 연결이 끊어진 상태에서도 포그라운드 복귀 시 재연결 시도
+      this.handleEvent({ type: 'RECONNECT' })
+    }
+  }
+
   // Public API
 
   /**
    * 수동 연결
    */
   async connect(): Promise<void> {
-    this.handleEvent({ type: 'CONNECT' })
+    try {
+      await PromiseManager.withTimeout(
+        Promise.resolve(this.handleEvent({ type: 'CONNECT' })),
+        {
+          timeout: 5000,
+          key: 'connection-core-connect',
+          errorMessage: 'Connection timeout after 5 seconds'
+        }
+      )
+    } catch (error) {
+      console.error('[ConnectionCore] Connect failed:', error)
+      this.handleEvent({ 
+        type: 'ERROR', 
+        error: error instanceof Error ? error : new Error('Connect failed')
+      })
+    }
   }
 
   /**
    * 수동 연결 해제
    */
   async disconnect(): Promise<void> {
-    this.handleEvent({ type: 'DISCONNECT' })
+    try {
+      await PromiseManager.withTimeout(
+        Promise.resolve(this.handleEvent({ type: 'DISCONNECT' })),
+        {
+          timeout: 3000,
+          key: 'connection-core-disconnect',
+          errorMessage: 'Disconnect timeout after 3 seconds'
+        }
+      )
+    } catch (error) {
+      console.error('[ConnectionCore] Disconnect failed:', error)
+      // 연결 해제는 에러가 발생해도 강제로 진행
+      this.handleEvent({ type: 'DISCONNECT' })
+    }
   }
 
   /**
@@ -419,14 +674,58 @@ export class ConnectionCore {
    * 설정 업데이트
    */
   updateConfig(config: Partial<ConnectionConfig>): void {
-    this.config = { ...this.config, ...config }
+    this.config = { 
+      ...this.config, 
+      ...config,
+      circuitBreakerConfig: {
+        ...this.config.circuitBreakerConfig,
+        ...(config.circuitBreakerConfig || {})
+      }
+    }
   }
 
   /**
    * 연결 상태 확인
    */
   isConnected(): boolean {
-    return this.status.state === 'connected'
+    return this.status.state === 'connected' || this.status.state === 'suspended'
+  }
+
+  /**
+   * Circuit Breaker 상태 조회
+   */
+  getCircuitBreakerStatus(): {
+    connection: { state: string; metrics: any } | null
+    heartbeat: { state: string; metrics: any } | null
+  } {
+    return {
+      connection: this.connectionCircuitBreaker ? {
+        state: this.connectionCircuitBreaker.getState(),
+        metrics: this.connectionCircuitBreaker.getMetrics()
+      } : null,
+      heartbeat: this.heartbeatCircuitBreaker ? {
+        state: this.heartbeatCircuitBreaker.getState(),
+        metrics: this.heartbeatCircuitBreaker.getMetrics()
+      } : null
+    }
+  }
+
+  /**
+   * Circuit Breaker 수동 리셋
+   */
+  resetCircuitBreakers(): void {
+    if (this.connectionCircuitBreaker) {
+      this.connectionCircuitBreaker.reset()
+      console.log('[ConnectionCore] Connection circuit breaker reset')
+    }
+    
+    if (this.heartbeatCircuitBreaker) {
+      this.heartbeatCircuitBreaker.reset()
+      console.log('[ConnectionCore] Heartbeat circuit breaker reset')
+    }
+    
+    // 상태 업데이트
+    this.updateStatus({})
   }
 
   /**
@@ -435,12 +734,46 @@ export class ConnectionCore {
   destroy(): void {
     this.cleanup()
     
-    if (this.visibilityHandler) {
-      document.removeEventListener('visibilitychange', this.visibilityHandler)
-      this.visibilityHandler = null
+    if (typeof document !== 'undefined' && typeof window !== 'undefined') {
+      // 모든 visibility 관련 이벤트 리스너 정리
+      if (this.visibilityHandler) {
+        document.removeEventListener('visibilitychange', this.visibilityHandler)
+        this.visibilityHandler = null
+      }
+      
+      if (this.focusHandler) {
+        window.removeEventListener('focus', this.focusHandler)
+        this.focusHandler = null
+      }
+      
+      if (this.blurHandler) {
+        window.removeEventListener('blur', this.blurHandler)
+        this.blurHandler = null
+      }
+      
+      if (this.pageshowHandler) {
+        window.removeEventListener('pageshow', this.pageshowHandler)
+        this.pageshowHandler = null
+      }
+      
+      if (this.pagehideHandler) {
+        window.removeEventListener('pagehide', this.pagehideHandler)
+        this.pagehideHandler = null
+      }
     }
     
     this.listeners.clear()
+    
+    // Circuit Breaker 정리
+    if (this.heartbeatCircuitBreaker) {
+      this.heartbeatCircuitBreaker.destroy()
+      this.heartbeatCircuitBreaker = null
+    }
+    
+    if (this.connectionCircuitBreaker) {
+      this.connectionCircuitBreaker.destroy()
+      this.connectionCircuitBreaker = null
+    }
   }
 }
 

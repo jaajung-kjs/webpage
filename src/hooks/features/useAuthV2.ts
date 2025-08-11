@@ -106,20 +106,12 @@ export function useAuthV2() {
     }
   })
 
-  // 활동 점수 증가 (RPC 함수 활용)
+  // @deprecated 활동 점수는 이제 DB 트리거에서 자동으로 처리됩니다.
+  // 하위 호환성을 위해 유지하지만 실제로는 사용하지 않습니다.
   const incrementActivityScore = useMutation({
     mutationFn: async ({ points = 1, action_type = 'general' }: { points?: number, action_type?: string } = {}) => {
-      if (!user?.id) throw new Error('User not authenticated')
-      
-      const { data, error } = await supabase
-        .rpc('increment_activity_score_v2', {
-          p_user_id: user.id,
-          p_action_type: action_type,
-          p_points: points
-        })
-      
-      if (error) throw error
-      return data
+      console.warn('incrementActivityScore is deprecated. Activity scores are now handled automatically by DB triggers.')
+      return { success: true, message: 'Deprecated - scores are handled by DB triggers' }
     },
     onSuccess: () => {
       // 사용자 정보 갱신

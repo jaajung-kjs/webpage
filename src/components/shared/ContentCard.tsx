@@ -121,15 +121,10 @@ export default function ContentCard({
 
             {/* Title */}
             <CardTitle className={cn(
-              "line-clamp-2",
+              "line-clamp-2 hover:text-primary transition-colors",
               viewMode === 'grid' ? "text-lg" : "text-xl"
             )}>
-              <Link
-                href={`${linkPrefix}/${content.id}`}
-                className="hover:text-primary transition-colors"
-              >
-                {content.title || '제목 없음'}
-              </Link>
+              {content.title || '제목 없음'}
             </CardTitle>
           </div>
 

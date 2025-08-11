@@ -15,6 +15,7 @@ import { connectionCore, ConnectionStatus } from '@/lib/core/connection-core'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { useAuthV2 } from '../features/useAuthV2'
 import type { Database } from '@/lib/database.types'
+import { PromiseManager } from '@/lib/utils/promise-manager'
 
 // 확장된 연결 상태 타입
 export interface ConnectionStateV2 extends ConnectionStatus {
@@ -119,15 +120,25 @@ export function useConnectionV2() {
     return 'unknown'
   }, [])
 
-  // 레이턴시 측정
+  // 레이턴시 측정 - 무한 루프 방지 개선
   const measureLatency = useCallback(async (): Promise<number | null> => {
     try {
       const start = performance.now()
-      const { error } = await supabaseClient
-        .from('users_v2')
-        .select('id')
-        .limit(1)
-        .single()
+      const result = await PromiseManager.withTimeout(
+        (async () => {
+          return await supabaseClient
+            .from('users_v2')
+            .select('id')
+            .limit(1)
+            .single()
+        })(),
+        {
+          timeout: 5000,
+          key: 'connection-latency-test',
+          errorMessage: 'Latency measurement timeout after 5 seconds'
+        }
+      )
+      const { error } = result
       
       const end = performance.now()
       const latency = end - start
@@ -143,25 +154,43 @@ export function useConnectionV2() {
       }
       
       return null
-    } catch {
+    } catch (error) {
+      // 무한 루프 방지: 모든 에러를 조용히 처리
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Latency measurement error (ignored):', error)
+      }
       return null
     }
   }, [])
 
-  // 온라인 사용자 수 조회
+  // 온라인 사용자 수 조회 - 무한 루프 방지 개선
   const getOnlineUsers = useCallback(async (): Promise<number> => {
     try {
       const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString()
       
-      const { count, error } = await supabaseClient
-        .from('users_v2')
-        .select('*', { count: 'exact', head: true })
-        .gte('last_login_at', fiveMinutesAgo)
-        .eq('is_active', true)
+      const result = await PromiseManager.withTimeout(
+        (async () => {
+          return await supabaseClient
+            .from('users_v2')
+            .select('*', { count: 'exact', head: true })
+            .gte('last_login_at', fiveMinutesAgo)
+            .eq('is_active', true)
+        })(),
+        {
+          timeout: 5000,
+          key: 'connection-online-users',
+          errorMessage: 'Online users count timeout after 5 seconds'
+        }
+      )
+      const { count, error } = result
       
       if (error) return 0
       return count || 0
-    } catch {
+    } catch (error) {
+      // 무한 루프 방지: 모든 에러를 조용히 처리
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Online users count error (ignored):', error)
+      }
       return 0
     }
   }, [])
@@ -174,62 +203,108 @@ export function useConnectionV2() {
     // users_v2 테이블 업데이트는 제거하여 realtime 이벤트 발생 방지
     // 실제 last_login_at 업데이트는 로그인 시에만 수행
     
-    // 대신 연결 상태만 체크
+    // 대신 연결 상태만 체크 - 에러는 조용히 처리하여 무한 루프 방지
     try {
       // 간단한 health check 쿼리로 대체
-      const { error } = await supabaseClient
-        .from('users_v2')
-        .select('id')
-        .eq('id', (user as any).id)
-        .single()
+      const result = await PromiseManager.withTimeout(
+        (async () => {
+          return await supabaseClient
+            .from('users_v2')
+            .select('id')
+            .eq('id', (user as any).id)
+            .single()
+        })(),
+        {
+          timeout: 3000,
+          key: 'connection-heartbeat-check',
+          errorMessage: 'Heartbeat check timeout after 3 seconds'
+        }
+      )
+      const { error } = result
       
       if (error) {
-        console.warn('Connection check failed:', error)
+        // 디버그 로그만 남기고 에러는 무시 (무한 루프 방지)
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Connection check failed (ignored):', error.message)
+        }
       }
     } catch (error) {
-      console.warn('Heartbeat check failed:', error)
+      // 타임아웃/취소 에러 조용히 처리 - 무한 루프 방지 핵심
+      if (error instanceof Error) {
+        const isTimeoutError = error.message.includes('timeout')
+        const isAbortError = error.message.includes('abort') || error.name === 'AbortError'
+        
+        if (isTimeoutError || isAbortError) {
+          // 타임아웃/취소 에러는 완전히 무시 (로그도 남기지 않음)
+          return
+        }
+      }
+      
+      // 기타 에러만 디버그 로그
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Heartbeat check error (ignored):', error)
+      }
     }
   }, [user])
 
-  // 연결 상태 업데이트
+  // 연결 상태 업데이트 - 무한 루프 방지 최적화
   const updateConnectionState = useCallback(async () => {
-    const basicStatus = connectionCore.getStatus()
-    const networkInfo = getNetworkInfo()
-    const latency = await measureLatency()
-    const bandwidth = calculateBandwidth(networkInfo)
-    const networkQuality = assessNetworkQuality(latency, bandwidth)
-    const onlineUsers = await getOnlineUsers()
+    try {
+      const basicStatus = connectionCore.getStatus()
+      const networkInfo = getNetworkInfo()
+      
+      // 병렬로 실행하여 성능 개선 - 각각 에러 처리
+      const [latency, onlineUsers] = await Promise.allSettled([
+        measureLatency(),
+        getOnlineUsers()
+      ])
+      
+      const latencyValue = latency.status === 'fulfilled' ? latency.value : null
+      const onlineUsersValue = onlineUsers.status === 'fulfilled' ? onlineUsers.value : 0
+      
+      const bandwidth = calculateBandwidth(networkInfo)
+      const networkQuality = assessNetworkQuality(latencyValue, bandwidth)
 
-    // 평균 레이턴시 계산
-    const avgLatency = latencyHistoryRef.current.length > 0
-      ? latencyHistoryRef.current.reduce((sum, l) => sum + l, 0) / latencyHistoryRef.current.length
-      : 0
+      // 평균 레이턴시 계산
+      const avgLatency = latencyHistoryRef.current.length > 0
+        ? latencyHistoryRef.current.reduce((sum, l) => sum + l, 0) / latencyHistoryRef.current.length
+        : 0
 
-    // 업타임 계산
-    const uptime = Date.now() - startTimeRef.current
+      // 업타임 계산
+      const uptime = Date.now() - startTimeRef.current
 
-    setConnectionState(prev => ({
-      ...basicStatus,
-      networkQuality,
-      latency,
-      bandwidth,
-      isRealTimeConnected: basicStatus.state === 'connected', // 실제 실시간 연결 상태는 별도 구현 필요
-      lastHeartbeat: new Date().toISOString(),
-      onlineUsers
-    }))
+      setConnectionState(prev => ({
+        ...basicStatus,
+        networkQuality,
+        latency: latencyValue,
+        bandwidth,
+        isRealTimeConnected: basicStatus.state === 'connected', // 실제 실시간 연결 상태는 별도 구현 필요
+        lastHeartbeat: new Date().toISOString(),
+        onlineUsers: onlineUsersValue
+      }))
 
-    setMetrics(prev => ({
-      ...prev,
-      averageLatency: Math.round(avgLatency),
-      uptime: Math.round(uptime / 1000), // seconds
-      totalReconnects: prev.totalReconnects + (
-        prev.lastDisconnection && basicStatus.state === 'connected' ? 1 : 0
-      ),
-      lastDisconnection: basicStatus.state === 'error' ? new Date().toISOString() : prev.lastDisconnection
-    }))
-
-    metricsRef.current = metrics
-  }, [assessNetworkQuality, calculateBandwidth, getNetworkInfo, measureLatency, getOnlineUsers, metrics])
+      setMetrics(prev => {
+        const newMetrics = {
+          ...prev,
+          averageLatency: Math.round(avgLatency),
+          uptime: Math.round(uptime / 1000), // seconds
+          totalReconnects: prev.totalReconnects + (
+            prev.lastDisconnection && basicStatus.state === 'connected' ? 1 : 0
+          ),
+          lastDisconnection: basicStatus.state === 'error' ? new Date().toISOString() : prev.lastDisconnection
+        }
+        
+        metricsRef.current = newMetrics
+        return newMetrics
+      })
+      
+    } catch (error) {
+      // 무한 루프 방지: 연결 상태 업데이트 에러는 조용히 처리
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Connection state update error (ignored):', error)
+      }
+    }
+  }, [assessNetworkQuality, calculateBandwidth, getNetworkInfo, measureLatency, getOnlineUsers]) // metrics 의존성 제거
 
   // 수동 재연결
   const reconnect = useCallback(async () => {
@@ -253,9 +328,18 @@ export function useConnectionV2() {
     }
 
     try {
-      // 5번의 레이턴시 측정
+      // 5번의 레이턴시 측정을 PromiseManager로 래핑
       const latencyTests = await Promise.all(
-        Array(5).fill(0).map(() => measureLatency())
+        Array(5).fill(0).map((_, index) => 
+          PromiseManager.withTimeout(
+            measureLatency(),
+            {
+              timeout: 8000,
+              key: `connection-quality-test-${index}`,
+              errorMessage: `Connection quality test ${index + 1} timeout after 8 seconds`
+            }
+          )
+        )
       )
 
       const validLatencies = latencyTests.filter(l => l !== null) as number[]
@@ -281,7 +365,7 @@ export function useConnectionV2() {
     }
   }, [measureLatency, calculateBandwidth, getNetworkInfo])
 
-  // 초기화 및 이벤트 리스너 설정
+  // 초기화 및 이벤트 리스너 설정 - 무한 루프 방지 최적화
   useEffect(() => {
     // 기본 연결 상태 구독
     const unsubscribeBasic = connectionCore.subscribe((status) => {
@@ -291,29 +375,96 @@ export function useConnectionV2() {
       }))
     })
 
-    // 정기적인 상태 업데이트 (30초마다)
-    networkMonitorRef.current = setInterval(updateConnectionState, 30000)
+    // 정기적인 상태 업데이트 (30초마다) - 에러 무시
+    networkMonitorRef.current = setInterval(() => {
+      try {
+        updateConnectionState().catch(error => {
+          // 네트워크 업데이트 에러는 조용히 처리
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Network update error (ignored):', error)
+          }
+        })
+      } catch (error) {
+        // 동기 에러도 조용히 처리
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Network update sync error (ignored):', error)
+        }
+      }
+    }, 30000)
     
-    // 하트비트 (2분마다)
+    // 하트비트 (2분마다) - 에러 무시
     if (user) {
-      heartbeatIntervalRef.current = setInterval(updateHeartbeat, 2 * 60 * 1000)
-      updateHeartbeat() // 즉시 한 번 실행
+      heartbeatIntervalRef.current = setInterval(() => {
+        try {
+          updateHeartbeat().catch(error => {
+            // 하트비트 에러는 조용히 처리 (무한 루프 방지 핵심)
+            if (process.env.NODE_ENV === 'development') {
+              console.debug('Heartbeat error (ignored):', error)
+            }
+          })
+        } catch (error) {
+          // 동기 에러도 조용히 처리
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Heartbeat sync error (ignored):', error)
+          }
+        }
+      }, 2 * 60 * 1000)
+      
+      // 즉시 한 번 실행 - 에러 무시
+      try {
+        updateHeartbeat().catch(error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Initial heartbeat error (ignored):', error)
+          }
+        })
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Initial heartbeat sync error (ignored):', error)
+        }
+      }
     }
 
-    // 초기 상태 업데이트
-    updateConnectionState()
+    // 초기 상태 업데이트 - 에러 무시
+    try {
+      updateConnectionState().catch(error => {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Initial connection state error (ignored):', error)
+        }
+      })
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Initial connection state sync error (ignored):', error)
+      }
+    }
 
     // 네트워크 상태 변화 감지
     const handleOnline = () => {
-      updateConnectionState()
+      try {
+        updateConnectionState().catch(error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Online event error (ignored):', error)
+          }
+        })
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Online event sync error (ignored):', error)
+        }
+      }
     }
     
     const handleOffline = () => {
-      setConnectionState(prev => ({
-        ...prev,
-        networkQuality: 'offline',
-        latency: null
-      }))
+      try {
+        setConnectionState(prev => ({
+          ...prev,
+          networkQuality: 'offline',
+          latency: null
+        }))
+      } catch (error) {
+        // setState 에러도 무시
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Offline state error (ignored):', error)
+        }
+      }
     }
 
     window.addEventListener('online', handleOnline)
@@ -321,7 +472,17 @@ export function useConnectionV2() {
 
     // 페이지 포커스 시 상태 업데이트
     const handleFocus = () => {
-      updateConnectionState()
+      try {
+        updateConnectionState().catch(error => {
+          if (process.env.NODE_ENV === 'development') {
+            console.debug('Focus event error (ignored):', error)
+          }
+        })
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.debug('Focus event sync error (ignored):', error)
+        }
+      }
     }
     
     window.addEventListener('focus', handleFocus)
@@ -335,7 +496,7 @@ export function useConnectionV2() {
       window.removeEventListener('offline', handleOffline)
       window.removeEventListener('focus', handleFocus)
     }
-  }, [user, updateConnectionState, updateHeartbeat])
+  }, [user]) // updateConnectionState와 updateHeartbeat 의존성 제거하여 무한 루프 방지
 
   return {
     // 기본 연결 상태
