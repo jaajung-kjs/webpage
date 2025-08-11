@@ -3,7 +3,7 @@
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { ArrowRight, Lightbulb, Cpu, ChartBar, Zap, BookOpen } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import ContentCard from '@/components/shared/ContentCard'
@@ -25,30 +25,6 @@ interface PostWithAuthor {
   metadata: Record<string, any> | null
 }
 
-const categoryLabels = {
-  productivity: '생산성 향상',
-  creativity: '창의적 활용',
-  development: '개발',
-  analysis: '분석',
-  other: '기타'
-}
-
-const categoryColors = {
-  productivity: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-  creativity: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-  development: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-  analysis: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-  other: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-300'
-}
-
-const categoryIcons = {
-  productivity: Zap,
-  creativity: Lightbulb,
-  development: Cpu,
-  analysis: ChartBar,
-  other: BookOpen
-}
-
 // Custom hook for fetching recent posts
 function useRecentPosts() {
   return useQuery<PostWithAuthor[]>({
@@ -62,11 +38,14 @@ function useRecentPosts() {
           title,
           content,
           content_type,
+          category,
           view_count,
           like_count,
           comment_count,
           created_at,
           author_id,
+          tags,
+          metadata,
           author:users_v2!author_id(
             id,
             name,
@@ -93,7 +72,7 @@ function useRecentPosts() {
           id: caseItem.id,
           title: caseItem.title,
           content: caseItem.content || '',
-          category: 'case', // V2에서는 content_type으로 관리
+          category: caseItem.category || 'other', // 실제 카테고리 사용
           view_count: caseItem.view_count || 0,
           like_count: caseItem.like_count || 0,
           comment_count: caseItem.comment_count || 0,
@@ -102,8 +81,8 @@ function useRecentPosts() {
           author_name: caseItem.author?.name || '익명',
           author_avatar_url: caseItem.author?.avatar_url || null,
           author_department: caseItem.author?.department || null,
-          tags: [], // V2에서는 별도 관계 테이블로 관리
-          metadata: {} // V2에서는 메타데이터 별도 관리
+          tags: caseItem.tags || [],
+          metadata: caseItem.metadata || {}
         }))
       
       return transformedData
@@ -227,9 +206,6 @@ export default function RecentPostsSection() {
                     <ContentCard
                       content={transformedPost}
                       viewMode="grid"
-                      categoryLabels={categoryLabels}
-                      categoryColors={categoryColors}
-                      categoryIcons={categoryIcons}
                       linkPrefix="/cases"
                       index={index}
                     />
