@@ -102,9 +102,18 @@ export function useMultipleFileUpload(options: FileUploadOptions = { bucket: 'at
           throw new Error(`파일 "${file.name}"은 지원하지 않는 형식입니다.`)
         }
         
-        // 파일명 생성
-        const fileExt = file.name.split('.').pop()
-        const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`
+        // 파일명 생성 - 원본 파일명 유지하면서 중복 방지
+        const timestamp = Date.now()
+        const randomStr = Math.random().toString(36).substring(7)
+        // 파일명에서 확장자 분리
+        const lastDotIndex = file.name.lastIndexOf('.')
+        const nameWithoutExt = lastDotIndex > -1 ? file.name.substring(0, lastDotIndex) : file.name
+        const fileExt = lastDotIndex > -1 ? file.name.substring(lastDotIndex + 1) : ''
+        // 안전한 파일명으로 변환 (특수문자 제거, 공백을 언더스코어로)
+        const safeName = nameWithoutExt.replace(/[^a-zA-Z0-9가-힣_.-]/g, '_')
+        const fileName = fileExt 
+          ? `${timestamp}_${randomStr}_${safeName}.${fileExt}`
+          : `${timestamp}_${randomStr}_${safeName}`
         const folder = options.folder || 'content'
         const filePath = `${folder}/${fileName}`
         

@@ -117,10 +117,19 @@ export default function TiptapEditor({
           event.preventDefault()
           const files = Array.from(event.dataTransfer.files)
           const imageFiles = files.filter(file => file.type.startsWith('image/'))
+          const otherFiles = files.filter(file => !file.type.startsWith('image/'))
+          
+          // 이미지 파일 처리
           if (imageFiles.length > 0) {
             handleImageUpload(imageFiles)
-            return true
           }
+          
+          // 다른 파일 처리
+          if (otherFiles.length > 0) {
+            handleFileUpload(otherFiles)
+          }
+          
+          return true
         }
         return false
       },
