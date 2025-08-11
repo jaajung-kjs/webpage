@@ -48,13 +48,13 @@ export class ConnectionRecoveryManager {
   private recoveryCircuitBreaker: CircuitBreaker | null = null
   
   // 복구 설정
-  private readonly RECOVERY_DELAY = 100 // 복구 시작 전 대기 시간 (ms)
-  private readonly BACKGROUND_THRESHOLD = 30000 // 30초 이상 백그라운드에 있었으면 전체 갱신
+  private readonly RECOVERY_DELAY = 50 // 복구 시작 전 대기 시간 (ms) - 단축
+  private readonly BACKGROUND_THRESHOLD = 300000 // 5분 이상 백그라운드에 있었으면 전체 갱신
   
   // 배치 처리 설정
-  private readonly BATCH_SIZE = 5 // 기본 배치 크기
-  private readonly MAX_CONCURRENT_BATCHES = 3 // 최대 동시 실행 배치 수
-  private readonly BATCH_DELAY = 50 // 배치 간 대기 시간 (ms)
+  private readonly BATCH_SIZE = 10 // 기본 배치 크기 - 증가
+  private readonly MAX_CONCURRENT_BATCHES = 5 // 최대 동시 실행 배치 수 - 증가
+  private readonly BATCH_DELAY = 20 // 배치 간 대기 시간 (ms) - 단축
   private readonly MAX_RETRIES = 1 // 최대 재시도 횟수
   
   // 모니터링 데이터
@@ -309,7 +309,7 @@ export class ConnectionRecoveryManager {
             refetchType
           }),
           {
-            timeout: priority === QueryPriority.CRITICAL ? 10000 : 15000, // 타임아웃 시간 증가
+            timeout: priority === QueryPriority.CRITICAL ? 3000 : 5000, // 타임아웃 시간 단축
             key: `batch-invalidation-${priority}-${batchIndex}-${attempt}`,
             errorMessage: `Batch invalidation timeout for Priority ${priority}`
           }
@@ -417,13 +417,14 @@ export class ConnectionRecoveryManager {
       if (hiddenDuration > this.BACKGROUND_THRESHOLD) {
         console.log(`[ConnectionRecovery] Page was hidden for ${hiddenDuration}ms, triggering full recovery`)
         this.handleVisibilityRestore(RecoveryStrategy.FULL)
-      } else if (hiddenDuration > 10000) {
+      } else if (hiddenDuration > 60000) { // 1분 이상
         console.log(`[ConnectionRecovery] Page was hidden for ${hiddenDuration}ms, triggering partial recovery`)
         this.handleVisibilityRestore(RecoveryStrategy.PARTIAL)
-      } else if (hiddenDuration > 3000) {
+      } else if (hiddenDuration > 30000) { // 30초 이상
         console.log(`[ConnectionRecovery] Page was hidden for ${hiddenDuration}ms, triggering light recovery`)
         this.handleVisibilityRestore(RecoveryStrategy.LIGHT)
       }
+      // 30초 미만은 복구 불필요
     }
     
     this.lastVisibilityChange = now
