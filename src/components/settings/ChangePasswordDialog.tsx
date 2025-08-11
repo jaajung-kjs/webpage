@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -38,33 +38,33 @@ export function ChangePasswordDialog({
         password: password
       })
       if (error) throw error
-      return { success: true }
     },
     onSuccess: () => {
       toast.success('비밀번호가 성공적으로 변경되었습니다.')
-      // Reset form and close dialog
-      setNewPassword('')
-      setConfirmPassword('')
-      setShowNewPassword(false)
-      setShowConfirmPassword(false)
-      // Reset mutation state before closing
-      changePasswordMutation.reset()
+      // Close dialog - form will be reset by useEffect
       onOpenChange(false)
     },
     onError: (error) => {
       console.error('Error changing password:', error)
       const message = error instanceof Error ? error.message : '비밀번호 변경에 실패했습니다.'
       toast.error(message)
-    },
-    onSettled: () => {
-      // Ensure loading state is cleared after mutation completes
-      // This helps prevent the infinite loading state
     }
   })
 
   const loading = changePasswordMutation.isPending
 
-  const handleSubmit = async () => {
+  // Reset form when dialog opens/closes
+  useEffect(() => {
+    if (!open) {
+      // Reset form when dialog closes
+      setNewPassword('')
+      setConfirmPassword('')
+      setShowNewPassword(false)
+      setShowConfirmPassword(false)
+    }
+  }, [open])
+
+  const handleSubmit = () => {
     // Prevent multiple submissions
     if (loading) return
     
@@ -84,21 +84,12 @@ export function ChangePasswordDialog({
       return
     }
 
-    // Execute mutation
-    try {
-      await changePasswordMutation.mutateAsync(newPassword)
-    } catch (error) {
-      // Error is handled by onError callback
-      console.error('Password change error:', error)
-    }
+    // Execute mutation with simple mutate
+    changePasswordMutation.mutate(newPassword)
   }
 
   const handleClose = () => {
     if (!loading) {
-      setNewPassword('')
-      setConfirmPassword('')
-      setShowNewPassword(false)
-      setShowConfirmPassword(false)
       onOpenChange(false)
     }
   }
