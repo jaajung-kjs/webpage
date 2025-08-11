@@ -43,10 +43,8 @@ import { cn } from '@/lib/utils'
 
 const newPasswordSchema = z.object({
   password: z.string()
-    .min(8, '비밀번호는 최소 8자 이상이어야 합니다')
-    .regex(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/, 
-           '비밀번호는 대소문자, 숫자, 특수문자를 포함해야 합니다'),
-  confirmPassword: z.string().min(8, '비밀번호 확인을 입력해주세요'),
+    .min(6, '비밀번호는 최소 6자 이상이어야 합니다'),
+  confirmPassword: z.string().min(1, '비밀번호 확인을 입력해주세요'),
 }).refine((data) => data.password === data.confirmPassword, {
   message: '비밀번호가 일치하지 않습니다',
   path: ['confirmPassword'],
@@ -60,32 +58,17 @@ interface NewPasswordModalProps {
 
 type ResetStep = 'input' | 'success'
 
-// 비밀번호 강도 체크 함수
+// 비밀번호 강도 체크 함수 (간소화)
 function getPasswordStrength(password: string): {
   score: number
   label: string
   color: string
 } {
-  let score = 0
-  let feedback = []
-
-  // 길이 체크
-  if (password.length >= 8) score += 25
-  if (password.length >= 12) score += 10
-
-  // 문자 종류 체크
-  if (/[a-z]/.test(password)) score += 15
-  if (/[A-Z]/.test(password)) score += 15
-  if (/[0-9]/.test(password)) score += 15
-  if (/[@$!%*?&]/.test(password)) score += 20
-
-  // 보너스 점수
-  if (password.length >= 16) score += 10
-
-  if (score <= 30) return { score, label: '약함', color: 'text-red-500' }
-  if (score <= 60) return { score, label: '보통', color: 'text-yellow-500' }
-  if (score <= 80) return { score, label: '강함', color: 'text-blue-500' }
-  return { score, label: '매우 강함', color: 'text-green-500' }
+  // 단순히 길이만 체크
+  if (password.length < 6) return { score: 0, label: '너무 짧음', color: 'text-red-500' }
+  if (password.length < 8) return { score: 50, label: '사용 가능', color: 'text-yellow-500' }
+  if (password.length < 12) return { score: 75, label: '안전', color: 'text-blue-500' }
+  return { score: 100, label: '매우 안전', color: 'text-green-500' }
 }
 
 export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPasswordModalProps) {
@@ -107,12 +90,15 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
   const passwordStrength = password ? getPasswordStrength(password) : null
 
   const onSubmit = async (values: z.infer<typeof newPasswordSchema>) => {
+    console.log('Starting password update...')
     setLoading(true)
     try {
       // Supabase에서 비밀번호 업데이트
-      const { error } = await supabaseClient.auth.updateUser({
+      const { data, error } = await supabaseClient.auth.updateUser({
         password: values.password
       })
+
+      console.log('Password update response:', { data, error })
 
       if (error) {
         console.error('Password update error:', error)
@@ -123,7 +109,7 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
           if (error.message.includes('same as the old password')) {
             errorMessage = '현재 비밀번호와 같은 비밀번호는 사용할 수 없습니다.'
           } else if (error.message.includes('Password should be at least')) {
-            errorMessage = '비밀번호는 최소 8자 이상이어야 합니다.'
+            errorMessage = '비밀번호는 최소 6자 이상이어야 합니다.'
           } else if (error.message.includes('weak_password')) {
             errorMessage = '더 강한 비밀번호를 사용해주세요.'
           } else if (error.message.includes('session_not_found') || 
@@ -136,10 +122,12 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
           description: errorMessage,
           duration: 4000
         })
+        setLoading(false)
         return
       }
 
-      // 성공
+      // 성공 - 실제로 성공했으므로 success 화면 표시
+      console.log('Password update successful!')
       setCurrentStep('success')
       form.reset()
       
@@ -148,10 +136,17 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
         duration: 5000
       })
       
+      // 성공 후 로딩 상태 해제
+      setLoading(false)
+      
+      // 2초 후 자동으로 완료 처리
+      setTimeout(() => {
+        handleComplete()
+      }, 2000)
+      
     } catch (error) {
       console.error('Password update exception:', error)
       toast.error('비밀번호 변경 중 오류가 발생했습니다.')
-    } finally {
       setLoading(false)
     }
   }
@@ -276,64 +271,21 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
                 )}
               />
 
-              {/* 비밀번호 요구사항 */}
-              <Card className="bg-muted/50">
-                <CardContent className="pt-4">
-                  <p className="text-sm font-medium mb-2">비밀번호 요구사항:</p>
-                  <ul className="text-xs text-muted-foreground space-y-1">
-                    <li className={cn("flex items-center gap-2", {
-                      "text-green-600": password && password.length >= 8
-                    })}>
-                      <div className={cn("w-1.5 h-1.5 rounded-full", {
-                        "bg-green-500": password && password.length >= 8,
-                        "bg-muted-foreground": !password || password.length < 8
-                      })} />
-                      최소 8자 이상
-                    </li>
-                    <li className={cn("flex items-center gap-2", {
-                      "text-green-600": password && /[A-Z]/.test(password)
-                    })}>
-                      <div className={cn("w-1.5 h-1.5 rounded-full", {
-                        "bg-green-500": password && /[A-Z]/.test(password),
-                        "bg-muted-foreground": !password || !/[A-Z]/.test(password)
-                      })} />
-                      대문자 포함
-                    </li>
-                    <li className={cn("flex items-center gap-2", {
-                      "text-green-600": password && /[a-z]/.test(password)
-                    })}>
-                      <div className={cn("w-1.5 h-1.5 rounded-full", {
-                        "bg-green-500": password && /[a-z]/.test(password),
-                        "bg-muted-foreground": !password || !/[a-z]/.test(password)
-                      })} />
-                      소문자 포함
-                    </li>
-                    <li className={cn("flex items-center gap-2", {
-                      "text-green-600": password && /[0-9]/.test(password)
-                    })}>
-                      <div className={cn("w-1.5 h-1.5 rounded-full", {
-                        "bg-green-500": password && /[0-9]/.test(password),
-                        "bg-muted-foreground": !password || !/[0-9]/.test(password)
-                      })} />
-                      숫자 포함
-                    </li>
-                    <li className={cn("flex items-center gap-2", {
-                      "text-green-600": password && /[@$!%*?&]/.test(password)
-                    })}>
-                      <div className={cn("w-1.5 h-1.5 rounded-full", {
-                        "bg-green-500": password && /[@$!%*?&]/.test(password),
-                        "bg-muted-foreground": !password || !/[@$!%*?&]/.test(password)
-                      })} />
-                      특수문자 포함 (@$!%*?&)
-                    </li>
-                  </ul>
-                </CardContent>
-              </Card>
+              {/* 비밀번호 요구사항 (간소화) */}
+              <div className="text-sm text-muted-foreground">
+                <p className="flex items-center gap-2">
+                  <div className={cn("w-1.5 h-1.5 rounded-full", {
+                    "bg-green-500": password && password.length >= 6,
+                    "bg-muted-foreground": !password || password.length < 6
+                  })} />
+                  최소 6자 이상 입력해주세요
+                </p>
+              </div>
               
               <Button
                 type="submit"
                 className="w-full kepco-gradient"
-                disabled={loading || !passwordStrength || passwordStrength.score < 60}
+                disabled={loading || !password || password.length < 6}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 비밀번호 변경
