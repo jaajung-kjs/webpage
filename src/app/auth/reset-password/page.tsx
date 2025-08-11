@@ -198,10 +198,21 @@ function PasswordResetContent() {
           }
         }
 
-        // URL 파라미터가 전혀 없는 경우 - 직접 접근
+        // Supabase는 hash fragment로 토큰을 전달함
+        // #access_token=...&refresh_token=...&type=recovery 형태
         if (!accessToken && !refreshToken && !type && !error && !code && !token) {
-          console.log('No parameters found - direct access to reset page')
-          setResetState('invalid')
+          console.log('No parameters found - checking if waiting for hash fragment')
+          // hash fragment가 로드되기를 기다림
+          setTimeout(() => {
+            const retryHashParams = new URLSearchParams(window.location.hash.substring(1))
+            const retryAccessToken = retryHashParams.get('access_token')
+            const retryType = retryHashParams.get('type')
+            
+            if (!retryAccessToken || retryType !== 'recovery') {
+              console.log('Still no valid parameters after retry')
+              setResetState('invalid')
+            }
+          }, 100)
           return
         }
 

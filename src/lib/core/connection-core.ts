@@ -65,9 +65,9 @@ export class ConnectionCore {
         autoRefreshToken: true,
         persistSession: true,
         detectSessionInUrl: true,
+        flowType: 'pkce',  // PKCE 플로우 활성화
         storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        storageKey: 'kepco-ai-auth',
-        flowType: 'pkce'
+        storageKey: 'kepco-ai-auth'
       },
       realtime: {
         params: {
