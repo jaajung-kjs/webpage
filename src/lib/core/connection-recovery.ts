@@ -393,14 +393,14 @@ export class ConnectionRecoveryManager {
     window.addEventListener('online', this.handleOnline)
     window.addEventListener('offline', this.handleOffline)
     
-    // 3. Window Focus (윈도우 포커스)
-    window.addEventListener('focus', this.handleFocus)
-    window.addEventListener('blur', this.handleBlur)
+    // 3. Window Focus (윈도우 포커스) - 배치 누적 방지를 위해 비활성화
+    // window.addEventListener('focus', this.handleFocus)
+    // window.addEventListener('blur', this.handleBlur)
     
     // 4. Page Show (브라우저 뒤로가기/앞으로가기)
     window.addEventListener('pageshow', this.handlePageShow)
     
-    console.log('[ConnectionRecovery] Event listeners registered')
+    console.log('[ConnectionRecovery] Event listeners registered (focus/blur disabled)')
   }
   
   /**
@@ -499,19 +499,11 @@ export class ConnectionRecoveryManager {
   }
   
   /**
-   * Focus 이벤트 처리 - 가벼운 배치 복구
+   * Focus 이벤트 처리 - 배치 누적 방지를 위해 비활성화
    */
   private handleFocus = async () => {
-    console.log('[ConnectionRecovery] Window focused')
-    
-    // Focus 시 가벼운 배치 복구만 수행
-    if (!this.isRecovering && this.queryClient) {
-      try {
-        await this.invalidateQueriesInBatches(RecoveryStrategy.LIGHT, 'active')
-      } catch (error) {
-        console.error('[ConnectionRecovery] Focus recovery failed:', error)
-      }
-    }
+    console.log('[ConnectionRecovery] Focus event ignored - disabled to prevent batch accumulation')
+    // 아무것도 하지 않음 - 배치 누적 방지를 위해 비활성화
   }
   
   /**
@@ -825,8 +817,8 @@ export class ConnectionRecoveryManager {
     document.removeEventListener('visibilitychange', this.handleVisibilityChange)
     window.removeEventListener('online', this.handleOnline)
     window.removeEventListener('offline', this.handleOffline)
-    window.removeEventListener('focus', this.handleFocus)
-    window.removeEventListener('blur', this.handleBlur)
+    // window.removeEventListener('focus', this.handleFocus)  // 비활성화됨
+    // window.removeEventListener('blur', this.handleBlur)    // 비활성화됨
     window.removeEventListener('pageshow', this.handlePageShow)
     
     this.recoveryHandlers.clear()
