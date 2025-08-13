@@ -72,6 +72,8 @@ export class ConnectionCore {
   private blurHandler: (() => void) | null = null
   private pageshowHandler: ((event: PageTransitionEvent) => void) | null = null
   private pagehideHandler: (() => void) | null = null
+  private onlineHandler: (() => void) | null = null
+  private offlineHandler: (() => void) | null = null
   private heartbeatFailures: number = 0
   private readonly MAX_HEARTBEAT_FAILURES = 3
   private heartbeatCircuitBreaker: CircuitBreaker | null = null
@@ -323,6 +325,17 @@ export class ConnectionCore {
       }
     }
 
+    // 네트워크 이벤트 핸들러 (ConnectionCore가 마스터로 처리)
+    this.onlineHandler = () => {
+      console.log('[ConnectionCore] Network online - triggering network recovery')
+      this.handleNetworkRecovery()
+    }
+
+    this.offlineHandler = () => {
+      console.log('[ConnectionCore] Network offline')
+      this.updateStatus({ state: 'disconnected' })
+    }
+
     // pagehide는 필요없음 (visibilitychange가 처리)
     // this.pagehideHandler = () => {
     //   this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
@@ -333,6 +346,8 @@ export class ConnectionCore {
     // window.addEventListener('focus', this.focusHandler) // 비활성화
     // window.addEventListener('blur', this.blurHandler) // 비활성화
     window.addEventListener('pageshow', this.pageshowHandler)
+    window.addEventListener('online', this.onlineHandler)
+    window.addEventListener('offline', this.offlineHandler)
     // window.addEventListener('pagehide', this.pagehideHandler) // 비활성화
   }
 
@@ -789,19 +804,47 @@ export class ConnectionCore {
       this.handleEvent({ type: 'RECONNECT' })
       
       // ConnectionRecovery에도 복구 트리거 (통합 관리)
-      import('../core/connection-recovery').then(({ connectionRecovery }) => {
+      // visibility 복구는 'visibility' source로 전달
+      import('../core/connection-recovery').then(({ connectionRecovery, RecoveryStrategy }) => {
         if (hiddenDuration > 300000) { // 5분 이상
-          connectionRecovery.manualRecovery('FULL')
+          connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.FULL)
         } else if (hiddenDuration > 60000) { // 1분 이상
-          connectionRecovery.manualRecovery('PARTIAL')
+          connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.PARTIAL)
         } else if (hiddenDuration > 30000) { // 30초 이상
-          connectionRecovery.manualRecovery('LIGHT')
+          connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.LIGHT)
         }
       })
     } else if (this.status.state === 'disconnected' || this.status.state === 'error') {
       // 연결이 끊어진 상태에서도 포그라운드 복귀 시 재연결 시도
       this.handleEvent({ type: 'RECONNECT' })
     }
+  }
+
+  /**
+   * 네트워크 복구 처리 (ConnectionCore가 마스터로 처리)
+   */
+  private async handleNetworkRecovery(): Promise<void> {
+    console.log('[ConnectionCore] Handling network recovery as master')
+    
+    // 1. 먼저 자체 연결 복구
+    if (this.status.state !== 'connected') {
+      console.log('[ConnectionCore] Reconnecting after network recovery')
+      this.handleEvent({ type: 'RECONNECT' })
+    }
+    
+    // 2. ConnectionRecovery에게 network source로 전체 복구 지시
+    import('../core/connection-recovery').then(({ connectionRecovery, RecoveryStrategy }) => {
+      console.log('[ConnectionCore] Triggering network recovery in ConnectionRecovery')
+      connectionRecovery.triggerProgressiveRecovery('network', RecoveryStrategy.FULL)
+    })
+  }
+
+  /**
+   * 네트워크 복구 테스트 함수 (브라우저 콘솔에서 사용)
+   */
+  testNetworkRecovery(): void {
+    console.log('[ConnectionCore] Testing network recovery manually')
+    this.handleNetworkRecovery()
   }
 
   private lastVisibilityChange: number | null = null
@@ -974,6 +1017,16 @@ export class ConnectionCore {
         this.pageshowHandler = null
       }
       
+      if (this.onlineHandler) {
+        window.removeEventListener('online', this.onlineHandler)
+        this.onlineHandler = null
+      }
+      
+      if (this.offlineHandler) {
+        window.removeEventListener('offline', this.offlineHandler)
+        this.offlineHandler = null
+      }
+      
       // Pagehide는 비활성화되어 있음
       // if (this.pagehideHandler) {
       //   window.removeEventListener('pagehide', this.pagehideHandler)
@@ -1001,3 +1054,8 @@ export const connectionCore = ConnectionCore.getInstance()
 
 // 편의 함수
 export const supabaseClient = connectionCore.getClient()
+
+// 개발 환경에서 테스트를 위해 글로벌 노출
+if (typeof window !== 'undefined') {
+  ;(window as any).testNetworkRecovery = () => connectionCore.testNetworkRecovery()
+}

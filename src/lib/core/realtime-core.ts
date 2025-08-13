@@ -41,7 +41,7 @@ export class RealtimeCore {
     status: SubscriptionStatus
   }>
   private listeners: Set<(subscriptions: SubscriptionStatus[]) => void>
-  private previousConnectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected'
+  private previousConnectionState: 'disconnected' | 'connecting' | 'connected' | 'error' | 'suspended' = 'disconnected'
   private hasInitialSubscription = false
 
   private constructor() {

@@ -392,9 +392,9 @@ export class ConnectionRecoveryManager {
     // ConnectionCore가 visibility 이벤트를 처리하고 ConnectionRecovery를 호출함
     // document.addEventListener('visibilitychange', this.handleVisibilityChange)
     
-    // 2. Online/Offline (네트워크 상태)
-    window.addEventListener('online', this.handleOnline)
-    window.addEventListener('offline', this.handleOffline)
+    // 2. Online/Offline (네트워크 상태) - ConnectionCore가 마스터로 처리하므로 비활성화
+    // window.addEventListener('online', this.handleOnline)
+    // window.addEventListener('offline', this.handleOffline)
     
     // 3. Window Focus (윈도우 포커스) - 배치 누적 방지를 위해 비활성화
     // window.addEventListener('focus', this.handleFocus)
@@ -403,7 +403,7 @@ export class ConnectionRecoveryManager {
     // 4. Page Show (브라우저 뒤로가기/앞으로가기)
     window.addEventListener('pageshow', this.handlePageShow)
     
-    console.log('[ConnectionRecovery] Event listeners registered (visibility/focus/blur disabled to prevent conflicts)')
+    console.log('[ConnectionRecovery] Event listeners registered (visibility/focus/blur/online/offline disabled to prevent conflicts with ConnectionCore master)')
   }
   
   /**
@@ -543,9 +543,9 @@ export class ConnectionRecoveryManager {
   }
 
   /**
-   * 프로그레시브 복구 트리거
+   * 프로그레시브 복구 트리거 (public 메서드로 변경 - ConnectionCore에서 호출)
    */
-  private async triggerProgressiveRecovery(source: string, strategy: RecoveryStrategy) {
+  async triggerProgressiveRecovery(source: string, strategy: RecoveryStrategy) {
     if (this.isRecovering) {
       console.log('[ConnectionRecovery] Recovery already in progress, skipping')
       return
@@ -608,9 +608,12 @@ export class ConnectionRecoveryManager {
       // 3. React Query 캐시 배치 갱신
       if (this.queryClient) {
         console.log(`[ConnectionRecovery] Starting batch cache invalidation with ${strategy} strategy`)
+        // 네트워크 복구 시에는 실제 데이터 fetch 필요
+        const refetchType = source === 'network' ? 'active' : 'none'
+        console.log(`[ConnectionRecovery] Using refetchType: ${refetchType} for source: ${source}`)
         const batchResults = await this.invalidateQueriesInBatches(
           strategy, 
-          'none' // 캐시만 무효화, 네트워크 요청 안함
+          refetchType
         )
         
         // 배치 결과 로깅
@@ -843,8 +846,8 @@ export class ConnectionRecoveryManager {
     if (typeof window === 'undefined') return
     
     // document.removeEventListener('visibilitychange', this.handleVisibilityChange)  // 비활성화됨
-    window.removeEventListener('online', this.handleOnline)
-    window.removeEventListener('offline', this.handleOffline)
+    // window.removeEventListener('online', this.handleOnline)  // 비활성화됨
+    // window.removeEventListener('offline', this.handleOffline)  // 비활성화됨
     // window.removeEventListener('focus', this.handleFocus)  // 비활성화됨
     // window.removeEventListener('blur', this.handleBlur)    // 비활성화됨
     window.removeEventListener('pageshow', this.handlePageShow)
