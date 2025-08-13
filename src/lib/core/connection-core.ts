@@ -218,8 +218,13 @@ export class ConnectionCore {
       }
     })
     
-    // Auth 상태 변경 구독 재설정
+    // Auth 상태 변경 구독 재설정 (INITIAL_SESSION 제외)
     this.client.auth.onAuthStateChange((event, session) => {
+      // INITIAL_SESSION은 무시 (무한 루프 방지)
+      if (event === 'INITIAL_SESSION') {
+        return
+      }
+      
       console.log('[ConnectionCore] Auth state changed:', event)
       
       switch (event) {
@@ -247,6 +252,15 @@ export class ConnectionCore {
     this.client.auth.onAuthStateChange((event, session) => {
       console.log('[ConnectionCore] Auth state changed:', event)
       
+      // INITIAL_SESSION은 초기 연결 시에만 처리
+      if (event === 'INITIAL_SESSION') {
+        // 초기화 시에만 한 번 연결 시도
+        if (this.status.state === 'disconnected') {
+          this.handleEvent({ type: 'CONNECT' })
+        }
+        return
+      }
+      
       switch (event) {
         case 'SIGNED_IN':
         case 'TOKEN_REFRESHED':
@@ -263,9 +277,8 @@ export class ConnectionCore {
 
     // Visibility 처리 설정
     this.setupVisibilityHandling()
-
-    // 초기 연결 시도
-    this.connect()
+    
+    // 초기 연결은 onAuthStateChange의 INITIAL_SESSION에서 처리됨
   }
 
   /**
@@ -377,6 +390,12 @@ export class ConnectionCore {
    * 연결 수립
    */
   private async establishConnection(): Promise<void> {
+    // 이미 connected 상태면 스킵 (무한 루프 방지)
+    if (this.status.state === 'connected') {
+      console.log('[ConnectionCore] Already connected, skipping establishment')
+      return
+    }
+    
     try {
       // Circuit Breaker를 통한 세션 확인
       const sessionRequest = async () => {
