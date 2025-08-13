@@ -183,6 +183,63 @@ export class ConnectionCore {
   }
 
   /**
+   * Supabase 클라이언트 재초기화
+   * DB 연결이 끊어진 경우 새로운 클라이언트 생성
+   */
+  private async reinitializeClient(): Promise<void> {
+    console.log('[ConnectionCore] Reinitializing Supabase client...')
+    
+    // 기존 이벤트 리스너 정리
+    this.cleanup()
+    
+    // 환경 설정 가져오기
+    const envConfig = getEnvConfig()
+    
+    // 새로운 클라이언트 생성
+    this.client = createClient<Database>(envConfig.supabaseUrl, envConfig.supabaseAnonKey, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+        flowType: 'pkce',
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+        storageKey: 'kepco-ai-auth'
+      },
+      realtime: {
+        params: {
+          eventsPerSecond: 10
+        },
+        timeout: 20000
+      },
+      global: {
+        headers: {
+          'x-application-name': 'kepco-ai-community'
+        }
+      }
+    })
+    
+    // Auth 상태 변경 구독 재설정
+    this.client.auth.onAuthStateChange((event, session) => {
+      console.log('[ConnectionCore] Auth state changed:', event)
+      
+      switch (event) {
+        case 'SIGNED_IN':
+        case 'TOKEN_REFRESHED':
+        case 'USER_UPDATED':
+          if (session) {
+            this.handleEvent({ type: 'CONNECT' })
+          }
+          break
+        case 'SIGNED_OUT':
+          this.handleEvent({ type: 'DISCONNECT' })
+          break
+      }
+    })
+    
+    console.log('[ConnectionCore] Supabase client reinitialized')
+  }
+
+  /**
    * 초기화
    */
   private initialize(): void {
@@ -342,6 +399,52 @@ export class ConnectionCore {
       const { data: { session }, error } = result
       
       if (error) throw error
+      
+      // 실제 DB 연결 테스트 (중요!)
+      const dbTestRequest = async () => {
+        console.log('[ConnectionCore] Testing DB connection...')
+        return await PromiseManager.withTimeout(
+          (async () => {
+            // 간단한 쿼리로 DB 연결 확인
+            const { data, error } = await this.client
+              .from('users_v2')
+              .select('id')
+              .limit(1)
+              .single()
+            
+            if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
+              throw error
+            }
+            return { success: true }
+          })(),
+          {
+            timeout: 3000,
+            key: 'connection-core-db-test',
+            errorMessage: 'DB connection test timeout after 3 seconds'
+          }
+        )
+      }
+
+      // DB 연결 테스트 실행
+      try {
+        await dbTestRequest()
+        console.log('[ConnectionCore] DB connection test successful')
+      } catch (dbError) {
+        console.error('[ConnectionCore] DB connection test failed:', dbError)
+        
+        // DB 연결 실패 시 클라이언트 재초기화 시도
+        console.log('[ConnectionCore] Attempting to reinitialize Supabase client...')
+        await this.reinitializeClient()
+        
+        // 재시도
+        try {
+          await dbTestRequest()
+          console.log('[ConnectionCore] DB connection restored after client reinitialization')
+        } catch (retryError) {
+          console.error('[ConnectionCore] DB connection still failing after reinitialization:', retryError)
+          throw retryError
+        }
+      }
       
       if (!session) {
         console.log('[ConnectionCore] No session available, but allowing anonymous access')
@@ -583,7 +686,7 @@ export class ConnectionCore {
   /**
    * 포그라운드 복귀 시 연결 점진적 복구
    */
-  private resumeConnection(): void {
+  private async resumeConnection(): Promise<void> {
     console.log('[ConnectionCore] Resuming connection (foreground return)')
     
     // suspended 상태에서만 복구 진행
@@ -598,6 +701,26 @@ export class ConnectionCore {
         'recovery_',
         'connection-core-'
       ])
+      
+      // DB 연결 테스트를 포함한 연결 복구
+      try {
+        // 간단한 DB 쿼리로 연결 확인
+        const { error } = await this.client
+          .from('users_v2')
+          .select('id')
+          .limit(1)
+          .single()
+        
+        if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
+          console.error('[ConnectionCore] DB connection test failed on resume:', error)
+          // DB 연결 실패 시 클라이언트 재초기화
+          await this.reinitializeClient()
+        }
+      } catch (dbError) {
+        console.error('[ConnectionCore] DB test error on resume:', dbError)
+        // 에러 발생 시에도 클라이언트 재초기화 시도
+        await this.reinitializeClient()
+      }
       
       // 점진적 연결 복구 시작
       this.handleEvent({ type: 'RECONNECT' })
