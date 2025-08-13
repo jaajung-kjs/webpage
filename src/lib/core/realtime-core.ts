@@ -41,6 +41,8 @@ export class RealtimeCore {
     status: SubscriptionStatus
   }>
   private listeners: Set<(subscriptions: SubscriptionStatus[]) => void>
+  private previousConnectionState: 'disconnected' | 'connecting' | 'connected' | 'error' = 'disconnected'
+  private hasInitialSubscription = false
 
   private constructor() {
     this.subscriptions = new Map()
@@ -67,31 +69,69 @@ export class RealtimeCore {
     let isResubscribing = false
     
     connectionCore.subscribe(async (status) => {
-      // 연결이 복구되면 모든 구독 재설정
-      if (status.state === 'connected' && status.isVisible) {
-        // 이미 재구독 중이면 스킵
-        if (isResubscribing) {
-          console.log('[RealtimeCore] Already resubscribing, skipping')
-          return
-        }
-        
-        console.log('[RealtimeCore] Connection restored, will resubscribe when Realtime is ready')
-        isResubscribing = true
-        
-        try {
-          await this.resubscribeAll()
-        } catch (error) {
-          console.error('[RealtimeCore] Failed to resubscribe:', error)
-        } finally {
-          isResubscribing = false
+      const currentState = status.state
+      const previousState = this.previousConnectionState
+      
+      // 상태 변경 로그
+      if (currentState !== previousState) {
+        console.log(`[RealtimeCore] Connection state changed: ${previousState} -> ${currentState}`)
+      }
+      
+      // 실제로 연결이 복구된 경우에만 재구독 (이전 상태가 disconnected/error였던 경우)
+      if (currentState === 'connected' && status.isVisible) {
+        // 최초 연결이거나 실제 재연결인 경우만 처리
+        // connecting 상태는 무시 (단순 페이지 이동 시 connecting -> connected가 발생)
+        if (!this.hasInitialSubscription && previousState === 'disconnected') {
+          // 이미 재구독 중이면 스킵
+          if (isResubscribing) {
+            console.log('[RealtimeCore] Already resubscribing, skipping')
+            this.previousConnectionState = currentState
+            return
+          }
+          
+          console.log('[RealtimeCore] Initial connection established, will subscribe when Realtime is ready')
+          isResubscribing = true
+          this.hasInitialSubscription = true
+          
+          try {
+            await this.resubscribeAll()
+          } catch (error) {
+            console.error('[RealtimeCore] Failed to resubscribe:', error)
+          } finally {
+            isResubscribing = false
+          }
+        } else if (previousState === 'disconnected' || previousState === 'error') {
+          // 실제 재연결 (네트워크 복구, 백그라운드 복귀 등)
+          if (isResubscribing) {
+            console.log('[RealtimeCore] Already resubscribing, skipping')
+            this.previousConnectionState = currentState
+            return
+          }
+          
+          console.log('[RealtimeCore] Connection restored from disconnected/error state, will resubscribe')
+          isResubscribing = true
+          
+          try {
+            await this.resubscribeAll()
+          } catch (error) {
+            console.error('[RealtimeCore] Failed to resubscribe:', error)
+          } finally {
+            isResubscribing = false
+          }
+        } else {
+          // 단순 페이지 이동 등으로 connected 상태가 유지된 경우 (connecting -> connected)
+          console.log('[RealtimeCore] Connection already established, skipping resubscribe (likely page navigation)')
         }
       }
       // 연결이 끊어지면 모든 구독 정리
-      else if (status.state === 'disconnected' || status.state === 'error') {
+      else if (currentState === 'disconnected' || currentState === 'error') {
         console.log('[RealtimeCore] Connection lost, cleaning up subscriptions')
         isResubscribing = false
         this.cleanupAll()
       }
+      
+      // 이전 상태 업데이트
+      this.previousConnectionState = currentState
     })
   }
 
@@ -251,16 +291,20 @@ export class RealtimeCore {
       await new Promise(resolve => setTimeout(resolve, delay))
     }
 
-    const subscriptionsToRestore = Array.from(this.subscriptions.values())
+    // 재구독할 구성 저장 (Map clear 전에 저장)
+    const subscriptionsToRestore = Array.from(this.subscriptions.values()).map(sub => ({ ...sub.config }))
     
-    // 모든 기존 채널 정리
+    // 모든 기존 채널 정리 및 Map clear
     this.cleanupAll()
+    
+    // Map을 clear하여 "Already subscribed" 문제 해결
+    this.subscriptions.clear()
     
     // 잠시 대기 (채널 정리 완료 대기)
     await new Promise(resolve => setTimeout(resolve, 200))
     
-    // 모든 구독 재생성
-    for (const { config } of subscriptionsToRestore) {
+    // 모든 구독 재생성 (새로운 구독으로 처리됨)
+    for (const config of subscriptionsToRestore) {
       console.log(`[RealtimeCore] Resubscribing to ${config.id}`)
       this.subscribe(config)
     }
