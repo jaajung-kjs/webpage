@@ -167,7 +167,7 @@ export class ConnectionRecoveryManager {
    */
   private async invalidateQueriesInBatches(
     strategy: RecoveryStrategy = RecoveryStrategy.FULL,
-    refetchType: 'active' | 'inactive' | 'all' = 'active'
+    refetchType: 'active' | 'inactive' | 'all' | 'none' = 'none'
   ): Promise<BatchResult[]> {
     if (!this.queryClient) {
       throw new Error('QueryClient not set')
@@ -228,7 +228,7 @@ export class ConnectionRecoveryManager {
   private async processPriorityBatch(
     priority: QueryPriority,
     queries: any[],
-    refetchType: 'active' | 'inactive' | 'all'
+    refetchType: 'active' | 'inactive' | 'all' | 'none'
   ): Promise<BatchResult> {
     const batchStartTime = Date.now()
     const batches = this.createBatches(queries, this.BATCH_SIZE)
@@ -285,7 +285,7 @@ export class ConnectionRecoveryManager {
    */
   private async processSingleBatch(
     batch: any[],
-    refetchType: 'active' | 'inactive' | 'all',
+    refetchType: 'active' | 'inactive' | 'all' | 'none',
     priority: QueryPriority,
     batchIndex: number
   ): Promise<void> {
@@ -299,17 +299,19 @@ export class ConnectionRecoveryManager {
 
         if (queryKeys.length === 0) return
 
-        await PromiseManager.withTimeout(
+        // 개별 쿼리 무효화로 변경 (더 효율적)
+        const invalidatePromises = queryKeys.map(key => 
           this.queryClient!.invalidateQueries({
-            predicate: (query) => {
-              return queryKeys.some(key => 
-                JSON.stringify(query.queryKey) === JSON.stringify(key)
-              )
-            },
-            refetchType
-          }),
+            queryKey: key,
+            refetchType: refetchType === 'none' ? 'inactive' : refetchType as any
+          })
+        )
+        
+        // Promise.allSettled로 일부 실패 허용
+        await PromiseManager.withTimeout(
+          Promise.allSettled(invalidatePromises),
           {
-            timeout: priority === QueryPriority.CRITICAL ? 8000 : 10000, // 타임아웃 시간 증가
+            timeout: 2000, // 타임아웃 감소
             key: `batch-invalidation-${priority}-${batchIndex}-${attempt}`,
             errorMessage: `Batch invalidation timeout for Priority ${priority}`
           }
@@ -386,8 +388,9 @@ export class ConnectionRecoveryManager {
   private setupEventListeners() {
     if (typeof window === 'undefined') return
     
-    // 1. Document Visibility Change (탭 전환)
-    document.addEventListener('visibilitychange', this.handleVisibilityChange)
+    // 1. Document Visibility Change (탭 전환) - ConnectionCore와 중복 방지를 위해 비활성화
+    // ConnectionCore가 visibility 이벤트를 처리하고 ConnectionRecovery를 호출함
+    // document.addEventListener('visibilitychange', this.handleVisibilityChange)
     
     // 2. Online/Offline (네트워크 상태)
     window.addEventListener('online', this.handleOnline)
@@ -400,7 +403,7 @@ export class ConnectionRecoveryManager {
     // 4. Page Show (브라우저 뒤로가기/앞으로가기)
     window.addEventListener('pageshow', this.handlePageShow)
     
-    console.log('[ConnectionRecovery] Event listeners registered (focus/blur disabled)')
+    console.log('[ConnectionRecovery] Event listeners registered (visibility/focus/blur disabled to prevent conflicts)')
   }
   
   /**
@@ -427,6 +430,12 @@ export class ConnectionRecoveryManager {
         this.handleVisibilityRestore(RecoveryStrategy.LIGHT)
       }
       // 30초 미만은 복구 불필요
+    } else {
+      // 페이지가 숨겨짐 - 복구 중이면 중단 방지
+      if (this.isRecovering) {
+        console.log('[ConnectionRecovery] Page hidden but recovery in progress, not interrupting')
+        return
+      }
     }
     
     this.lastVisibilityChange = now
@@ -601,7 +610,7 @@ export class ConnectionRecoveryManager {
         console.log(`[ConnectionRecovery] Starting batch cache invalidation with ${strategy} strategy`)
         const batchResults = await this.invalidateQueriesInBatches(
           strategy, 
-          strategy === RecoveryStrategy.FULL ? 'all' : 'active'
+          'none' // 캐시만 무효화, 네트워크 요청 안함
         )
         
         // 배치 결과 로깅
@@ -671,12 +680,12 @@ export class ConnectionRecoveryManager {
       // 기본적인 배치 캐시 무효화만 수행 (CRITICAL 우선순위만)
       if (this.queryClient) {
         try {
-          await this.invalidateQueriesInBatches(RecoveryStrategy.LIGHT, 'active')
+          await this.invalidateQueriesInBatches(RecoveryStrategy.LIGHT, 'none')
         } catch (batchError) {
           // 배치 처리 실패시 기본 무효화 시도
           console.warn('[ConnectionRecovery] Batch minimal recovery failed, falling back to basic invalidation')
           this.queryClient.invalidateQueries({
-            refetchType: 'none', // 네트워크 요청 없이 무효화만
+            refetchType: 'inactive' as any, // 네트워크 요청 없이 무효화만
             type: 'active'
           })
         }
@@ -692,9 +701,28 @@ export class ConnectionRecoveryManager {
   /**
    * 수동 복구 트리거 (프로그레시브)
    */
-  async manualRecovery(strategy: RecoveryStrategy = RecoveryStrategy.FULL) {
-    console.log(`[ConnectionRecovery] Manual recovery triggered with strategy: ${strategy}`)
-    await this.triggerProgressiveRecovery('manual', strategy)
+  async manualRecovery(strategy: RecoveryStrategy | string = RecoveryStrategy.FULL) {
+    // string으로 전달된 경우 RecoveryStrategy enum으로 변환
+    let recoveryStrategy: RecoveryStrategy
+    if (typeof strategy === 'string') {
+      switch (strategy.toUpperCase()) {
+        case 'LIGHT':
+          recoveryStrategy = RecoveryStrategy.LIGHT
+          break
+        case 'PARTIAL':
+          recoveryStrategy = RecoveryStrategy.PARTIAL
+          break
+        case 'FULL':
+        default:
+          recoveryStrategy = RecoveryStrategy.FULL
+          break
+      }
+    } else {
+      recoveryStrategy = strategy
+    }
+    
+    console.log(`[ConnectionRecovery] Manual recovery triggered with strategy: ${recoveryStrategy}`)
+    await this.triggerProgressiveRecovery('manual', recoveryStrategy)
   }
 
   /**
@@ -780,7 +808,7 @@ export class ConnectionRecoveryManager {
    */
   async invalidateWithStrategy(
     strategy: RecoveryStrategy, 
-    refetchType: 'active' | 'inactive' | 'all' = 'active'
+    refetchType: 'active' | 'inactive' | 'all' | 'none' = 'none'
   ): Promise<BatchResult[]> {
     console.log(`[ConnectionRecovery] Manual batch invalidation with strategy: ${strategy}`)
     return this.invalidateQueriesInBatches(strategy, refetchType)
@@ -814,7 +842,7 @@ export class ConnectionRecoveryManager {
   cleanup() {
     if (typeof window === 'undefined') return
     
-    document.removeEventListener('visibilitychange', this.handleVisibilityChange)
+    // document.removeEventListener('visibilitychange', this.handleVisibilityChange)  // 비활성화됨
     window.removeEventListener('online', this.handleOnline)
     window.removeEventListener('offline', this.handleOffline)
     // window.removeEventListener('focus', this.handleFocus)  // 비활성화됨

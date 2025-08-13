@@ -220,6 +220,7 @@ export class ConnectionCore {
     // Named functions으로 정의 (메모리 누수 방지를 위한 적절한 cleanup을 위해)
     this.visibilityHandler = () => {
       const visible = document.visibilityState === 'visible'
+      this.lastVisibilityChange = Date.now()
       this.handleEvent({ type: 'VISIBILITY_CHANGE', visible })
     }
 
@@ -547,6 +548,12 @@ export class ConnectionCore {
    * 백그라운드 전환 시 연결 일시정지
    */
   private suspendConnection(): void {
+    // 복구 중이면 suspend 하지 않음 (복구 중단 방지)
+    if (this.status.state === 'connecting') {
+      console.log('[ConnectionCore] Skip suspending - recovery in progress')
+      return
+    }
+    
     console.log('[ConnectionCore] Suspending connection (background transition)')
     
     // 현재 connected 상태일 때만 suspended로 변경
@@ -557,7 +564,13 @@ export class ConnectionCore {
       this.stopHeartbeat()
       
       // 진행 중인 visibility_change 관련 Promise들 취소
-      PromiseManager.cancelAll('visibility_change')
+      // 단, 복구 관련 Promise는 보호
+      PromiseManager.cancelAll('visibility_change', [
+        'recovery-',           // Connection Recovery 관련
+        'batch-invalidation-', // Batch invalidation 관련
+        'recovery_',           // Recovery 관련 일반
+        'connection-core-'     // ConnectionCore 자체 Promise
+      ])
       
       // 백그라운드에서는 재연결 타이머도 중지
       if (this.reconnectTimer) {
@@ -578,16 +591,35 @@ export class ConnectionCore {
       // 먼저 connecting 상태로 변경
       this.updateStatus({ state: 'connecting' })
       
-      // 누적된 Promise들 정리 (새로운 시작을 위해)
-      PromiseManager.cancelAll('visibility_change')
+      // 누적된 Promise들 정리 (새로운 시작을 위해) - 복구 관련은 보호
+      PromiseManager.cancelAll('visibility_change', [
+        'recovery-',
+        'batch-invalidation-',
+        'recovery_',
+        'connection-core-'
+      ])
       
       // 점진적 연결 복구 시작
       this.handleEvent({ type: 'RECONNECT' })
+      
+      // ConnectionRecovery에도 복구 트리거 (통합 관리)
+      import('../core/connection-recovery').then(({ connectionRecovery }) => {
+        const hiddenDuration = Date.now() - (this.lastVisibilityChange || Date.now())
+        if (hiddenDuration > 300000) { // 5분 이상
+          connectionRecovery.manualRecovery('FULL')
+        } else if (hiddenDuration > 60000) { // 1분 이상
+          connectionRecovery.manualRecovery('PARTIAL')
+        } else if (hiddenDuration > 30000) { // 30초 이상
+          connectionRecovery.manualRecovery('LIGHT')
+        }
+      })
     } else if (this.status.state === 'disconnected' || this.status.state === 'error') {
       // 연결이 끊어진 상태에서도 포그라운드 복귀 시 재연결 시도
       this.handleEvent({ type: 'RECONNECT' })
     }
   }
+
+  private lastVisibilityChange: number | null = null
 
   // Public API
 
