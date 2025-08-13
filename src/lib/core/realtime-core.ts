@@ -64,15 +64,32 @@ export class RealtimeCore {
    * 연결 상태 리스너 설정
    */
   private setupConnectionListener(): void {
-    connectionCore.subscribe((status) => {
+    let isResubscribing = false
+    
+    connectionCore.subscribe(async (status) => {
       // 연결이 복구되면 모든 구독 재설정
       if (status.state === 'connected' && status.isVisible) {
-        console.log('[RealtimeCore] Connection restored, resubscribing all channels')
-        this.resubscribeAll()
+        // 이미 재구독 중이면 스킵
+        if (isResubscribing) {
+          console.log('[RealtimeCore] Already resubscribing, skipping')
+          return
+        }
+        
+        console.log('[RealtimeCore] Connection restored, will resubscribe when Realtime is ready')
+        isResubscribing = true
+        
+        try {
+          await this.resubscribeAll()
+        } catch (error) {
+          console.error('[RealtimeCore] Failed to resubscribe:', error)
+        } finally {
+          isResubscribing = false
+        }
       }
       // 연결이 끊어지면 모든 구독 정리
       else if (status.state === 'disconnected' || status.state === 'error') {
         console.log('[RealtimeCore] Connection lost, cleaning up subscriptions')
+        isResubscribing = false
         this.cleanupAll()
       }
     })
@@ -129,8 +146,18 @@ export class RealtimeCore {
       }
     )
 
-    // 구독 시작
+    // 구독 시작 (타임아웃 추가)
+    const subscribeTimeout = setTimeout(() => {
+      if (!status.isSubscribed) {
+        console.warn(`[RealtimeCore] Subscription timeout for ${config.id}, will retry on next reconnection`)
+        // 타임아웃시 에러로 처리하지 않고, 다음 재연결 시 재시도
+        status.error = new Error('Subscription timeout')
+        this.notifyListeners()
+      }
+    }, 10000) // 10초 타임아웃
+    
     channel.subscribe((subscriptionStatus) => {
+      clearTimeout(subscribeTimeout)
       console.log(`[RealtimeCore] Channel ${config.id} status:`, subscriptionStatus)
       
       if (subscriptionStatus === 'SUBSCRIBED') {
@@ -146,10 +173,8 @@ export class RealtimeCore {
         status.error = error
         this.notifyListeners()
         
-        console.error(`[RealtimeCore] Failed to subscribe to ${config.id}:`, subscriptionStatus)
-        if (config.onError) {
-          config.onError(error)
-        }
+        console.warn(`[RealtimeCore] Failed to subscribe to ${config.id}: ${subscriptionStatus}, will retry on next reconnection`)
+        // onError 콜백은 호출하지 않음 (자동 재시도 예정이므로)
       } else if (subscriptionStatus === 'CLOSED') {
         status.isSubscribed = false
         status.subscribedAt = null
@@ -192,7 +217,7 @@ export class RealtimeCore {
   }
 
   /**
-   * 모든 구독 재설정
+   * 모든 구독 재설정 (Realtime WebSocket 연결 확인 포함)
    */
   private async resubscribeAll(): Promise<void> {
     // 연결 상태 확인
@@ -201,13 +226,38 @@ export class RealtimeCore {
       return
     }
 
+    // Realtime WebSocket 연결 확인 및 대기
+    const client = connectionCore.getClient()
+    const maxRetries = 10
+    const baseDelay = 100
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // Realtime 연결 상태 확인
+      const isRealtimeConnected = (client as any).realtime?.isConnected?.() || false
+      
+      if (isRealtimeConnected) {
+        console.log('[RealtimeCore] Realtime WebSocket connected, proceeding with resubscribe')
+        break
+      }
+      
+      if (attempt === maxRetries - 1) {
+        console.error('[RealtimeCore] Realtime WebSocket failed to connect after 10 attempts')
+        return
+      }
+      
+      // 지수 백오프로 대기
+      const delay = Math.min(baseDelay * Math.pow(2, attempt), 5000)
+      console.log(`[RealtimeCore] Waiting for Realtime WebSocket to connect (attempt ${attempt + 1}/${maxRetries}, delay: ${delay}ms)`)
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+
     const subscriptionsToRestore = Array.from(this.subscriptions.values())
     
     // 모든 기존 채널 정리
     this.cleanupAll()
     
-    // 잠시 대기
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // 잠시 대기 (채널 정리 완료 대기)
+    await new Promise(resolve => setTimeout(resolve, 200))
     
     // 모든 구독 재생성
     for (const { config } of subscriptionsToRestore) {
@@ -219,9 +269,11 @@ export class RealtimeCore {
   /**
    * 재연결 처리 (ConnectionRecovery에서 호출)
    */
-  handleReconnection(): void {
+  async handleReconnection(): Promise<void> {
     console.log('[RealtimeCore] Handling reconnection')
-    this.resubscribeAll()
+    
+    // Realtime WebSocket이 준비될 때까지 대기 후 재구독
+    await this.resubscribeAll()
   }
 
   /**
