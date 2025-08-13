@@ -76,6 +76,12 @@ export class ConnectionCore {
   private readonly MAX_HEARTBEAT_FAILURES = 3
   private heartbeatCircuitBreaker: CircuitBreaker | null = null
   private connectionCircuitBreaker: CircuitBreaker | null = null
+  
+  // DB 테스트 관련 플래그와 타임스탬프
+  private lastDbTestTime: number = 0
+  private readonly DB_TEST_COOLDOWN = 30000 // 30초 쿨다운
+  private isDbTesting: boolean = false
+  private visibilityDebounceTimer: NodeJS.Timeout | null = null
 
   private constructor() {
     // 환경 설정 가져오기
@@ -291,34 +297,43 @@ export class ConnectionCore {
     this.visibilityHandler = () => {
       const visible = document.visibilityState === 'visible'
       this.lastVisibilityChange = Date.now()
-      this.handleEvent({ type: 'VISIBILITY_CHANGE', visible })
+      // Debounce: 100ms 내의 중복 이벤트 무시
+      if (this.visibilityDebounceTimer) {
+        clearTimeout(this.visibilityDebounceTimer)
+      }
+      this.visibilityDebounceTimer = setTimeout(() => {
+        this.handleEvent({ type: 'VISIBILITY_CHANGE', visible })
+      }, 100)
     }
 
-    this.focusHandler = () => {
-      this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: true })
-    }
+    // Focus/Blur 이벤트는 비활성화 (visibilitychange로 충분)
+    // this.focusHandler = () => {
+    //   this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: true })
+    // }
 
-    this.blurHandler = () => {
-      this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
-    }
+    // this.blurHandler = () => {
+    //   this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
+    // }
 
     this.pageshowHandler = (event: PageTransitionEvent) => {
-      // 캐시에서 복원된 경우에도 visibility 체크
-      if (event.persisted || document.visibilityState === 'visible') {
+      // 캐시에서 복원된 경우에만 처리 (중요한 경우)
+      if (event.persisted) {
+        this.lastVisibilityChange = Date.now()
         this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: true })
       }
     }
 
-    this.pagehideHandler = () => {
-      this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
-    }
+    // pagehide는 필요없음 (visibilitychange가 처리)
+    // this.pagehideHandler = () => {
+    //   this.handleEvent({ type: 'VISIBILITY_CHANGE', visible: false })
+    // }
 
-    // 이벤트 리스너 등록
+    // 이벤트 리스너 등록 (최소한만)
     document.addEventListener('visibilitychange', this.visibilityHandler)
-    window.addEventListener('focus', this.focusHandler)
-    window.addEventListener('blur', this.blurHandler)
+    // window.addEventListener('focus', this.focusHandler) // 비활성화
+    // window.addEventListener('blur', this.blurHandler) // 비활성화
     window.addEventListener('pageshow', this.pageshowHandler)
-    window.addEventListener('pagehide', this.pagehideHandler)
+    // window.addEventListener('pagehide', this.pagehideHandler) // 비활성화
   }
 
   /**
@@ -664,6 +679,11 @@ export class ConnectionCore {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
+    
+    if (this.visibilityDebounceTimer) {
+      clearTimeout(this.visibilityDebounceTimer)
+      this.visibilityDebounceTimer = null
+    }
   }
 
   /**
@@ -721,24 +741,48 @@ export class ConnectionCore {
         'connection-core-'
       ])
       
-      // DB 연결 테스트를 포함한 연결 복구
-      try {
-        // 간단한 DB 쿼리로 연결 확인
-        const { error } = await this.client
-          .from('users_v2')
-          .select('id')
-          .limit(1)
-          .single()
-        
-        if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
-          console.error('[ConnectionCore] DB connection test failed on resume:', error)
-          // DB 연결 실패 시 클라이언트 재초기화
+      // DB 테스트는 필요한 경우에만 수행
+      const now = Date.now()
+      const hiddenDuration = now - (this.lastVisibilityChange || now)
+      const timeSinceLastDbTest = now - this.lastDbTestTime
+      
+      // DB 테스트 조건:
+      // 1. 현재 DB 테스트 중이 아님
+      // 2. 마지막 테스트로부터 쿨다운 시간이 지남
+      // 3. 오래 숨겨져 있었거나 (1분 이상) 처음 테스트
+      const shouldTestDb = !this.isDbTesting && 
+                          (timeSinceLastDbTest > this.DB_TEST_COOLDOWN || this.lastDbTestTime === 0) &&
+                          (hiddenDuration > 60000 || this.lastDbTestTime === 0)
+      
+      if (shouldTestDb) {
+        this.isDbTesting = true
+        try {
+          console.log('[ConnectionCore] Testing DB connection after long absence...')
+          // 간단한 DB 쿼리로 연결 확인
+          const { error } = await this.client
+            .from('users_v2')
+            .select('id')
+            .limit(1)
+            .single()
+          
+          if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
+            console.error('[ConnectionCore] DB connection test failed on resume:', error)
+            // DB 연결 실패 시 클라이언트 재초기화
+            await this.reinitializeClient()
+          } else {
+            console.log('[ConnectionCore] DB connection verified successfully')
+          }
+          this.lastDbTestTime = now
+        } catch (dbError) {
+          console.error('[ConnectionCore] DB test error on resume:', dbError)
+          // 에러 발생 시에도 클라이언트 재초기화 시도
           await this.reinitializeClient()
+          this.lastDbTestTime = now
+        } finally {
+          this.isDbTesting = false
         }
-      } catch (dbError) {
-        console.error('[ConnectionCore] DB test error on resume:', dbError)
-        // 에러 발생 시에도 클라이언트 재초기화 시도
-        await this.reinitializeClient()
+      } else {
+        console.log('[ConnectionCore] Skipping DB test (cooldown or already testing)')
       }
       
       // 점진적 연결 복구 시작
@@ -746,7 +790,6 @@ export class ConnectionCore {
       
       // ConnectionRecovery에도 복구 트리거 (통합 관리)
       import('../core/connection-recovery').then(({ connectionRecovery }) => {
-        const hiddenDuration = Date.now() - (this.lastVisibilityChange || Date.now())
         if (hiddenDuration > 300000) { // 5분 이상
           connectionRecovery.manualRecovery('FULL')
         } else if (hiddenDuration > 60000) { // 1분 이상
@@ -909,31 +952,33 @@ export class ConnectionCore {
     this.cleanup()
     
     if (typeof document !== 'undefined' && typeof window !== 'undefined') {
-      // 모든 visibility 관련 이벤트 리스너 정리
+      // 활성화된 이벤트 리스너만 정리
       if (this.visibilityHandler) {
         document.removeEventListener('visibilitychange', this.visibilityHandler)
         this.visibilityHandler = null
       }
       
-      if (this.focusHandler) {
-        window.removeEventListener('focus', this.focusHandler)
-        this.focusHandler = null
-      }
+      // Focus/Blur는 비활성화되어 있음
+      // if (this.focusHandler) {
+      //   window.removeEventListener('focus', this.focusHandler)
+      //   this.focusHandler = null
+      // }
       
-      if (this.blurHandler) {
-        window.removeEventListener('blur', this.blurHandler)
-        this.blurHandler = null
-      }
+      // if (this.blurHandler) {
+      //   window.removeEventListener('blur', this.blurHandler)
+      //   this.blurHandler = null
+      // }
       
       if (this.pageshowHandler) {
         window.removeEventListener('pageshow', this.pageshowHandler)
         this.pageshowHandler = null
       }
       
-      if (this.pagehideHandler) {
-        window.removeEventListener('pagehide', this.pagehideHandler)
-        this.pagehideHandler = null
-      }
+      // Pagehide는 비활성화되어 있음
+      // if (this.pagehideHandler) {
+      //   window.removeEventListener('pagehide', this.pagehideHandler)
+      //   this.pagehideHandler = null
+      // }
     }
     
     this.listeners.clear()
