@@ -108,10 +108,11 @@ export class AuthManager {
     })
 
     // ConnectionCore 상태 구독
-    connectionCore.subscribe((status) => {
+    connectionCore.subscribe(async (status) => {
       if (status.state === 'connected' && status.isVisible) {
         // 연결 복구 시 세션 확인
-        this.validateSession()
+        // getSession()을 사용하므로 항상 안전하게 동기화됨
+        await this.validateSession()
       }
     })
   }
@@ -267,16 +268,41 @@ export class AuthManager {
 
   /**
    * 세션 유효성 검증
+   * localStorage에서 직접 읽어와서 모듈 간 동기화 보장
    */
   private async validateSession(): Promise<void> {
-    if (!this.state.session) return
-    
-    const expiresAt = this.state.session.expires_at || 0
-    const now = Math.floor(Date.now() / 1000)
-    
-    // 만료됐거나 5분 이내 만료 예정이면 갱신
-    if (now >= expiresAt - 300) {
-      await this.refreshSession()
+    try {
+      const client = connectionCore.getClient()
+      // refreshSession() 대신 getSession() 사용
+      // localStorage에서 직접 읽어와서 모든 내부 모듈이 동기화됨
+      const { data: { session }, error } = await client.auth.getSession()
+      
+      if (error) throw error
+      
+      if (session) {
+        // 세션이 유효하면 상태 업데이트
+        this.updateState({ 
+          session, 
+          user: session.user,
+          error: null 
+        })
+        
+        // 토큰 갱신 스케줄링
+        this.scheduleTokenRefresh(session)
+        
+        // 프로필이 없으면 로드
+        if (!this.state.profile) {
+          await this.loadProfile(session.user.id)
+        }
+      } else {
+        // 세션이 없으면 로그아웃 처리
+        console.log('[AuthManager] No valid session found, signing out')
+        this.handleSignOut()
+      }
+    } catch (error) {
+      console.error('[AuthManager] Session validation failed:', error)
+      // 에러 시 로그아웃 처리
+      this.handleSignOut()
     }
   }
 

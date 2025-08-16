@@ -119,7 +119,18 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
           connection: () => connectionCore.getStatus(),
           auth: () => authManager.getState(),
           queryClient: () => queryClient.getQueryCache().getAll(),
-          clearCache: () => queryClient.clear()
+          clearCache: () => queryClient.clear(),
+          // Auth 동기화 상태 확인
+          checkAuthSync: async () => {
+            const client = connectionCore.getClient()
+            const { data: { session } } = await client.auth.getSession()
+            return {
+              hasSession: !!session,
+              authManagerState: authManager.isAuthenticated(),
+              synced: !!session === authManager.isAuthenticated(),
+              sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : null
+            }
+          }
         }
         
         console.log('[CoreProvider] Debug functions registered: window.__DEBUG__')
