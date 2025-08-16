@@ -761,6 +761,13 @@ export class ConnectionCore {
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       const timeSinceLastDbTest = now - this.lastDbTestTime
       
+      // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋
+      if (hiddenDuration > 60000) { // 1분 이상
+        console.log('[ConnectionCore] Resetting Circuit Breakers after long background period')
+        this.resetCircuitBreakers()
+        this.heartbeatFailures = 0 // heartbeat 실패 카운터도 리셋
+      }
+      
       // DB 테스트 조건:
       // 1. 현재 DB 테스트 중이 아님
       // 2. 마지막 테스트로부터 쿨다운 시간이 지남
@@ -825,6 +832,11 @@ export class ConnectionCore {
    */
   private async handleNetworkRecovery(): Promise<void> {
     console.log('[ConnectionCore] Handling network recovery as master')
+    
+    // 네트워크 복구 시 Circuit Breaker 리셋 (새로운 시작)
+    console.log('[ConnectionCore] Resetting Circuit Breakers after network recovery')
+    this.resetCircuitBreakers()
+    this.heartbeatFailures = 0 // heartbeat 실패 카운터도 리셋
     
     // 1. 먼저 자체 연결 복구
     if (this.status.state !== 'connected') {

@@ -169,7 +169,7 @@ function useConversationsV2() {
       unsubscribeMessages()
       unsubscribeReadStatus()
     }
-  }, [user?.id, queryClient])
+  }, [user?.id]) // queryClient 제거 - 변경되지 않는 인스턴스이므로 불필요
   
   return useRealtimeQueryV2<ConversationV2[]>({
     queryKey: ['conversations-v2', user?.id],
@@ -519,7 +519,7 @@ function useUnreadCountV2() {
       unsubscribeMessages()
       unsubscribeReadStatus()
     }
-  }, [user?.id, queryClient])
+  }, [user?.id]) // queryClient 제거 - 변경되지 않는 인스턴스이므로 불필요
   
   return useQuery<number>({
     queryKey: ['unread-count-v2', user?.id],
