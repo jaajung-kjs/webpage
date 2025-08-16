@@ -131,7 +131,7 @@ export class RealtimeCore {
    */
   private setReady(ready: boolean) {
     if (this.isReady !== ready) {
-      console.log(`[RealtimeCore] Ready state changed: ${this.isReady} -> ${ready}`)
+      console.log(`[RealtimeCore] 🎯 Ready state changed: ${this.isReady} -> ${ready}`)
       this.isReady = ready
       
       if (ready) {
@@ -223,84 +223,64 @@ export class RealtimeCore {
         console.log(`[RealtimeCore] Connection state changed: ${previousState} -> ${currentState}`)
       }
       
-      // 실제로 연결이 복구된 경우에만 재구독 (이전 상태가 disconnected/error였던 경우)
+      // 연결된 상태에서 준비 상태 확인 및 설정
       if (currentState === 'connected' && status.isVisible) {
-        // 최초 연결이거나 실제 재연결인 경우만 처리
-        // connecting 상태는 무시 (단순 페이지 이동 시 connecting -> connected가 발생)
-        if (!this.hasInitialSubscription && previousState === 'disconnected') {
+        // 준비 상태가 아니면 항상 준비 상태 설정 시도
+        if (!this.isReady) {
           // 이미 재구독 중이면 스킵
           if (isResubscribing) {
-            console.log('[RealtimeCore] Already resubscribing, skipping')
+            console.log('[RealtimeCore] Already processing ready state, skipping')
             this.previousConnectionState = currentState
             return
           }
           
-          console.log('[RealtimeCore] Initial connection established, testing Realtime ready state')
+          console.log('[RealtimeCore] Connection established, setting up ready state')
           isResubscribing = true
-          this.hasInitialSubscription = true
           
           try {
-            // Realtime WebSocket 실제 테스트 (실패해도 연결 상태이면 준비 상태로 설정)
+            // Realtime WebSocket 실제 테스트 (관대한 처리)
             const isRealtimeWorking = await this.testRealtimeConnection()
             
             if (isRealtimeWorking) {
               console.log('[RealtimeCore] Realtime test successful, setting ready state')
-              this.setReady(true)
-              await this.resubscribeAll()
             } else {
               console.warn('[RealtimeCore] Realtime test failed, but allowing connection (degraded mode)')
-              // 테스트 실패해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
-              this.setReady(true)
+            }
+            
+            // 테스트 결과와 관계없이 연결된 상태이면 준비 상태로 설정
+            this.setReady(true)
+            
+            // 최초 연결이거나 실제 재연결인 경우만 resubscribeAll 호출
+            if (!this.hasInitialSubscription || previousState === 'disconnected' || previousState === 'error') {
+              this.hasInitialSubscription = true
               await this.resubscribeAll()
             }
+            
           } catch (error) {
-            console.error('[RealtimeCore] Failed to test/resubscribe:', error)
+            console.error('[RealtimeCore] Failed to test realtime:', error)
             // 에러 발생해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
             console.warn('[RealtimeCore] Test failed with error, but allowing connection (degraded mode)')
             this.setReady(true)
           } finally {
             isResubscribing = false
           }
-        } else if (previousState === 'disconnected' || previousState === 'error') {
-          // 실제 재연결 (네트워크 복구, 백그라운드 복귀 등)
-          if (isResubscribing) {
-            console.log('[RealtimeCore] Already resubscribing, skipping')
-            this.previousConnectionState = currentState
-            return
-          }
-          
-          console.log('[RealtimeCore] Connection restored from disconnected/error state, testing Realtime ready state')
-          isResubscribing = true
-          
-          try {
-            // Realtime WebSocket 실제 테스트 (실패해도 연결 상태이면 준비 상태로 설정)
-            const isRealtimeWorking = await this.testRealtimeConnection()
-            
-            if (isRealtimeWorking) {
-              console.log('[RealtimeCore] Realtime test successful after reconnection')
-              this.setReady(true)
-              await this.resubscribeAll()
-            } else {
-              console.warn('[RealtimeCore] Realtime test failed after reconnection, but allowing connection (degraded mode)')
-              // 테스트 실패해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
-              this.setReady(true)
-              await this.resubscribeAll()
-            }
-          } catch (error) {
-            console.error('[RealtimeCore] Failed to test/resubscribe after reconnection:', error)
-            // 에러 발생해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
-            console.warn('[RealtimeCore] Test failed with error after reconnection, but allowing connection (degraded mode)')
-            this.setReady(true)
-          } finally {
-            isResubscribing = false
-          }
         } else {
-          // 단순 페이지 이동 등으로 connected 상태가 유지된 경우 (connecting -> connected)
-          console.log('[RealtimeCore] Connection already established, checking ready state')
-          if (!this.isReady) {
-            // 준비 상태가 아니면 간단히 준비 상태로 설정 (페이지 이동 시)
-            console.log('[RealtimeCore] Setting ready state for existing connection')
-            this.setReady(true)
+          // 이미 준비 상태인 경우
+          console.log('[RealtimeCore] Already ready, checking for reconnection needs')
+          
+          // 실제 재연결이 필요한 경우 (이전 상태가 끊어진 상태였던 경우)
+          if (previousState === 'disconnected' || previousState === 'error') {
+            if (!isResubscribing) {
+              console.log('[RealtimeCore] Reconnection detected, resubscribing all')
+              isResubscribing = true
+              try {
+                await this.resubscribeAll()
+              } catch (error) {
+                console.error('[RealtimeCore] Failed to resubscribe on reconnection:', error)
+              } finally {
+                isResubscribing = false
+              }
+            }
           }
         }
       }
@@ -729,6 +709,23 @@ export class RealtimeCore {
 
 // 싱글톤 인스턴스 export
 export const realtimeCore = RealtimeCore.getInstance()
+
+// 개발 환경에서 디버깅을 위해 글로벌 노출
+if (typeof window !== 'undefined') {
+  ;(window as any).debugRealtimeCore = () => {
+    console.log('[RealtimeCore Debug] Current state:')
+    console.log('- Is Ready:', realtimeCore.isRealtimeReady())
+    console.log('- Active subscriptions:', realtimeCore.getActiveCount())
+    console.log('- All subscriptions:', realtimeCore.getAllSubscriptions())
+    console.log('- Connection status:', connectionCore.getStatus())
+    return {
+      isReady: realtimeCore.isRealtimeReady(),
+      activeSubscriptions: realtimeCore.getActiveCount(),
+      allSubscriptions: realtimeCore.getAllSubscriptions(),
+      connectionStatus: connectionCore.getStatus()
+    }
+  }
+}
 
 // 헬퍼 함수들
 export function subscribeToTable(

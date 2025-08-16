@@ -168,12 +168,16 @@ export class UserMessageSubscriptionManager {
    */
   subscribeToConversation(conversationId: string, callback: () => void): () => void {
     if (!this.userId || !this.queryClient) {
-      console.warn('[UserMessageSubscriptionManager] Not initialized')
+      console.warn('[UserMessageSubscriptionManager] Not initialized for conversation subscription')
       return () => {}
     }
 
     const messageSubId = `user-msg-manager-conv-messages-${conversationId}`
     const readStatusSubId = `user-msg-manager-conv-read-status-${conversationId}`
+
+    console.log(`[UserMessageSubscriptionManager] 🔄 Subscribing to conversation: ${conversationId}`)
+    console.log(`[UserMessageSubscriptionManager] Manager initialized: ${this.isInitialized}`)
+    console.log(`[UserMessageSubscriptionManager] RealtimeCore ready: ${realtimeCore.isRealtimeReady()}`)
 
     // 이미 구독 중이면 기존 구독 반환
     if (this.subscriptions.has(messageSubId)) {
