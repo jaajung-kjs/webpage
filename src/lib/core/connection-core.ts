@@ -84,6 +84,7 @@ export class ConnectionCore {
   private readonly DB_TEST_COOLDOWN = 30000 // 30초 쿨다운
   private isDbTesting: boolean = false
   private visibilityDebounceTimer: NodeJS.Timeout | null = null
+  private isReinitializing: boolean = false // 재초기화 진행 중 플래그
 
   private constructor() {
     // 환경 설정 가져오기
@@ -123,17 +124,17 @@ export class ConnectionCore {
       isVisible: true
     }
 
-    // 기본 설정
+    // 기본 설정 (백그라운드 복귀 최적화)
     this.config = {
-      maxReconnectAttempts: 5,
-      reconnectInterval: 3000,
+      maxReconnectAttempts: 8, // 재시도 횟수 증가
+      reconnectInterval: 2000, // 빠른 초기 재시도
       heartbeatInterval: 30000,
       enableAutoReconnect: true,
       enableCircuitBreaker: true,
       circuitBreakerConfig: {
-        failureThreshold: 3,
-        resetTimeout: 30000, // 30초
-        monitoringWindow: 60000 // 1분
+        failureThreshold: 5, // 백그라운드 복귀 시 관대하게
+        resetTimeout: 60000, // 1분으로 증가
+        monitoringWindow: 120000 // 2분으로 증가
       }
     }
 
@@ -155,12 +156,12 @@ export class ConnectionCore {
       return
     }
 
-    // Heartbeat용 Circuit Breaker (더 민감하게)
+    // Heartbeat용 Circuit Breaker (백그라운드 복귀 최적화)
     this.heartbeatCircuitBreaker = new CircuitBreaker({
       ...CircuitBreakerPresets.network,
-      failureThreshold: 2, // heartbeat는 더 민감하게
-      resetTimeout: 15000, // 15초
-      monitoringWindow: 30000
+      failureThreshold: 3, // 백그라운드 복귀 시 관대하게
+      resetTimeout: 30000, // 30초로 증가
+      monitoringWindow: 60000 // 1분으로 증가
     }).fallback((error) => {
       console.warn('[ConnectionCore] Heartbeat circuit breaker triggered, using cached status')
       // Heartbeat 실패 시 캐시된 상태 사용
@@ -191,65 +192,91 @@ export class ConnectionCore {
   }
 
   /**
-   * Supabase 클라이언트 재초기화
+   * Supabase 클라이언트 재초기화 (중복 생성 방지)
    * DB 연결이 끊어진 경우 새로운 클라이언트 생성
    */
   private async reinitializeClient(): Promise<void> {
-    console.log('[ConnectionCore] Reinitializing Supabase client...')
+    // 이미 재초기화 중이면 스킵 (중복 방지)
+    if (this.isReinitializing) {
+      console.log('[ConnectionCore] Client reinitialization already in progress, skipping')
+      return
+    }
     
-    // 기존 이벤트 리스너 정리
-    this.cleanup()
+    this.isReinitializing = true
     
-    // 환경 설정 가져오기
-    const envConfig = getEnvConfig()
-    
-    // 새로운 클라이언트 생성
-    this.client = createClient<Database>(envConfig.supabaseUrl, envConfig.supabaseAnonKey, {
-      auth: {
-        autoRefreshToken: true,
-        persistSession: true,
-        detectSessionInUrl: true,
-        flowType: 'pkce',
-        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
-        storageKey: 'kepco-ai-auth'
-      },
-      realtime: {
-        params: {
-          eventsPerSecond: 10
+    try {
+      console.log('[ConnectionCore] Reinitializing Supabase client...')
+      
+      // 기존 클라이언트 정리 (GoTrueClient 인스턴스 정리 포함)
+      try {
+        // 기존 auth listener 정리
+        await this.client.auth.signOut({ scope: 'local' }) // 로컬만 정리
+      } catch (error) {
+        console.warn('[ConnectionCore] Error during client cleanup:', error)
+      }
+      
+      // 기존 이벤트 리스너 정리
+      this.cleanup()
+      
+      // 잠시 대기 (GoTrueClient 정리 완료 대기)
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      
+      // 환경 설정 가져오기
+      const envConfig = getEnvConfig()
+      
+      // 새로운 클라이언트 생성
+      this.client = createClient<Database>(envConfig.supabaseUrl, envConfig.supabaseAnonKey, {
+        auth: {
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: true,
+          flowType: 'pkce',
+          storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+          storageKey: 'kepco-ai-auth'
         },
-        timeout: 20000
-      },
-      global: {
-        headers: {
-          'x-application-name': 'kepco-ai-community'
-        }
-      }
-    })
-    
-    // Auth 상태 변경 구독 재설정 (INITIAL_SESSION 제외)
-    this.client.auth.onAuthStateChange((event, session) => {
-      // INITIAL_SESSION은 무시 (무한 루프 방지)
-      if (event === 'INITIAL_SESSION') {
-        return
-      }
-      
-      console.log('[ConnectionCore] Auth state changed:', event)
-      
-      switch (event) {
-        case 'SIGNED_IN':
-        case 'TOKEN_REFRESHED':
-        case 'USER_UPDATED':
-          if (session) {
-            this.handleEvent({ type: 'CONNECT' })
+        realtime: {
+          params: {
+            eventsPerSecond: 10
+          },
+          timeout: 20000
+        },
+        global: {
+          headers: {
+            'x-application-name': 'kepco-ai-community'
           }
-          break
-        case 'SIGNED_OUT':
-          this.handleEvent({ type: 'DISCONNECT' })
-          break
-      }
-    })
-    
-    console.log('[ConnectionCore] Supabase client reinitialized')
+        }
+      })
+      
+      // Auth 상태 변경 구독 재설정 (INITIAL_SESSION 제외)
+      this.client.auth.onAuthStateChange((event, session) => {
+        // INITIAL_SESSION은 무시 (무한 루프 방지)
+        if (event === 'INITIAL_SESSION') {
+          return
+        }
+        
+        console.log('[ConnectionCore] Auth state changed after reinit:', event)
+        
+        switch (event) {
+          case 'SIGNED_IN':
+          case 'TOKEN_REFRESHED':
+          case 'USER_UPDATED':
+            if (session) {
+              this.handleEvent({ type: 'CONNECT' })
+            }
+            break
+          case 'SIGNED_OUT':
+            this.handleEvent({ type: 'DISCONNECT' })
+            break
+        }
+      })
+      
+      console.log('[ConnectionCore] Supabase client reinitialized successfully')
+    } catch (error) {
+      console.error('[ConnectionCore] Failed to reinitialize client:', error)
+      throw error
+    } finally {
+      this.isReinitializing = false
+    }
   }
 
   /**
@@ -427,16 +454,20 @@ export class ConnectionCore {
     }
     
     try {
-      // Circuit Breaker를 통한 세션 확인
+      // Circuit Breaker를 통한 세션 확인 (백그라운드 복귀 최적화)
       const sessionRequest = async () => {
+        // 백그라운드 복귀 감지
+        const isBackgroundReturn = this.isBackgroundReturn()
+        const timeout = isBackgroundReturn ? 15000 : 8000 // 백그라운드 복귀 시 더 긴 타임아웃
+        
         return await PromiseManager.withTimeout(
           (async () => {
             return await this.client.auth.getSession()
           })(),
           {
-            timeout: 5000,
+            timeout,
             key: 'connection-core-get-session',
-            errorMessage: 'Session retrieval timeout after 5 seconds'
+            errorMessage: `Session retrieval timeout after ${timeout/1000} seconds`
           }
         )
       }
@@ -449,9 +480,12 @@ export class ConnectionCore {
       
       if (error) throw error
       
-      // 실제 DB 연결 테스트 (중요!)
+      // 실제 DB 연결 테스트 (백그라운드 복귀 최적화)
       const dbTestRequest = async () => {
-        console.log('[ConnectionCore] Testing DB connection...')
+        const isBackgroundReturn = this.isBackgroundReturn()
+        const timeout = isBackgroundReturn ? 10000 : 5000 // 백그라운드 복귀 시 더 긴 타임아웃
+        
+        console.log(`[ConnectionCore] Testing DB connection (timeout: ${timeout/1000}s, background return: ${isBackgroundReturn})...`)
         return await PromiseManager.withTimeout(
           (async () => {
             // 간단한 쿼리로 DB 연결 확인
@@ -467,9 +501,9 @@ export class ConnectionCore {
             return { success: true }
           })(),
           {
-            timeout: 3000,
+            timeout,
             key: 'connection-core-db-test',
-            errorMessage: 'DB connection test timeout after 3 seconds'
+            errorMessage: `DB connection test timeout after ${timeout/1000} seconds`
           }
         )
       }
@@ -529,7 +563,7 @@ export class ConnectionCore {
   }
 
   /**
-   * 재연결 스케줄링 (exponential backoff with max retry limit)
+   * 재연결 스케줄링 (백그라운드 복귀 최적화된 exponential backoff)
    * 무한 루프 방지: 최대 재시도 횟수 제한 및 점진적 백오프
    */
   private scheduleReconnect(): void {
@@ -544,12 +578,18 @@ export class ConnectionCore {
       clearTimeout(this.reconnectTimer)
     }
 
-    const delay = Math.min(
-      this.config.reconnectInterval * Math.pow(2, this.status.reconnectAttempts),
-      30000 // 최대 30초
-    )
+    // 백그라운드 복귀인지 확인
+    const isBackgroundReturn = this.isBackgroundReturn()
+    
+    // 백그라운드 복귀 시 더 빠른 재연결, 일반적인 경우 exponential backoff
+    const delay = isBackgroundReturn 
+      ? Math.min(1000 * (this.status.reconnectAttempts + 1), 5000) // 백그라운드 복귀: 1초, 2초, 3초... 최대 5초
+      : Math.min(
+          this.config.reconnectInterval * Math.pow(2, this.status.reconnectAttempts),
+          30000 // 일반적인 경우: 최대 30초
+        )
 
-    console.log(`[ConnectionCore] Scheduling reconnect in ${delay}ms (attempt ${this.status.reconnectAttempts + 1}/${this.config.maxReconnectAttempts})`)
+    console.log(`[ConnectionCore] Scheduling reconnect in ${delay}ms (attempt ${this.status.reconnectAttempts + 1}/${this.config.maxReconnectAttempts}, background return: ${isBackgroundReturn})`)
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
@@ -579,16 +619,19 @@ export class ConnectionCore {
     }
 
     try {
-      // Circuit Breaker를 통한 heartbeat 수행
+      // Circuit Breaker를 통한 heartbeat 수행 (백그라운드 복귀 최적화)
       const heartbeatRequest = async () => {
+        const isBackgroundReturn = this.isBackgroundReturn()
+        const timeout = isBackgroundReturn ? 8000 : 5000 // 백그라운드 복귀 시 더 긴 타임아웃
+        
         return await PromiseManager.withTimeout(
           (async () => {
             return await this.client.auth.getSession()
           })(),
           {
-            timeout: 3000,
+            timeout,
             key: 'connection-core-heartbeat',
-            errorMessage: 'Heartbeat timeout after 3 seconds'
+            errorMessage: `Heartbeat timeout after ${timeout/1000} seconds`
           }
         )
       }
@@ -761,11 +804,22 @@ export class ConnectionCore {
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       const timeSinceLastDbTest = now - this.lastDbTestTime
       
-      // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋
-      if (hiddenDuration > 60000) { // 1분 이상
-        console.log('[ConnectionCore] Resetting Circuit Breakers after long background period')
+      // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋 및 재초기화 여부 결정
+      if (hiddenDuration > 300000) { // 5분 이상
+        console.log('[ConnectionCore] Long background period (5+ min), performing full recovery')
         this.resetCircuitBreakers()
-        this.heartbeatFailures = 0 // heartbeat 실패 카운터도 리셋
+        this.heartbeatFailures = 0
+        
+        // 클라이언트 재초기화 (장시간 백그라운드 후)
+        try {
+          await this.reinitializeClient()
+        } catch (error) {
+          console.error('[ConnectionCore] Failed to reinitialize after long background:', error)
+        }
+      } else if (hiddenDuration > 60000) { // 1분 이상
+        console.log('[ConnectionCore] Medium background period (1+ min), resetting Circuit Breakers')
+        this.resetCircuitBreakers()
+        this.heartbeatFailures = 0
       }
       
       // DB 테스트 조건:
@@ -807,8 +861,14 @@ export class ConnectionCore {
         console.log('[ConnectionCore] Skipping DB test (cooldown or already testing)')
       }
       
-      // 점진적 연결 복구 시작
-      this.handleEvent({ type: 'RECONNECT' })
+      // 점진적 연결 복구 시작 (재초기화가 완료된 후)
+      if (hiddenDuration <= 300000) {
+        // 5분 미만이면 일반 재연결 (재초기화는 이미 위에서 처리됨)
+        this.handleEvent({ type: 'RECONNECT' })
+      } else {
+        // 5분 이상이면 재초기화 후 연결 시도
+        this.handleEvent({ type: 'CONNECT' })
+      }
       
       // ConnectionRecovery에도 복구 트리거 (통합 관리)
       // visibility 복구는 'visibility' source로 전달
@@ -860,6 +920,19 @@ export class ConnectionCore {
   }
 
   private lastVisibilityChange: number | null = null
+
+  /**
+   * 백그라운드 복귀 여부 감지
+   */
+  private isBackgroundReturn(): boolean {
+    if (!this.lastVisibilityChange) return false
+    
+    const now = Date.now()
+    const hiddenDuration = now - this.lastVisibilityChange
+    
+    // 1분 이상 백그라운드에 있었으면 백그라운드 복귀로 간주
+    return hiddenDuration > 60000
+  }
 
   // Public API
 
