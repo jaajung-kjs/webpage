@@ -44,6 +44,11 @@ export class RealtimeCore {
   private previousConnectionState: 'disconnected' | 'connecting' | 'connected' | 'error' | 'suspended' = 'disconnected'
   private hasInitialSubscription = false
 
+  // 준비 상태 관리
+  private isReady = false
+  private readyListeners: Set<(ready: boolean) => void> = new Set()
+  private pendingSubscriptions: SubscriptionConfig[] = []
+
   private constructor() {
     this.subscriptions = new Map()
     this.listeners = new Set()
@@ -60,6 +65,147 @@ export class RealtimeCore {
       RealtimeCore.instance = new RealtimeCore()
     }
     return RealtimeCore.instance
+  }
+
+  /**
+   * 준비 상태 대기
+   */
+  async waitForReady(timeout = 10000): Promise<boolean> {
+    if (this.isReady) {
+      console.log('[RealtimeCore] Already ready')
+      return true
+    }
+    
+    console.log(`[RealtimeCore] Waiting for ready state (timeout: ${timeout}ms)`)
+    
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        console.warn('[RealtimeCore] Ready state timeout')
+        this.readyListeners.delete(listener)
+        resolve(false)
+      }, timeout)
+      
+      const listener = (ready: boolean) => {
+        if (ready) {
+          console.log('[RealtimeCore] Ready state achieved')
+          clearTimeout(timer)
+          this.readyListeners.delete(listener)
+          resolve(true)
+        }
+      }
+      
+      this.readyListeners.add(listener)
+    })
+  }
+
+  /**
+   * 준비 상태 리스너 등록
+   */
+  onReady(listener: () => void): () => void {
+    if (this.isReady) {
+      console.log('[RealtimeCore] Already ready, calling listener immediately')
+      listener()
+      return () => {}
+    }
+    
+    const wrappedListener = (ready: boolean) => {
+      if (ready) {
+        console.log('[RealtimeCore] Calling ready listener')
+        listener()
+      }
+    }
+    
+    this.readyListeners.add(wrappedListener)
+    return () => this.readyListeners.delete(wrappedListener)
+  }
+
+  /**
+   * 준비 상태 확인
+   */
+  isRealtimeReady(): boolean {
+    return this.isReady
+  }
+
+  /**
+   * 준비 상태 설정 (private)
+   */
+  private setReady(ready: boolean) {
+    if (this.isReady !== ready) {
+      console.log(`[RealtimeCore] Ready state changed: ${this.isReady} -> ${ready}`)
+      this.isReady = ready
+      
+      if (ready) {
+        // 대기 중인 구독들 처리
+        const pending = [...this.pendingSubscriptions]
+        this.pendingSubscriptions = []
+        
+        if (pending.length > 0) {
+          console.log(`[RealtimeCore] Processing ${pending.length} pending subscriptions`)
+          pending.forEach(config => {
+            console.log(`[RealtimeCore] Processing pending subscription: ${config.id}`)
+            this.actualSubscribe(config)
+          })
+        }
+      }
+      
+      // 리스너들에게 알림
+      this.readyListeners.forEach(listener => {
+        try {
+          listener(ready)
+        } catch (error) {
+          console.error('[RealtimeCore] Ready listener error:', error)
+        }
+      })
+    }
+  }
+
+  /**
+   * 실제 Realtime 연결 테스트 (안전한 채널 정리)
+   */
+  private async testRealtimeConnection(): Promise<boolean> {
+    try {
+      console.log('[RealtimeCore] Testing Realtime connection')
+      const client = connectionCore.getClient()
+      const testChannelName = `ready-test-${Date.now()}`
+      const testChannel = client.channel(testChannelName)
+      
+      return new Promise((resolve) => {
+        let isResolved = false
+        
+        const cleanup = () => {
+          if (!isResolved) {
+            isResolved = true
+            // 안전한 채널 정리 - 비동기로 처리하여 재귀 방지
+            setTimeout(() => {
+              try {
+                client.removeChannel(testChannel)
+              } catch (error) {
+                console.warn('[RealtimeCore] Test channel cleanup error:', error)
+              }
+            }, 100)
+          }
+        }
+        
+        const timeout = setTimeout(() => {
+          console.log('[RealtimeCore] Realtime connection test timeout')
+          cleanup()
+          resolve(false)
+        }, 3000)
+        
+        testChannel.subscribe((status) => {
+          if (!isResolved) {
+            clearTimeout(timeout)
+            const success = status === 'SUBSCRIBED'
+            console.log(`[RealtimeCore] Realtime connection test result: ${success} (status: ${status})`)
+            cleanup()
+            resolve(success)
+          }
+        })
+      })
+    } catch (error) {
+      console.error('[RealtimeCore] Realtime connection test error:', error)
+      return false
+    }
   }
 
   /**
@@ -89,14 +235,29 @@ export class RealtimeCore {
             return
           }
           
-          console.log('[RealtimeCore] Initial connection established, will subscribe when Realtime is ready')
+          console.log('[RealtimeCore] Initial connection established, testing Realtime ready state')
           isResubscribing = true
           this.hasInitialSubscription = true
           
           try {
-            await this.resubscribeAll()
+            // Realtime WebSocket 실제 테스트 (실패해도 연결 상태이면 준비 상태로 설정)
+            const isRealtimeWorking = await this.testRealtimeConnection()
+            
+            if (isRealtimeWorking) {
+              console.log('[RealtimeCore] Realtime test successful, setting ready state')
+              this.setReady(true)
+              await this.resubscribeAll()
+            } else {
+              console.warn('[RealtimeCore] Realtime test failed, but allowing connection (degraded mode)')
+              // 테스트 실패해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
+              this.setReady(true)
+              await this.resubscribeAll()
+            }
           } catch (error) {
-            console.error('[RealtimeCore] Failed to resubscribe:', error)
+            console.error('[RealtimeCore] Failed to test/resubscribe:', error)
+            // 에러 발생해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
+            console.warn('[RealtimeCore] Test failed with error, but allowing connection (degraded mode)')
+            this.setReady(true)
           } finally {
             isResubscribing = false
           }
@@ -108,25 +269,46 @@ export class RealtimeCore {
             return
           }
           
-          console.log('[RealtimeCore] Connection restored from disconnected/error state, will resubscribe')
+          console.log('[RealtimeCore] Connection restored from disconnected/error state, testing Realtime ready state')
           isResubscribing = true
           
           try {
-            await this.resubscribeAll()
+            // Realtime WebSocket 실제 테스트 (실패해도 연결 상태이면 준비 상태로 설정)
+            const isRealtimeWorking = await this.testRealtimeConnection()
+            
+            if (isRealtimeWorking) {
+              console.log('[RealtimeCore] Realtime test successful after reconnection')
+              this.setReady(true)
+              await this.resubscribeAll()
+            } else {
+              console.warn('[RealtimeCore] Realtime test failed after reconnection, but allowing connection (degraded mode)')
+              // 테스트 실패해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
+              this.setReady(true)
+              await this.resubscribeAll()
+            }
           } catch (error) {
-            console.error('[RealtimeCore] Failed to resubscribe:', error)
+            console.error('[RealtimeCore] Failed to test/resubscribe after reconnection:', error)
+            // 에러 발생해도 연결 상태이면 준비 상태로 설정 (관대한 처리)
+            console.warn('[RealtimeCore] Test failed with error after reconnection, but allowing connection (degraded mode)')
+            this.setReady(true)
           } finally {
             isResubscribing = false
           }
         } else {
           // 단순 페이지 이동 등으로 connected 상태가 유지된 경우 (connecting -> connected)
-          console.log('[RealtimeCore] Connection already established, skipping resubscribe (likely page navigation)')
+          console.log('[RealtimeCore] Connection already established, checking ready state')
+          if (!this.isReady) {
+            // 준비 상태가 아니면 간단히 준비 상태로 설정 (페이지 이동 시)
+            console.log('[RealtimeCore] Setting ready state for existing connection')
+            this.setReady(true)
+          }
         }
       }
       // 연결이 끊어지면 모든 구독 정리
       else if (currentState === 'disconnected' || currentState === 'error') {
-        console.log('[RealtimeCore] Connection lost, cleaning up subscriptions')
+        console.log('[RealtimeCore] Connection lost, cleaning up subscriptions and setting ready to false')
         isResubscribing = false
+        this.setReady(false)
         this.cleanupAll()
       }
       
@@ -136,7 +318,7 @@ export class RealtimeCore {
   }
 
   /**
-   * 채널 구독
+   * 개선된 구독 메서드 (준비 상태 확인)
    */
   subscribe(config: SubscriptionConfig): () => void {
     // 이미 구독 중인 경우
@@ -145,7 +327,39 @@ export class RealtimeCore {
       return () => this.unsubscribe(config.id)
     }
 
-    console.log(`[RealtimeCore] Subscribing to ${config.id}`, {
+    if (!this.isReady) {
+      console.log(`[RealtimeCore] Not ready, queueing subscription: ${config.id}`)
+      this.pendingSubscriptions.push(config)
+      
+      // 준비되면 자동 구독
+      const unsubscribeReady = this.onReady(() => {
+        unsubscribeReady()
+        console.log(`[RealtimeCore] Ready state achieved, processing queued subscription: ${config.id}`)
+        this.actualSubscribe(config)
+      })
+      
+      return () => {
+        // 대기 중인 구독 제거
+        const index = this.pendingSubscriptions.findIndex(p => p.id === config.id)
+        if (index !== -1) {
+          console.log(`[RealtimeCore] Removing pending subscription: ${config.id}`)
+          this.pendingSubscriptions.splice(index, 1)
+        }
+        // 이미 구독된 경우 해제
+        if (this.subscriptions.has(config.id)) {
+          this.unsubscribe(config.id)
+        }
+      }
+    }
+    
+    return this.actualSubscribe(config)
+  }
+
+  /**
+   * 실제 구독 처리 (준비 상태일 때만 호출)
+   */
+  private actualSubscribe(config: SubscriptionConfig): () => void {
+    console.log(`[RealtimeCore] Actually subscribing to ${config.id}`, {
       table: config.table,
       event: config.event,
       filter: config.filter
@@ -371,14 +585,20 @@ export class RealtimeCore {
   }
 
   /**
-   * 모든 구독 정리 (채널은 유지)
+   * 모든 구독 정리 (채널은 유지) - 안전한 채널 정리
    */
   private cleanupAll(): void {
     const client = connectionCore.getClient()
     
     this.subscriptions.forEach((subscription) => {
       console.log(`[RealtimeCore] Cleaning up ${subscription.config.id}`)
-      client.removeChannel(subscription.channel)
+      
+      // 안전한 채널 정리 - try-catch로 보호
+      try {
+        client.removeChannel(subscription.channel)
+      } catch (error) {
+        console.warn(`[RealtimeCore] Failed to remove channel ${subscription.config.id}:`, error)
+      }
       
       // 상태만 업데이트
       subscription.status.isSubscribed = false
@@ -390,14 +610,20 @@ export class RealtimeCore {
   }
 
   /**
-   * 모든 구독 완전 제거
+   * 모든 구독 완전 제거 - 안전한 채널 정리
    */
   unsubscribeAll(): void {
     const client = connectionCore.getClient()
     
     this.subscriptions.forEach((subscription, id) => {
       console.log(`[RealtimeCore] Removing ${id}`)
-      client.removeChannel(subscription.channel)
+      
+      // 안전한 채널 정리 - try-catch로 보호
+      try {
+        client.removeChannel(subscription.channel)
+      } catch (error) {
+        console.warn(`[RealtimeCore] Failed to remove channel ${id}:`, error)
+      }
     })
     
     this.subscriptions.clear()

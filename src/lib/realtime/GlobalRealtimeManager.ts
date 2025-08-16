@@ -77,7 +77,7 @@ export class GlobalRealtimeManager {
   }
   
   /**
-   * 전역 구독 초기화 - 개선된 병렬 처리 및 재시도 메커니즘
+   * 전역 구독 초기화 - RealtimeCore 준비 상태 기반
    */
   async initialize(): Promise<void> {
     if (this.isInitialized) {
@@ -93,11 +93,33 @@ export class GlobalRealtimeManager {
     if (!this.queryClient) {
       throw new Error('[GlobalRealtime] QueryClient not set')
     }
+
+    // RealtimeCore 준비 대기
+    const isReady = await realtimeCore.waitForReady(10000)
+    
+    if (!isReady) {
+      console.warn('[GlobalRealtime] RealtimeCore not ready, setting up retry')
+      this.setupRetryMechanism()
+      throw new Error('RealtimeCore not ready')
+    }
     
     this.initializationPromise = this.performInitialization()
     return this.initializationPromise
   }
   
+  /**
+   * 재시도 메커니즘 설정
+   */
+  private setupRetryMechanism() {
+    const unsubscribe = realtimeCore.onReady(() => {
+      unsubscribe()
+      if (this.queryClient && !this.isInitialized) {
+        console.log('[GlobalRealtime] RealtimeCore ready, retrying initialization')
+        this.performInitialization().catch(console.error)
+      }
+    })
+  }
+
   /**
    * 실제 초기화 로직
    */

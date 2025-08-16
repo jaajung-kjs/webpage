@@ -118,9 +118,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
         
-        // 초기 세션이 있으면 메시지 구독 초기화
+        // 초기 세션이 있으면 메시지 구독 초기화 (에러 처리 포함)
         if (session?.user) {
-          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          try {
+            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          } catch (error) {
+            console.error('[AuthProvider] Message subscription initialization failed:', error)
+            // 실패해도 앱은 계속 실행
+          }
         }
       } catch (err) {
         console.error('Initial session error:', err)
@@ -146,11 +151,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (event === 'SIGNED_IN' && session?.user) {
           // 로그인 시 프로필 새로고침
           queryClient.invalidateQueries({ queryKey: ['user-profile-v2', session.user.id] })
-          // 로그인 시 메시지 구독 초기화
-          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          // 로그인 시 메시지 구독 초기화 (에러 처리 포함)
+          try {
+            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          } catch (error) {
+            console.error('[AuthProvider] SIGNED_IN: Message subscription initialization failed:', error)
+            // 실패해도 앱은 계속 실행
+          }
         } else if (event === 'USER_UPDATED' && session?.user) {
-          // 사용자 정보 업데이트 시 재초기화
-          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          // 사용자 정보 업데이트 시 재초기화 (에러 처리 포함)
+          try {
+            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+          } catch (error) {
+            console.error('[AuthProvider] USER_UPDATED: Message subscription initialization failed:', error)
+            // 실패해도 앱은 계속 실행
+          }
         }
       }
     )

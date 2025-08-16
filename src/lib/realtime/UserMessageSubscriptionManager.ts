@@ -47,9 +47,9 @@ export class UserMessageSubscriptionManager {
   }
 
   /**
-   * 매니저 초기화 (로그인 시 호출)
+   * 매니저 초기화 (로그인 시 호출) - 비동기로 변경
    */
-  initialize(userId: string, queryClient: QueryClient) {
+  async initialize(userId: string, queryClient: QueryClient) {
     // 이미 같은 사용자로 초기화되어 있으면 스킵
     if (this.isInitialized && this.userId === userId) {
       // console.log('[UserMessageSubscriptionManager] Already initialized for user:', userId)
@@ -64,10 +64,34 @@ export class UserMessageSubscriptionManager {
     // console.log('[UserMessageSubscriptionManager] Initializing for user:', userId)
     this.userId = userId
     this.queryClient = queryClient
-    this.isInitialized = true
+
+    // RealtimeCore 준비 대기 (계층 구조 준수)
+    const isReady = await realtimeCore.waitForReady(10000)
+    
+    if (!isReady) {
+      console.warn('[UserMessageSubscriptionManager] RealtimeCore not ready, setting up retry')
+      this.setupRetryMechanism()
+      return
+    }
 
     // 메시지 구독 설정
     this.setupSubscriptions()
+    this.isInitialized = true
+  }
+
+  /**
+   * 재시도 메커니즘 설정
+   */
+  private setupRetryMechanism() {
+    // RealtimeCore가 준비되면 자동 재시도
+    const unsubscribe = realtimeCore.onReady(() => {
+      unsubscribe()
+      if (this.userId && this.queryClient && !this.isInitialized) {
+        console.log('[UserMessageSubscriptionManager] RealtimeCore ready, retrying initialization')
+        this.setupSubscriptions()
+        this.isInitialized = true
+      }
+    })
   }
 
   /**

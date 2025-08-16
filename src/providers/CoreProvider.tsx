@@ -77,8 +77,13 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
         // 초기 연결 시도
         await connectionCore.connect()
         
-        // Realtime 구독 초기화
-        await globalRealtimeManager.initialize()
+        // GlobalRealtimeManager 초기화 (에러 처리 포함)
+        try {
+          await globalRealtimeManager.initialize()
+        } catch (error) {
+          console.error('[CoreProvider] Global realtime initialization failed:', error)
+          // 실패해도 앱은 계속 실행
+        }
         
         // 연결 상태 변경 시 쿼리 재검증 (ConnectionRecovery가 이제 처리)
         connectionCore.subscribe((status) => {
