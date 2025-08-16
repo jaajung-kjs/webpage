@@ -79,10 +79,7 @@ export class ConnectionCore {
   private heartbeatCircuitBreaker: CircuitBreaker | null = null
   private connectionCircuitBreaker: CircuitBreaker | null = null
   
-  // DB 테스트 관련 플래그와 타임스탬프
-  private lastDbTestTime: number = 0
-  private readonly DB_TEST_COOLDOWN = 30000 // 30초 쿨다운
-  private isDbTesting: boolean = false
+  // DB 테스트 제거됨 - Supabase 자체 연결 관리 활용
   private visibilityDebounceTimer: NodeJS.Timeout | null = null
   private isReinitializing: boolean = false // 재초기화 진행 중 플래그
 
@@ -480,54 +477,7 @@ export class ConnectionCore {
       
       if (error) throw error
       
-      // 실제 DB 연결 테스트 (백그라운드 복귀 최적화)
-      const dbTestRequest = async () => {
-        const isBackgroundReturn = this.isBackgroundReturn()
-        const timeout = isBackgroundReturn ? 10000 : 5000 // 백그라운드 복귀 시 더 긴 타임아웃
-        
-        console.log(`[ConnectionCore] Testing DB connection (timeout: ${timeout/1000}s, background return: ${isBackgroundReturn})...`)
-        return await PromiseManager.withTimeout(
-          (async () => {
-            // 간단한 쿼리로 DB 연결 확인
-            const { data, error } = await this.client
-              .from('users_v2')
-              .select('id')
-              .limit(1)
-              .single()
-            
-            if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
-              throw error
-            }
-            return { success: true }
-          })(),
-          {
-            timeout,
-            key: 'connection-core-db-test',
-            errorMessage: `DB connection test timeout after ${timeout/1000} seconds`
-          }
-        )
-      }
-
-      // DB 연결 테스트 실행
-      try {
-        await dbTestRequest()
-        console.log('[ConnectionCore] DB connection test successful')
-      } catch (dbError) {
-        console.error('[ConnectionCore] DB connection test failed:', dbError)
-        
-        // DB 연결 실패 시 클라이언트 재초기화 시도
-        console.log('[ConnectionCore] Attempting to reinitialize Supabase client...')
-        await this.reinitializeClient()
-        
-        // 재시도
-        try {
-          await dbTestRequest()
-          console.log('[ConnectionCore] DB connection restored after client reinitialization')
-        } catch (retryError) {
-          console.error('[ConnectionCore] DB connection still failing after reinitialization:', retryError)
-          throw retryError
-        }
-      }
+      // DB 테스트 제거 - Supabase 자체 연결 관리에 의존
       
       if (!session) {
         console.log('[ConnectionCore] No session available, but allowing anonymous access')
@@ -799,10 +749,9 @@ export class ConnectionCore {
         'connection-core-'
       ])
       
-      // DB 테스트는 필요한 경우에만 수행
+      // 백그라운드 복귀 시 복구 처리
       const now = Date.now()
       const hiddenDuration = now - (this.lastVisibilityChange || now)
-      const timeSinceLastDbTest = now - this.lastDbTestTime
       
       // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋 및 재초기화 여부 결정
       if (hiddenDuration > 300000) { // 5분 이상
@@ -822,44 +771,7 @@ export class ConnectionCore {
         this.heartbeatFailures = 0
       }
       
-      // DB 테스트 조건:
-      // 1. 현재 DB 테스트 중이 아님
-      // 2. 마지막 테스트로부터 쿨다운 시간이 지남
-      // 3. 오래 숨겨져 있었거나 (1분 이상) 처음 테스트
-      const shouldTestDb = !this.isDbTesting && 
-                          (timeSinceLastDbTest > this.DB_TEST_COOLDOWN || this.lastDbTestTime === 0) &&
-                          (hiddenDuration > 60000 || this.lastDbTestTime === 0)
-      
-      if (shouldTestDb) {
-        this.isDbTesting = true
-        try {
-          console.log('[ConnectionCore] Testing DB connection after long absence...')
-          // 간단한 DB 쿼리로 연결 확인
-          const { error } = await this.client
-            .from('users_v2')
-            .select('id')
-            .limit(1)
-            .single()
-          
-          if (error && error.code !== 'PGRST116') { // PGRST116 = No rows found (정상)
-            console.error('[ConnectionCore] DB connection test failed on resume:', error)
-            // DB 연결 실패 시 클라이언트 재초기화
-            await this.reinitializeClient()
-          } else {
-            console.log('[ConnectionCore] DB connection verified successfully')
-          }
-          this.lastDbTestTime = now
-        } catch (dbError) {
-          console.error('[ConnectionCore] DB test error on resume:', dbError)
-          // 에러 발생 시에도 클라이언트 재초기화 시도
-          await this.reinitializeClient()
-          this.lastDbTestTime = now
-        } finally {
-          this.isDbTesting = false
-        }
-      } else {
-        console.log('[ConnectionCore] Skipping DB test (cooldown or already testing)')
-      }
+      // DB 테스트 제거 - Supabase 자체 연결 관리에 의존
       
       // 점진적 연결 복구 시작 (재초기화가 완료된 후)
       if (hiddenDuration <= 300000) {
