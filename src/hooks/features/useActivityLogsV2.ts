@@ -156,7 +156,7 @@ export function useActivityLogsV2() {
         supabaseClient.removeChannel(channel)
       }
     }
-  }, [user?.id, supabaseClient, queryClient])
+  }, [user?.id]) // supabaseClient, queryClient 제거
 
   // 사용자 활동 로그 목록 조회 (무한 스크롤)
   const useActivityLogs = (filter: ActivityLogFilter = {}, pageSize = 50) => {

@@ -246,7 +246,7 @@ export function useGamificationV2(userId?: string) {
     return () => {
       supabaseClient.removeChannel(channel)
     }
-  }, [user?.id, isOwnProfile, queryClient])
+  }, [user?.id, isOwnProfile]) // queryClient 제거
 
   // 레벨 진행률 계산 (activity_level 기준)
   const getLevelProgress = useCallback((currentScore: number, activityLevel: string) => {

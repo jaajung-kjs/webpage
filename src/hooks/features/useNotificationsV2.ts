@@ -143,7 +143,7 @@ export function useNotificationsV2() {
         supabase.removeChannel(channel)
       }
     }
-  }, [user?.id, supabase, queryClient])
+  }, [user?.id]) // supabase, queryClient 제거 - 싱글톤 인스턴스
 
   // 알림 목록 조회 (무한 스크롤)
   const useNotifications = (filter: NotificationFilter = {}, pageSize = 20) => {

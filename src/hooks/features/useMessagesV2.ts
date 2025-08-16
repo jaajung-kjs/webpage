@@ -333,7 +333,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       unsubscribeMessages()
       unsubscribeReadStatus()
     }
-  }, [user?.id, conversationId, options, queryClient])
+  }, [user?.id, conversationId]) // options, queryClient 제거 - 불필요한 재구독 방지
   
   return useRealtimeQueryV2<MessageV2[]>({
     queryKey: ['conversation-messages-v2', conversationId, user?.id, options],

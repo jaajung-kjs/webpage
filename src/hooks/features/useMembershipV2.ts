@@ -116,7 +116,7 @@ export function useMembershipV2() {
         supabase.removeChannel(channel)
       }
     }
-  }, [user?.id, supabase, queryClient])
+  }, [user?.id]) // supabase, queryClient 제거
 
   // 현재 사용자의 멤버십 신청 상태 조회
   const useMyApplication = () => {

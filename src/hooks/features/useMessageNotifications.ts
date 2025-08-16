@@ -200,7 +200,7 @@ export function useMessageNotifications() {
     return () => {
       unsubscribe()
     }
-  }, [user?.id, settings, permission])
+  }, [user?.id]) // settings, permission 제거 - 콜백 내부에서 최신값 참조
 
   // 설정 업데이트
   const updateSettings = (newSettings: Partial<NotificationSettings>) => {

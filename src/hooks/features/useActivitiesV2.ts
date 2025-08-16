@@ -129,7 +129,7 @@ export function useActivitiesV2() {
         supabase.removeChannel(channel)
       }
     }
-  }, [user?.id, supabase, queryClient])
+  }, [user?.id]) // supabase, queryClient 제거
 
   // 활동 상세 조회
   const useActivity = (activityId: string) => {

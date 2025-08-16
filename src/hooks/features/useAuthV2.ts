@@ -128,7 +128,7 @@ export function useAuthV2() {
       .update({ last_login_at: new Date().toISOString() })
       .eq('id', user.id)
       .is('deleted_at', null)
-  }, [user?.id, supabase])
+  }, [user?.id]) // supabase 제거
 
   // 로그아웃 (개선된 에러 핸들링)
   const signOut = useMutation({

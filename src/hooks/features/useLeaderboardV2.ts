@@ -338,7 +338,7 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
     return () => {
       supabaseClient.removeChannel(channel)
     }
-  }, [user?.id, queryClient])
+  }, [user?.id]) // queryClient 제거
 
   // 기간 변경 함수
   const changePeriod = useCallback((newPeriod: LeaderboardPeriod) => {
