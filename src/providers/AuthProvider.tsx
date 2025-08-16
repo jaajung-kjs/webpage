@@ -10,6 +10,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
+import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Tables } from '@/lib/database.types'
 import { UserRole } from '@/hooks/types/v2-types'
@@ -116,6 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         setSession(session)
         setUser(session?.user ?? null)
+        
+        // 초기 세션이 있으면 메시지 구독 초기화
+        if (session?.user) {
+          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+        }
       } catch (err) {
         console.error('Initial session error:', err)
       } finally {
@@ -134,10 +140,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         // 프로필 캐시 무효화
         if (event === 'SIGNED_OUT') {
+          // 로그아웃 시 메시지 구독 정리
+          userMessageSubscriptionManager.cleanup()
           queryClient.clear()
         } else if (event === 'SIGNED_IN' && session?.user) {
           // 로그인 시 프로필 새로고침
           queryClient.invalidateQueries({ queryKey: ['user-profile-v2', session.user.id] })
+          // 로그인 시 메시지 구독 초기화
+          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+        } else if (event === 'USER_UPDATED' && session?.user) {
+          // 사용자 정보 업데이트 시 재초기화
+          userMessageSubscriptionManager.initialize(session.user.id, queryClient)
         }
       }
     )
@@ -186,6 +199,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsSigningOut(true)
     
     try {
+      // 로그아웃 시 메시지 구독 정리 (signOut 전에 실행)
+      userMessageSubscriptionManager.cleanup()
+      
       const { error } = await supabaseClient.auth.signOut()
       if (error) {
         console.warn('AuthProvider signOut error:', error)

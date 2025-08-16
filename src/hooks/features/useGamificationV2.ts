@@ -226,27 +226,9 @@ export function useGamificationV2(userId?: string) {
     })
   }, [recordActivity])
 
-  // 실시간 구독 (본인 데이터만)
-  useEffect(() => {
-    if (!isOwnProfile || !user?.id) return
-
-    const channel = supabaseClient
-      .channel(`gamification:${user.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'users_v2',
-        filter: `id=eq.${user.id}`
-      }, () => {
-        queryClient.invalidateQueries({ queryKey: ['user-game-data-v2', user.id] })
-        queryClient.invalidateQueries({ queryKey: ['user-stats-v2', user.id] })
-      })
-      .subscribe()
-
-    return () => {
-      supabaseClient.removeChannel(channel)
-    }
-  }, [user?.id, isOwnProfile]) // queryClient 제거
+  // GlobalRealtimeManager가 users_v2 실시간 업데이트를 처리함
+  // 개별 Hook에서 직접 구독하지 않음 (중복 방지)
+  // GlobalRealtimeManager의 handleUsersChange가 관련 쿼리를 자동 무효화함
 
   // 레벨 진행률 계산 (activity_level 기준)
   const getLevelProgress = useCallback((currentScore: number, activityLevel: string) => {

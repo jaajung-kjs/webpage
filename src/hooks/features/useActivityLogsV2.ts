@@ -11,10 +11,9 @@
  */
 
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
-import { useCallback, useEffect } from 'react'
+import { useCallback } from 'react'
 import { supabaseClient } from '@/lib/core/connection-core'
 import type { Database } from '@/lib/database.types'
-import type { RealtimeChannel } from '@supabase/supabase-js'
 import { useAuth } from '@/providers'
 
 type Tables = Database['public']['Tables']
@@ -106,57 +105,9 @@ export function useActivityLogsV2() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  // 실시간 활동 로그 구독 (현재 사용자용)
-  useEffect(() => {
-    if (!user?.id) return
-
-    let channel: RealtimeChannel | null = null
-
-    const setupRealtimeSubscription = () => {
-      // audit_logs_v2 테이블을 통해 활동 로그를 구독
-      // (log_activity_v2 RPC 함수가 audit_logs_v2에 기록한다고 가정)
-      channel = supabaseClient
-        .channel('user_activity_logs')
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'audit_logs_v2',
-            filter: `user_id=eq.${user.id}`
-          },
-          (payload) => {
-            const newLog = payload.new as any
-            
-            // 새 활동을 캐시에 추가
-            queryClient.setQueryData<{ pages: any[] }>(['activity-logs-v2', user.id], (old) => {
-              if (!old) return old
-              
-              const firstPage = old.pages[0]
-              if (firstPage) {
-                firstPage.logs = [newLog, ...firstPage.logs]
-                firstPage.totalCount += 1
-              }
-              
-              return old
-            })
-            
-            // 활동 통계 무효화
-            queryClient.invalidateQueries({ queryKey: ['activity-stats-v2', user.id] })
-            queryClient.invalidateQueries({ queryKey: ['recent-activities-v2', user.id] })
-          }
-        )
-        .subscribe()
-    }
-
-    setupRealtimeSubscription()
-
-    return () => {
-      if (channel) {
-        supabaseClient.removeChannel(channel)
-      }
-    }
-  }, [user?.id]) // supabaseClient, queryClient 제거
+  // GlobalRealtimeManager가 audit_logs_v2 실시간 업데이트를 처리함
+  // 개별 Hook에서 직접 구독하지 않음 (중복 방지)
+  // GlobalRealtimeManager의 handleAuditLogsChange가 recent-activities-v2와 audit-logs-v2 쿼리를 자동 무효화함
 
   // 사용자 활동 로그 목록 조회 (무한 스크롤)
   const useActivityLogs = (filter: ActivityLogFilter = {}, pageSize = 50) => {

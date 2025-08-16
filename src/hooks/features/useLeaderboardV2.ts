@@ -316,29 +316,9 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
     staleTime: 10 * 60 * 1000, // 10분
   })
 
-  // 실시간 구독 (랭킹 변동 알림용)
-  useEffect(() => {
-    if (!user?.id) return
-
-    const channel = supabaseClient
-      .channel('leaderboard-updates')
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'users_v2',
-        filter: 'activity_score=neq.null'
-      }, () => {
-        // 리더보드 관련 쿼리 무효화
-        queryClient.invalidateQueries({ queryKey: ['leaderboard-v2'] })
-        queryClient.invalidateQueries({ queryKey: ['user-rank-v2'] })
-        queryClient.invalidateQueries({ queryKey: ['leaderboard-stats-v2'] })
-      })
-      .subscribe()
-
-    return () => {
-      supabaseClient.removeChannel(channel)
-    }
-  }, [user?.id]) // queryClient 제거
+  // GlobalRealtimeManager가 users_v2 실시간 업데이트를 처리함
+  // 개별 Hook에서 직접 구독하지 않음 (중복 방지)
+  // GlobalRealtimeManager의 handleUsersChange가 members 관련 쿼리를 자동 무효화함
 
   // 기간 변경 함수
   const changePeriod = useCallback((newPeriod: LeaderboardPeriod) => {

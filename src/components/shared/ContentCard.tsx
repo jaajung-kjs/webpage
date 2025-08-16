@@ -63,14 +63,14 @@ export default function ContentCard({
   linkPrefix,
   index = 0,
 }: ContentCardProps) {
-  // 디버깅: comment_count 확인
-  if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
-    console.log('[ContentCard] Rendering with comment_count:', {
-      title: content.title,
-      comment_count: content.comment_count,
-      entire_content: content
-    })
-  }
+  // 디버깅 로그 제거 (프로덕션에서는 불필요)
+  // if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+  //   console.log('[ContentCard] Rendering with comment_count:', {
+  //     title: content.title,
+  //     comment_count: content.comment_count,
+  //     entire_content: content
+  //   })
+  // }
   const isPinned = (content.metadata as any)?.is_pinned
   const hasImage = (content.metadata as any)?.has_image
   const attachments = (content.metadata as any)?.attachments || []

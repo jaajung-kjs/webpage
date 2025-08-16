@@ -13,7 +13,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAuthV2 } from './useAuthV2'
 import { supabaseClient } from '@/lib/core/connection-core'
-import { realtimeCore } from '@/lib/core/realtime-core'
+import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 
@@ -138,16 +138,15 @@ export function useMessageNotifications() {
     }
   }
 
-  // 실시간 메시지 구독
+  // 실시간 메시지 구독 - UserMessageSubscriptionManager 사용
   useEffect(() => {
     if (!user) return
 
-    // RealtimeCore를 사용한 메시지 알림 구독
-    const unsubscribe = realtimeCore.subscribe({
-      id: `message-notifications-${user.id}`,
-      table: 'messages_v2',
-      event: 'INSERT',
-      callback: async (payload: any) => {
+    const componentId = `notifications-${Date.now()}`
+    
+    // Manager에 새 메시지 콜백 등록
+    userMessageSubscriptionManager.registerCallbacks(componentId, {
+      onNewMessage: async (payload: any) => {
         const newMessage = payload.new
 
         // 내가 보낸 메시지는 알림 표시 안함
@@ -191,14 +190,11 @@ export function useMessageNotifications() {
         
         // 사운드 재생
         playSound()
-      },
-      onError: (error) => {
-        console.error('[useMessageNotifications] Subscription error:', error)
       }
     })
 
     return () => {
-      unsubscribe()
+      userMessageSubscriptionManager.unregisterCallbacks(componentId)
     }
   }, [user?.id]) // settings, permission 제거 - 콜백 내부에서 최신값 참조
 

@@ -322,15 +322,15 @@ export function useContentV2() {
             ? content.comments.filter((c: any) => c && c.id).length 
             : 0
           
-          // 디버깅
-          if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
-            console.log('[useInfiniteContents] Real comment count:', {
-              title: content.title,
-              stored_count: content.comment_count,
-              real_count: realCommentCount,
-              comments: content.comments
-            })
-          }
+          // 디버깅 로그 제거 (프로덕션에서는 불필요)
+          // if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+          //   console.log('[useInfiniteContents] Real comment count:', {
+          //     title: content.title,
+          //     stored_count: content.comment_count,
+          //     real_count: realCommentCount,
+          //     comments: content.comments
+          //   })
+          // }
           const { data: interactions } = await supabase
             .from('interactions_v2')
             .select('interaction_type')
@@ -377,15 +377,15 @@ export function useContentV2() {
             user_interactions: userInteractions,
           }
           
-          // 디버깅
-          if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
-            console.log('[useInfiniteContents] Final content:', {
-              title: content.title,
-              stored_count: content.comment_count,
-              real_count: realCommentCount,
-              final_count: result.comment_count
-            })
-          }
+          // 디버깅 로그 제거 (프로덕션에서는 불필요)
+          // if (content.title?.includes('GPT') || content.title?.includes('PPT')) {
+          //   console.log('[useInfiniteContents] Final content:', {
+          //     title: content.title,
+          //     stored_count: content.comment_count,
+          //     real_count: realCommentCount,
+          //     final_count: result.comment_count
+          //   })
+          // }
           
           return result
         }))

@@ -84,21 +84,21 @@ export default function CommunityPage() {
     return postsData?.pages.flatMap(page => page.contents) || []
   }, [postsData])
 
-  // 디버깅: 데이터 변경 감지
-  useEffect(() => {
-    console.log('[CommunityPage] Posts data updated:', {
-      totalPosts: posts.length,
-      isFetching,
-      timestamp: new Date().toISOString()
-    })
-    if (posts.length > 0) {
-      console.log('[CommunityPage] Latest post:', {
-        id: posts[0].id,
-        title: posts[0].title,
-        created_at: posts[0].created_at
-      })
-    }
-  }, [posts, isFetching])
+  // 디버깅 로그 제거 (프로덕션에서는 불필요)
+  // useEffect(() => {
+  //   console.log('[CommunityPage] Posts data updated:', {
+  //     totalPosts: posts.length,
+  //     isFetching,
+  //     timestamp: new Date().toISOString()
+  //   })
+  //   if (posts.length > 0) {
+  //     console.log('[CommunityPage] Latest post:', {
+  //       id: posts[0].id,
+  //       title: posts[0].title,
+  //       created_at: posts[0].created_at
+  //     })
+  //   }
+  // }, [posts, isFetching])
 
   // V2 hooks handle filtering and sorting server-side, so we just need final client-side adjustments
   const filteredPosts = useMemo(() => {

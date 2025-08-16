@@ -41,14 +41,6 @@ interface PerformanceMetrics {
   errorRate: number
 }
 
-// Circuit Breaker 상태
-interface CircuitBreakerState {
-  isOpen: boolean
-  failureCount: number
-  lastFailureTime?: Date
-  nextRetryTime?: Date
-}
-
 export class GlobalRealtimeManager {
   private static instance: GlobalRealtimeManager
   private queryClient: QueryClient | null = null
@@ -57,7 +49,6 @@ export class GlobalRealtimeManager {
   private unsubscribers: Map<string, () => void> = new Map() // RealtimeCore unsubscribe functions
   private subscriptionStates: Map<string, SubscriptionState> = new Map()
   private performanceMetrics: Map<string, PerformanceMetrics> = new Map()
-  private circuitBreaker: Map<string, CircuitBreakerState> = new Map()
   private isInitialized = false
   private initializationPromise: Promise<void> | null = null
   
@@ -117,14 +108,17 @@ export class GlobalRealtimeManager {
       { name: 'content_v2', task: () => this.subscribeToContentTable() },
       { name: 'users_v2', task: () => this.subscribeToUsersTable() },
       { name: 'comments_v2', task: () => this.subscribeToCommentsTable() },
-      { name: 'activity_participants_v2', task: () => this.subscribeToActivityParticipantsTable() }
+      { name: 'activity_participants_v2', task: () => this.subscribeToActivityParticipantsTable() },
+      { name: 'audit_logs_v2', task: () => this.subscribeToAuditLogsTable() },
+      { name: 'interactions_v2', task: () => this.subscribeToInteractionsTable() }
     ]
     
     // Promise.allSettled로 부분 성공 허용
     const results = await Promise.allSettled(
       subscriptionTasks.map(async ({ name, task }) => {
         try {
-          await this.subscribeWithRetry(name, task, 3)
+          await task()
+          console.log(`[GlobalRealtime] ✅ Successfully subscribed to ${name}`)
         } catch (error) {
           console.error(`[GlobalRealtime] Failed to subscribe to ${name}:`, error)
           throw error
@@ -147,104 +141,6 @@ export class GlobalRealtimeManager {
     
     this.isInitialized = true
     console.log(`[GlobalRealtime] ✅ Initialization complete: ${successful}/${subscriptionTasks.length} subscriptions active`)
-  }
-  
-  /**
-   * 채널이 구독 상태가 될 때까지 대기
-   */
-  private async waitForChannelReady(channelName: string, maxWaitTime = 3000): Promise<void> {
-    const startTime = Date.now()
-    let checkInterval = 50 // 초기 체크 간격 50ms
-    const maxInterval = 500 // 최대 체크 간격 500ms
-    
-    return new Promise((resolve, reject) => {
-      const checkStatus = () => {
-        const elapsed = Date.now() - startTime
-        
-        if (elapsed > maxWaitTime) {
-          reject(new Error(`[GlobalRealtime] Channel ${channelName} ready timeout after ${maxWaitTime}ms`))
-          return
-        }
-        
-        const state = this.subscriptionStates.get(channelName)
-        if (state?.status === 'subscribed') {
-          console.log(`[GlobalRealtime] ✅ Channel ${channelName} ready in ${elapsed}ms`)
-          resolve()
-          return
-        }
-        
-        if (state?.status === 'error') {
-          reject(new Error(`[GlobalRealtime] Channel ${channelName} subscription failed: ${state.lastError}`))
-          return
-        }
-        
-        // Exponential backoff로 체크 간격 증가
-        checkInterval = Math.min(checkInterval * 1.2, maxInterval)
-        setTimeout(checkStatus, checkInterval)
-      }
-      
-      checkStatus()
-    })
-  }
-  
-  /**
-   * 재시도 메커니즘이 포함된 구독 함수
-   */
-  private async subscribeWithRetry(
-    tableName: string, 
-    subscribeFunction: () => Promise<void>, 
-    maxRetries = 3
-  ): Promise<void> {
-    let lastError: Error | null = null
-    
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        // Circuit Breaker 체크
-        if (this.isCircuitBreakerOpen(tableName)) {
-          throw new Error(`Circuit breaker open for ${tableName}`)
-        }
-        
-        console.log(`[GlobalRealtime] Subscribing to ${tableName} (attempt ${attempt}/${maxRetries})`)
-        
-        // 구독 상태 초기화
-        this.updateSubscriptionState(tableName, {
-          status: 'connecting',
-          retryCount: attempt - 1,
-          errorCount: this.subscriptionStates.get(tableName)?.errorCount || 0
-        })
-        
-        await subscribeFunction()
-        await this.waitForChannelReady(tableName)
-        
-        // 성공 시 Circuit Breaker 리셋
-        this.resetCircuitBreaker(tableName)
-        
-        console.log(`[GlobalRealtime] ✅ Successfully subscribed to ${tableName}`)
-        return
-      } catch (error) {
-        lastError = error as Error
-        console.error(`[GlobalRealtime] ❌ Attempt ${attempt} failed for ${tableName}:`, error)
-        
-        // 구독 상태 업데이트
-        this.updateSubscriptionState(tableName, {
-          status: 'error',
-          retryCount: attempt,
-          lastError: lastError.message,
-          errorCount: (this.subscriptionStates.get(tableName)?.errorCount || 0) + 1
-        })
-        
-        // Circuit Breaker 업데이트
-        this.updateCircuitBreaker(tableName, lastError)
-        
-        if (attempt < maxRetries) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000) // Exponential backoff, 최대 5초
-          console.log(`[GlobalRealtime] Retrying ${tableName} in ${delay}ms...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        }
-      }
-    }
-    
-    throw new Error(`[GlobalRealtime] Failed to subscribe to ${tableName} after ${maxRetries} attempts: ${lastError?.message}`)
   }
   
   /**
@@ -636,49 +532,6 @@ export class GlobalRealtimeManager {
     }
   }
   
-  /**
-   * Circuit Breaker 관리
-   */
-  private isCircuitBreakerOpen(tableName: string): boolean {
-    const state = this.circuitBreaker.get(tableName)
-    if (!state || !state.isOpen) return false
-    
-    if (state.nextRetryTime && Date.now() > state.nextRetryTime.getTime()) {
-      console.log(`[GlobalRealtime] Circuit breaker half-open for ${tableName}`)
-      state.isOpen = false
-      return false
-    }
-    
-    return true
-  }
-  
-  private updateCircuitBreaker(tableName: string, error: Error) {
-    let state = this.circuitBreaker.get(tableName)
-    if (!state) {
-      state = { isOpen: false, failureCount: 0 }
-      this.circuitBreaker.set(tableName, state)
-    }
-    
-    state.failureCount++
-    state.lastFailureTime = new Date()
-    
-    // 3회 연속 실패 시 Circuit Breaker 활성화
-    if (state.failureCount >= 3) {
-      state.isOpen = true
-      state.nextRetryTime = new Date(Date.now() + 30000) // 30초 후 재시도
-      console.warn(`[GlobalRealtime] 🚫 Circuit breaker opened for ${tableName}`)
-    }
-  }
-  
-  private resetCircuitBreaker(tableName: string) {
-    const state = this.circuitBreaker.get(tableName)
-    if (state) {
-      state.isOpen = false
-      state.failureCount = 0
-      state.lastFailureTime = undefined
-      state.nextRetryTime = undefined
-    }
-  }
 
   /**
    * 콘텐츠 INSERT 처리 - 개선된 버전 (배치 처리로 위임)
@@ -841,6 +694,132 @@ export class GlobalRealtimeManager {
   }
   
   /**
+   * audit_logs_v2 테이블 구독 - RealtimeCore 사용
+   */
+  private async subscribeToAuditLogsTable(): Promise<void> {
+    const channelName = 'audit_logs_v2'
+    
+    const unsubscribe = realtimeCore.subscribe({
+      id: 'global-audit-logs-v2',
+      table: 'audit_logs_v2',
+      event: '*',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, payload.eventType, () => {
+          this.handleAuditLogsChange(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Audit logs subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
+    
+    this.unsubscribers.set('audit-logs-v2', unsubscribe)
+    
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
+    this.initializeMetrics(channelName)
+  }
+  
+  /**
+   * interactions_v2 테이블 구독 - RealtimeCore 사용
+   */
+  private async subscribeToInteractionsTable(): Promise<void> {
+    const channelName = 'interactions_v2'
+    
+    const unsubscribe = realtimeCore.subscribe({
+      id: 'global-interactions-v2',
+      table: 'interactions_v2',
+      event: '*',
+      callback: (payload) => {
+        this.processEventWithMetrics(channelName, payload.eventType, () => {
+          this.handleInteractionsChange(payload)
+        })
+      },
+      onError: (error) => {
+        console.error('[GlobalRealtime] Interactions subscription error:', error)
+        this.updateSubscriptionState(channelName, {
+          status: 'error',
+          lastError: error.message,
+          errorCount: (this.subscriptionStates.get(channelName)?.errorCount || 0) + 1
+        })
+      }
+    })
+    
+    this.unsubscribers.set('interactions-v2', unsubscribe)
+    
+    this.updateSubscriptionState(channelName, {
+      status: 'subscribed',
+      subscribedAt: new Date()
+    })
+    
+    this.initializeMetrics(channelName)
+  }
+  
+  /**
+   * Audit logs 변경 처리
+   */
+  private handleAuditLogsChange(payload: any) {
+    console.log('[GlobalRealtime] Audit log changed:', payload.eventType, payload.new?.id)
+    
+    if (this.queryClient) {
+      // 활동 로그 관련 쿼리 무효화
+      if (payload.new?.user_id) {
+        this.queryClient.invalidateQueries({
+          queryKey: ['recent-activities-v2', payload.new.user_id],
+          exact: false
+        })
+      }
+      
+      // 전체 로그 목록도 무효화
+      this.queryClient.invalidateQueries({
+        queryKey: ['audit-logs-v2'],
+        exact: false
+      })
+    }
+  }
+  
+  /**
+   * Interactions 변경 처리
+   */
+  private handleInteractionsChange(payload: any) {
+    console.log('[GlobalRealtime] Interaction changed:', payload.eventType, payload.new?.id)
+    
+    if (this.queryClient) {
+      // 통계 관련 쿼리 무효화
+      this.queryClient.invalidateQueries({
+        queryKey: ['dashboard-stats-v2'],
+        exact: false
+      })
+      
+      this.queryClient.invalidateQueries({
+        queryKey: ['engagement-analysis-v2'],
+        exact: false
+      })
+      
+      this.queryClient.invalidateQueries({
+        queryKey: ['time-series-stats-v2'],
+        exact: false
+      })
+      
+      // 콘텐츠별 상호작용 무효화
+      if (payload.new?.target_id) {
+        this.queryClient.invalidateQueries({
+          queryKey: ['content-v2', payload.new.target_id],
+          exact: true
+        })
+      }
+    }
+  }
+  
+  /**
    * 추가된 유틸리티 메서드들
    */
   
@@ -890,40 +869,14 @@ export class GlobalRealtimeManager {
   }
   
   /**
-   * 강제 재시도 (개발/디버깅용)
+   * 강제 재초기화 (개발/디버깅용)
+   * RealtimeCore가 재연결을 처리하므로 단순히 재초기화만 수행
    */
-  async forceReconnect(tableName?: string): Promise<void> {
-    if (tableName) {
-      console.log(`[GlobalRealtime] Force reconnecting to ${tableName}`)
-      // 특정 테이블 재구독
-      const channel = this.channelRefs.get(tableName)
-      if (channel) {
-        const client = connectionCore.getClient()
-        client.removeChannel(channel)
-        this.channelRefs.delete(tableName)
-        
-        // Circuit Breaker 리셋
-        this.resetCircuitBreaker(tableName)
-        
-        // 재구독 시도
-        const subscriptionTasks: { [key: string]: () => Promise<void> } = {
-          'content_v2': () => this.subscribeToContentTable(),
-          'users_v2': () => this.subscribeToUsersTable(),
-          'comments_v2': () => this.subscribeToCommentsTable(),
-          'activity_participants_v2': () => this.subscribeToActivityParticipantsTable()
-        }
-        
-        const task = subscriptionTasks[tableName]
-        if (task) {
-          await this.subscribeWithRetry(tableName, task, 3)
-        }
-      }
-    } else {
-      console.log('[GlobalRealtime] Force reconnecting all channels')
-      // 전체 재초기화
-      this.cleanup()
-      await this.initialize()
-    }
+  async forceReinitialize(): Promise<void> {
+    console.log('[GlobalRealtime] Force reinitializing all subscriptions')
+    // 전체 재초기화
+    this.cleanup()
+    await this.initialize()
   }
   
   /**
@@ -969,7 +922,6 @@ export class GlobalRealtimeManager {
     this.channelRefs.clear()
     this.subscriptionStates.clear()
     this.performanceMetrics.clear()
-    this.circuitBreaker.clear()
     
     // WeakMap은 자동으로 가비지 콜렉션됨
     
@@ -984,4 +936,4 @@ export class GlobalRealtimeManager {
 export const globalRealtimeManager = GlobalRealtimeManager.getInstance()
 
 // 타입 export
-export type { SubscriptionState, PerformanceMetrics, CircuitBreakerState }
+export type { SubscriptionState, PerformanceMetrics }

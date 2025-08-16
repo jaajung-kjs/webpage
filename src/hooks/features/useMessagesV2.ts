@@ -27,6 +27,7 @@ import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { realtimeCore } from '@/lib/core/realtime-core'
+import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import { useRealtimeQueryV2 } from '@/hooks/core/useRealtimeQueryV2'
 import { useAuth } from '@/providers'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
@@ -133,43 +134,29 @@ function useConversationsV2() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   
-  // 메시지와 읽음상태 변경사항 실시간 감지 후 대화방 목록 무효화
+  // UserMessageSubscriptionManager가 전역 구독을 관리하므로
+  // 여기서는 컴포넌트별 콜백만 등록
   useEffect(() => {
     if (!user) return
 
-    // 메시지 변경사항 구독 (RealtimeCore 사용)
-    const unsubscribeMessages = realtimeCore.subscribe({
-      id: `messages-conversations-${user.id}`,
-      table: 'messages_v2',
-      event: '*',
-      callback: () => {
-        queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
-        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+    const componentId = `conversations-${Date.now()}`
+    
+    // Manager에 콜백 등록 (이미 구독은 되어 있음)
+    userMessageSubscriptionManager.registerCallbacks(componentId, {
+      onMessagesChange: () => {
+        // 대화 목록 업데이트는 Manager에서 이미 처리
+        // 추가 로직이 필요하면 여기에
       },
-      onError: (error) => {
-        console.error('[useConversationsV2] Messages subscription error:', error)
-      }
-    })
-
-    // 읽음상태 변경사항 구독 (RealtimeCore 사용)
-    const unsubscribeReadStatus = realtimeCore.subscribe({
-      id: `read-status-conversations-${user.id}`,
-      table: 'message_read_status_v2',
-      event: '*',
-      callback: () => {
-        queryClient.invalidateQueries({ queryKey: ['conversations-v2', user.id] })
-        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      },
-      onError: (error) => {
-        console.error('[useConversationsV2] Read status subscription error:', error)
+      onReadStatusChange: () => {
+        // 읽음 상태 업데이트는 Manager에서 이미 처리
+        // 추가 로직이 필요하면 여기에
       }
     })
 
     return () => {
-      unsubscribeMessages()
-      unsubscribeReadStatus()
+      userMessageSubscriptionManager.unregisterCallbacks(componentId)
     }
-  }, [user?.id]) // queryClient 제거 - 변경되지 않는 인스턴스이므로 불필요
+  }, [user?.id])
   
   return useRealtimeQueryV2<ConversationV2[]>({
     queryKey: ['conversations-v2', user?.id],
@@ -289,49 +276,23 @@ function useConversationMessagesV2(conversationId: string, options?: {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   
-  // 대화목록처럼 직접 구독 방식으로 변경 (더 안정적)
+  // 개별 대화방 구독은 UserMessageSubscriptionManager를 통해 관리
   useEffect(() => {
     if (!user || !conversationId) return
 
-    // 메시지 변경사항 구독 (RealtimeCore 사용)
-    const unsubscribeMessages = realtimeCore.subscribe({
-      id: `messages-direct-${conversationId}-${user.id}`,
-      table: 'messages_v2',
-      event: '*',
-      filter: `conversation_id=eq.${conversationId}`,
-      callback: () => {
-        console.log('[ConversationMessages] 실시간 메시지 변경 감지, 무효화 실행')
+    // Manager를 통해 대화방 구독 (중복 체크 포함)
+    const unsubscribe = userMessageSubscriptionManager.subscribeToConversation(
+      conversationId,
+      () => {
+        console.log('[ConversationMessages] 실시간 변경 감지, 무효화 실행')
         queryClient.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
         })
-      },
-      onError: (error) => {
-        console.error('[ConversationMessages] Messages subscription error:', error)
       }
-    })
-
-    // 읽음 상태 변경사항 구독 (RealtimeCore 사용)
-    const unsubscribeReadStatus = realtimeCore.subscribe({
-      id: `read-status-messages-${conversationId}-${user.id}`,
-      table: 'message_read_status_v2',
-      event: '*',
-      callback: (payload) => {
-        console.log('[ConversationMessages] 실시간 읽음상태 변경 감지:', payload)
-        console.log('Payload event type:', payload.eventType)
-        console.log('Payload new data:', payload.new)
-        console.log('Payload old data:', payload.old)
-        queryClient.invalidateQueries({ 
-          queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
-        })
-      },
-      onError: (error) => {
-        console.error('[ConversationMessages] Read status subscription error:', error)
-      }
-    })
+    )
 
     return () => {
-      unsubscribeMessages()
-      unsubscribeReadStatus()
+      unsubscribe()
     }
   }, [user?.id, conversationId]) // options, queryClient 제거 - 불필요한 재구독 방지
   
@@ -485,41 +446,29 @@ function useUnreadCountV2() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
   
-  // 메시지와 읽음상태 변경사항을 감지해서 안읽은 메시지 카운트 실시간 업데이트
+  // UserMessageSubscriptionManager가 전역 구독을 관리하므로
+  // 여기서는 컴포넌트별 콜백만 등록
   useEffect(() => {
     if (!user) return
 
-    // 메시지 변경사항 구독 (새 메시지 등) - RealtimeCore 사용
-    const unsubscribeMessages = realtimeCore.subscribe({
-      id: `messages-unread-count-${user.id}`,
-      table: 'messages_v2',
-      event: '*',
-      callback: () => {
-        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
+    const componentId = `unread-count-${Date.now()}`
+    
+    // Manager에 콜백 등록 (이미 구독은 되어 있음)
+    userMessageSubscriptionManager.registerCallbacks(componentId, {
+      onMessagesChange: () => {
+        // 안읽은 메시지 수 업데이트는 Manager에서 이미 처리
+        // 추가 로직이 필요하면 여기에
       },
-      onError: (error) => {
-        console.error('[useUnreadMessageCount] Messages subscription error:', error)
-      }
-    })
-
-    // 읽음상태 변경사항 구독 (읽음 처리 등) - RealtimeCore 사용
-    const unsubscribeReadStatus = realtimeCore.subscribe({
-      id: `read-status-unread-count-${user.id}`,
-      table: 'message_read_status_v2',
-      event: '*',
-      callback: () => {
-        queryClient.invalidateQueries({ queryKey: ['unread-count-v2', user.id] })
-      },
-      onError: (error) => {
-        console.error('[useUnreadMessageCount] Read status subscription error:', error)
+      onReadStatusChange: () => {
+        // 읽음 상태 업데이트는 Manager에서 이미 처리
+        // 추가 로직이 필요하면 여기에
       }
     })
 
     return () => {
-      unsubscribeMessages()
-      unsubscribeReadStatus()
+      userMessageSubscriptionManager.unregisterCallbacks(componentId)
     }
-  }, [user?.id]) // queryClient 제거 - 변경되지 않는 인스턴스이므로 불필요
+  }, [user?.id])
   
   return useQuery<number>({
     queryKey: ['unread-count-v2', user?.id],

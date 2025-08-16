@@ -15,8 +15,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuth } from '@/providers'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { Database } from '@/lib/database.types'
-import { useCallback, useEffect } from 'react'
-import { RealtimeChannel } from '@supabase/supabase-js'
+import { useCallback } from 'react'
 
 type Tables = Database['public']['Tables']
 
@@ -158,48 +157,9 @@ export function useStatisticsV2() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  // 실시간 통계 업데이트 구독
-  useEffect(() => {
-    const channels: RealtimeChannel[] = []
-
-    const setupRealtimeSubscriptions = () => {
-      // 사용자 변경사항 구독
-      const userChannel = supabaseClient
-        .channel('user_stats_updates')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'users_v2' }, () => {
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats-v2'] })
-          queryClient.invalidateQueries({ queryKey: ['engagement-analysis-v2'] })
-        })
-        .subscribe()
-
-      // 콘텐츠 변경사항 구독
-      const contentChannel = supabaseClient
-        .channel('content_stats_updates')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'content_v2' }, () => {
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats-v2'] })
-          queryClient.invalidateQueries({ queryKey: ['content-performance-v2'] })
-        })
-        .subscribe()
-
-      // 상호작용 변경사항 구독
-      const interactionChannel = supabaseClient
-        .channel('interaction_stats_updates')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'interactions_v2' }, () => {
-          queryClient.invalidateQueries({ queryKey: ['dashboard-stats-v2'] })
-          queryClient.invalidateQueries({ queryKey: ['engagement-analysis-v2'] })
-          queryClient.invalidateQueries({ queryKey: ['time-series-stats-v2'] })
-        })
-        .subscribe()
-
-      channels.push(userChannel, contentChannel, interactionChannel)
-    }
-
-    setupRealtimeSubscriptions()
-
-    return () => {
-      channels.forEach(channel => supabaseClient.removeChannel(channel))
-    }
-  }, [queryClient])
+  // GlobalRealtimeManager가 users_v2, content_v2, interactions_v2 실시간 업데이트를 처리함
+  // 개별 Hook에서 직접 구독하지 않음 (중복 방지)
+  // GlobalRealtimeManager의 handleInteractionsChange가 dashboard-stats-v2, engagement-analysis-v2, time-series-stats-v2 쿼리를 자동 무효화함
 
   // 대시보드 총괄 통계
   const useDashboardStats = () => {

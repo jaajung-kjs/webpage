@@ -93,43 +93,12 @@ export function useActivitiesV2() {
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
-  // 실시간 참가자 수 업데이트 구독
-  useEffect(() => {
-    if (!user?.id) return
-
-    let channel: RealtimeChannel | null = null
-
-    const setupRealtimeSubscription = () => {
-      channel = supabase
-        .channel('activity_participants_v2')
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'activity_participants_v2'
-          },
-          (payload) => {
-            // 활동별 참가자 수 무효화
-            if (payload.new && 'activity_id' in payload.new) {
-              const activityId = payload.new.activity_id as string
-              queryClient.invalidateQueries({ queryKey: ['activity-v2', activityId] })
-              queryClient.invalidateQueries({ queryKey: ['activity-stats-v2', activityId] })
-              queryClient.invalidateQueries({ queryKey: ['activity-participants-v2', activityId] })
-            }
-          }
-        )
-        .subscribe()
-    }
-
-    setupRealtimeSubscription()
-
-    return () => {
-      if (channel) {
-        supabase.removeChannel(channel)
-      }
-    }
-  }, [user?.id]) // supabase, queryClient 제거
+  // GlobalRealtimeManager가 activity_participants_v2 실시간 업데이트를 처리함
+  // 개별 Hook에서 직접 구독하지 않음 (중복 방지)
+  // GlobalRealtimeManager의 handleActivityParticipantsChange가 아래 쿼리들을 자동 무효화:
+  // - ['activity-v2', activityId]
+  // - ['activity-participants-v2', activityId]
+  // - ['my-participation-v2', userId, activityId]
 
   // 활동 상세 조회
   const useActivity = (activityId: string) => {
