@@ -268,10 +268,20 @@ export class RealtimeCore {
           // 이미 준비 상태인 경우
           console.log('[RealtimeCore] Already ready, checking for reconnection needs')
           
-          // 실제 재연결이 필요한 경우 (이전 상태가 끊어진 상태였던 경우)
-          if (previousState === 'disconnected' || previousState === 'error') {
+          // 실패한 구독이 있는지 확인
+          const failedSubscriptions = Array.from(this.subscriptions.values()).filter(sub => 
+            !sub.status.isSubscribed || sub.status.error
+          )
+          
+          // 실제 재연결이 필요한 경우 또는 실패한 구독이 있는 경우
+          if (previousState === 'disconnected' || previousState === 'error' || failedSubscriptions.length > 0) {
             if (!isResubscribing) {
-              console.log('[RealtimeCore] Reconnection detected, resubscribing all')
+              if (failedSubscriptions.length > 0) {
+                console.log(`[RealtimeCore] Found ${failedSubscriptions.length} failed subscriptions, resubscribing all`)
+              } else {
+                console.log('[RealtimeCore] Reconnection detected, resubscribing all')
+              }
+              
               isResubscribing = true
               try {
                 await this.resubscribeAll()
@@ -471,8 +481,8 @@ export class RealtimeCore {
     // Map을 clear하여 "Already subscribed" 문제 해결
     this.subscriptions.clear()
     
-    // 잠시 대기 (채널 정리 완료 대기)
-    await new Promise(resolve => setTimeout(resolve, 300))
+    // 서버 측 채널 정리 완료 대기 (CHANNEL_ERROR 방지)
+    await new Promise(resolve => setTimeout(resolve, 1000))
     
     // Realtime WebSocket 연결 상태를 실제 채널 구독으로 확인
     const client = connectionCore.getClient()
@@ -544,8 +554,8 @@ export class RealtimeCore {
       try {
         console.log(`[RealtimeCore] Resubscribing to ${config.id}`)
         this.subscribe(config)
-        // 각 구독 사이에 짧은 대기
-        await new Promise(resolve => setTimeout(resolve, 100))
+        // 각 구독 사이에 충분한 대기 (서버 부하 방지)
+        await new Promise(resolve => setTimeout(resolve, 200))
       } catch (error) {
         console.error(`[RealtimeCore] Failed to resubscribe to ${config.id}:`, error)
       }
