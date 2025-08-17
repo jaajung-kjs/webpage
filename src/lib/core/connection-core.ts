@@ -204,6 +204,40 @@ export class ConnectionCore {
     try {
       console.log('[ConnectionCore] Reinitializing Supabase client...')
       
+      // 🔥 기존 WebSocket 완전 정리 (장시간 백그라운드 후 핵심)
+      if (this.client?.realtime) {
+        console.log('[ConnectionCore] Cleaning up old WebSocket connection...')
+        const oldRealtime = this.client.realtime
+        
+        try {
+          // 1. 모든 채널 제거
+          const channels = oldRealtime.getChannels()
+          console.log(`[ConnectionCore] Removing ${channels.length} channels`)
+          for (const channel of channels) {
+            try {
+              await oldRealtime.removeChannel(channel)
+            } catch (e) {
+              // 에러 무시
+            }
+          }
+          
+          // 2. WebSocket 강제 종료
+          console.log('[ConnectionCore] Force closing WebSocket...')
+          oldRealtime.disconnect(1000, 'Client reinitializing')
+          
+          // WebSocket 인스턴스 직접 종료
+          if (oldRealtime.conn) {
+            try {
+              oldRealtime.conn.close()
+            } catch (e) {
+              // 에러 무시
+            }
+          }
+        } catch (error) {
+          console.warn('[ConnectionCore] Error cleaning up realtime:', error)
+        }
+      }
+      
       // 기존 클라이언트 정리 (GoTrueClient 인스턴스 정리 포함)
       try {
         // 기존 auth listener 정리
@@ -215,8 +249,8 @@ export class ConnectionCore {
       // 기존 이벤트 리스너 정리
       this.cleanup()
       
-      // 잠시 대기 (GoTrueClient 정리 완료 대기)
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // 잠시 대기 (WebSocket과 GoTrueClient 정리 완료 대기)
+      await new Promise(resolve => setTimeout(resolve, 1500))
       
       // 환경 설정 가져오기
       const envConfig = getEnvConfig()
@@ -698,35 +732,41 @@ export class ConnectionCore {
    * 백그라운드 전환 시 연결 일시정지
    */
   private suspendConnection(): void {
-    // 복구 중이면 suspend 하지 않음 (복구 중단 방지)
-    if (this.status.state === 'connecting') {
-      console.log('[ConnectionCore] Skip suspending - recovery in progress')
+    console.log(`[ConnectionCore] Suspending connection (current state: ${this.status.state})`)
+    
+    // suspended 상태가 아닌 경우에만 처리
+    if (this.status.state === 'suspended') {
+      console.log('[ConnectionCore] Already suspended, skipping')
       return
     }
     
-    console.log('[ConnectionCore] Suspending connection (background transition)')
+    // 이전 상태 저장 (복귀 시 참조용)
+    const previousState = this.status.state
     
-    // 현재 connected 상태일 때만 suspended로 변경
-    if (this.status.state === 'connected') {
-      this.updateStatus({ state: 'suspended' })
-      
-      // heartbeat 중지 (백그라운드에서 불필요한 작업 중단)
-      this.stopHeartbeat()
-      
-      // 진행 중인 visibility_change 관련 Promise들 취소
-      // 단, 복구 관련 Promise는 보호
-      PromiseManager.cancelAll('visibility_change', [
-        'recovery-',           // Connection Recovery 관련
-        'batch-invalidation-', // Batch invalidation 관련
-        'recovery_',           // Recovery 관련 일반
-        'connection-core-'     // ConnectionCore 자체 Promise
-      ])
-      
-      // 백그라운드에서는 재연결 타이머도 중지
-      if (this.reconnectTimer) {
-        clearTimeout(this.reconnectTimer)
-        this.reconnectTimer = null
-      }
+    // connected, connecting, error 등 모든 상태에서 suspended로 전환 가능
+    this.updateStatus({ 
+      state: 'suspended',
+      previousState // 복귀 시 어떤 상태였는지 기록
+    })
+    
+    console.log(`[ConnectionCore] State changed to suspended (was: ${previousState})`)
+    
+    // heartbeat 중지 (백그라운드에서 불필요한 작업 중단)
+    this.stopHeartbeat()
+    
+    // 진행 중인 visibility_change 관련 Promise들 취소
+    // 단, 복구 관련 Promise는 보호
+    PromiseManager.cancelAll('visibility_change', [
+      'recovery-',           // Connection Recovery 관련
+      'batch-invalidation-', // Batch invalidation 관련
+      'recovery_',           // Recovery 관련 일반
+      'connection-core-'     // ConnectionCore 자체 Promise
+    ])
+    
+    // 백그라운드에서는 재연결 타이머도 중지
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
     }
   }
 
