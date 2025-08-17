@@ -745,8 +745,7 @@ export class ConnectionCore {
     
     // connected, connecting, error 등 모든 상태에서 suspended로 전환 가능
     this.updateStatus({ 
-      state: 'suspended',
-      previousState // 복귀 시 어떤 상태였는지 기록
+      state: 'suspended'
     })
     
     console.log(`[ConnectionCore] State changed to suspended (was: ${previousState})`)
