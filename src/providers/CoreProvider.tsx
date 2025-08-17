@@ -130,7 +130,25 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
               synced: !!session === authManager.isAuthenticated(),
               sessionExpiry: session?.expires_at ? new Date(session.expires_at * 1000).toLocaleString() : null
             }
-          }
+          },
+          // CircuitBreaker 상태 확인
+          circuitBreaker: () => connectionCore.getCircuitBreakerStatus(),
+          // CircuitBreaker 강제 리셋
+          resetCircuitBreakers: () => {
+            connectionCore.resetCircuitBreakers()
+            return 'Circuit Breakers reset successfully'
+          },
+          // Supabase 클라이언트 강제 리셋
+          forceReset: async () => {
+            try {
+              await connectionCore.forceReset()
+              return 'Force reset completed successfully'
+            } catch (error) {
+              return `Force reset failed: ${error}`
+            }
+          },
+          // CircuitBreaker Open 상태 확인
+          isCircuitBreakerOpen: () => connectionCore.isCircuitBreakerOpen()
         }
         
         console.log('[CoreProvider] Debug functions registered: window.__DEBUG__')

@@ -269,34 +269,79 @@ export class AuthManager {
   /**
    * 세션 유효성 검증
    * localStorage에서 직접 읽어와서 모듈 간 동기화 보장
+   * 3초 타임아웃으로 CircuitBreaker 트리거 방지
    */
   private async validateSession(): Promise<void> {
     try {
       const client = connectionCore.getClient()
-      // refreshSession() 대신 getSession() 사용
-      // localStorage에서 직접 읽어와서 모든 내부 모듈이 동기화됨
-      const { data: { session }, error } = await client.auth.getSession()
       
-      if (error) throw error
+      // 3초 타임아웃으로 getSession() 호출
+      // CircuitBreaker가 영구 오프라인 모드로 빠지는 것을 방지
+      const sessionPromise = client.auth.getSession()
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('Session validation timeout after 3 seconds')), 3000)
+      })
       
-      if (session) {
-        // 세션이 유효하면 상태 업데이트
-        this.updateState({ 
-          session, 
-          user: session.user,
-          error: null 
-        })
+      try {
+        // Promise.race로 먼저 완료되는 것 사용
+        const { data: { session }, error } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ])
         
-        // 토큰 갱신 스케줄링
-        this.scheduleTokenRefresh(session)
+        if (error) throw error
         
-        // 프로필이 없으면 로드
-        if (!this.state.profile) {
-          await this.loadProfile(session.user.id)
+        if (session) {
+          // 세션이 유효하면 상태 업데이트
+          this.updateState({ 
+            session, 
+            user: session.user,
+            error: null 
+          })
+          
+          // 토큰 갱신 스케줄링
+          this.scheduleTokenRefresh(session)
+          
+          // 프로필이 없으면 로드
+          if (!this.state.profile) {
+            await this.loadProfile(session.user.id)
+          }
+        } else {
+          // 세션이 없으면 로그아웃 처리
+          console.log('[AuthManager] No valid session found, signing out')
+          this.handleSignOut()
         }
-      } else {
-        // 세션이 없으면 로그아웃 처리
-        console.log('[AuthManager] No valid session found, signing out')
+      } catch (timeoutError) {
+        // 타임아웃 발생 시 CircuitBreaker 리셋 시도
+        console.warn('[AuthManager] Session validation timeout, checking CircuitBreaker status')
+        
+        // CircuitBreaker가 Open 상태인지 확인
+        if (connectionCore.isCircuitBreakerOpen()) {
+          console.log('[AuthManager] CircuitBreaker is open, attempting force reset')
+          try {
+            await connectionCore.forceReset()
+            // 리셋 후 재시도
+            const { data: { session }, error } = await client.auth.getSession()
+            
+            if (!error && session) {
+              this.updateState({ 
+                session, 
+                user: session.user,
+                error: null 
+              })
+              this.scheduleTokenRefresh(session)
+              if (!this.state.profile) {
+                await this.loadProfile(session.user.id)
+              }
+              return
+            }
+          } catch (resetError) {
+            console.error('[AuthManager] Force reset failed:', resetError)
+          }
+        }
+        
+        // 타임아웃이나 리셋 실패 시 로그아웃 처리
+        console.log('[AuthManager] Session validation failed due to timeout, signing out')
         this.handleSignOut()
       }
     } catch (error) {

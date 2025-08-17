@@ -986,6 +986,50 @@ export class ConnectionCore {
   }
 
   /**
+   * 강제 리셋 - Supabase 클라이언트 완전 재생성
+   * CircuitBreaker가 영구 오프라인 모드에 빠졌을 때 사용
+   */
+  async forceReset(): Promise<void> {
+    console.log('[ConnectionCore] Force reset initiated - recreating Supabase client')
+    
+    try {
+      // 1. 모든 활동 중지
+      this.cleanup()
+      
+      // 2. Circuit Breaker 리셋
+      this.resetCircuitBreakers()
+      
+      // 3. 상태 초기화
+      this.status = {
+        state: 'disconnected',
+        lastConnectedAt: null,
+        lastError: null,
+        reconnectAttempts: 0,
+        isVisible: true
+      }
+      
+      // 4. Supabase 클라이언트 재생성
+      await this.reinitializeClient()
+      
+      // 5. 연결 재시도
+      await this.connect()
+      
+      console.log('[ConnectionCore] Force reset completed successfully')
+    } catch (error) {
+      console.error('[ConnectionCore] Force reset failed:', error)
+      throw error
+    }
+  }
+
+  /**
+   * CircuitBreaker가 Open 상태인지 확인
+   */
+  isCircuitBreakerOpen(): boolean {
+    if (!this.connectionCircuitBreaker) return false
+    return this.connectionCircuitBreaker.getState() === 'open'
+  }
+
+  /**
    * 종료 (cleanup)
    */
   destroy(): void {
