@@ -55,7 +55,7 @@ export function useFileUpload(options: FileUploadOptions = { bucket: 'attachment
       const filePath = `${folder}/${fileName}`
       
       // Storage에 업로드
-      const { data, error } = await supabaseClient.storage
+      const { data, error } = await supabaseClient().storage
         .from(options.bucket || 'attachments')
         .upload(filePath, file, {
           cacheControl: '3600',
@@ -65,7 +65,7 @@ export function useFileUpload(options: FileUploadOptions = { bucket: 'attachment
       if (error) throw error
       
       // Public URL 가져오기
-      const { data: urlData } = supabaseClient.storage
+      const { data: urlData } = supabaseClient().storage
         .from(options.bucket || 'attachments')
         .getPublicUrl(filePath)
       
@@ -118,7 +118,7 @@ export function useMultipleFileUpload(options: FileUploadOptions = { bucket: 'at
         const filePath = `${folder}/${fileName}`
         
         // Storage에 업로드
-        const { data, error } = await supabaseClient.storage
+        const { data, error } = await supabaseClient().storage
           .from(options.bucket || 'attachments')
           .upload(filePath, file, {
             cacheControl: '3600',
@@ -128,7 +128,7 @@ export function useMultipleFileUpload(options: FileUploadOptions = { bucket: 'at
         if (error) throw error
         
         // Public URL 가져오기
-        const { data: urlData } = supabaseClient.storage
+        const { data: urlData } = supabaseClient().storage
           .from(options.bucket || 'attachments')
           .getPublicUrl(filePath)
         

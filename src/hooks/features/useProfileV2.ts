@@ -36,7 +36,7 @@ export function useUserProfileV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) return null
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('*')
         .eq('id', targetUserId)
@@ -83,7 +83,7 @@ export function useUserActivityScoreV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) return 0
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('calculate_activity_score', {
           p_user_id: targetUserId
         })
@@ -112,7 +112,7 @@ export function useUsersProfilesV2(userIds: string[]) {
     queryFn: async () => {
       if (!userIds.length) return []
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('*')
         .in('id', userIds)
@@ -154,7 +154,7 @@ export function useProfileListV2(options?: {
   return useQuery<UserV2[], Error>({
     queryKey: ['profile-v2-list', page, limit, role, search, orderBy, order],
     queryFn: async () => {
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('users_v2')
         .select('*')
         .is('deleted_at', null)
@@ -199,7 +199,7 @@ export function useUpdateProfileV2() {
     mutationFn: async (updates) => {
       if (!user) throw new Error('User is not authenticated')
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .update({
           ...updates,
@@ -278,7 +278,7 @@ export function useUserActivityHistoryV2(userId?: string, includePast: boolean =
     queryFn: async () => {
       if (!targetUserId) return null
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('get_user_activity_history_v2', {
           p_user_id: targetUserId,
           p_include_past: includePast
@@ -307,7 +307,7 @@ export function useUserRecentActivitiesV2(userId?: string, limit: number = 10) {
     queryFn: async () => {
       if (!targetUserId) return []
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('get_user_recent_activities_v2', {
           p_user_id: targetUserId,
           p_limit: limit
@@ -342,8 +342,8 @@ export function usePrefetchProfileV2(userId: string) {
     queryClient.prefetchQuery({
       queryKey: ['user-v2', userId],
       queryFn: async () => {
-        const { data, error } = await supabaseClient
-          .from('users_v2')
+        const { data, error } = await supabaseClient()
+        .from('users_v2')
           .select('*')
           .eq('id', userId)
           .is('deleted_at', null)
@@ -373,7 +373,7 @@ export function useUploadAvatar() {
       const fileName = `avatar-${user.id}-${Date.now()}.${fileExt}`
       
       // Supabase Storage에 업로드
-      const { data, error } = await supabaseClient.storage
+      const { data, error } = await supabaseClient().storage
         .from('avatars')
         .upload(fileName, file, {
           cacheControl: '3600',
@@ -383,7 +383,7 @@ export function useUploadAvatar() {
       if (error) throw error
       
       // Public URL 생성
-      const { data: { publicUrl } } = supabaseClient.storage
+      const { data: { publicUrl } } = supabaseClient().storage
         .from('avatars')
         .getPublicUrl(fileName)
 
@@ -424,7 +424,7 @@ export function useUserProfileComplete(
       if (!userId) throw new Error('User ID required')
       
       // DB 함수 사용으로 롤백
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('get_user_stats_v2', {
           p_user_id: userId
         })

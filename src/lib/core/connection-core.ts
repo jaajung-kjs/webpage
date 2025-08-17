@@ -1359,8 +1359,8 @@ export class ConnectionCore {
 // 싱글톤 인스턴스 export
 export const connectionCore = ConnectionCore.getInstance()
 
-// 편의 함수
-export const supabaseClient = connectionCore.getClient()
+// 편의 함수 - getter로 변경하여 항상 최신 client 반환
+export const supabaseClient = () => connectionCore.getClient()
 
 // 개발 환경에서 테스트를 위해 글로벌 노출
 if (typeof window !== 'undefined') {

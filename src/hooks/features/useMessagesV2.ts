@@ -164,7 +164,7 @@ function useConversationsV2() {
       if (!user) return []
       
       // Get conversations first - error 무시하고 data만 사용
-      const { data: conversations } = await supabaseClient
+      const { data: conversations } = await supabaseClient()
         .from('conversations_v2')
         .select('*')
         .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
@@ -181,7 +181,7 @@ function useConversationsV2() {
         .map(c => c.last_message_id)
         .filter((id): id is string => id !== null)
       
-      const { data: messages } = await supabaseClient
+      const { data: messages } = await supabaseClient()
         .from('messages_v2')
         .select(`
           id,
@@ -195,7 +195,7 @@ function useConversationsV2() {
       // Get all users
       const userIds = [...new Set(conversations.flatMap(c => [c.user1_id, c.user2_id]))]
       
-      const { data: users } = await supabaseClient
+      const { data: users } = await supabaseClient()
         .from('users_v2')
         .select('id, name, avatar_url, role, department')
         .in('id', userIds)
@@ -209,7 +209,7 @@ function useConversationsV2() {
       }))
       
       // Get unread counts for all conversations in one query
-      const { data: unreadCounts } = await supabaseClient
+      const { data: unreadCounts } = await supabaseClient()
         .rpc('get_unread_count_per_conversation_v2', { p_user_id: user.id })
       
       const unreadMap = new Map(
@@ -302,7 +302,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       if (!user || !conversationId) return []
       
       // Verify user has access to this conversation
-      const { data: conversation } = await supabaseClient
+      const { data: conversation } = await supabaseClient()
         .from('conversations_v2')
         .select('id')
         .eq('id', conversationId)
@@ -315,7 +315,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       
       // Get messages with sender info and read status in one query
       // Get messages first
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('messages_v2')
         .select('*')
         .eq('conversation_id', conversationId)
@@ -340,7 +340,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       const replyToIds = messages.map(m => m.reply_to_id).filter(Boolean)
       
       // Get users
-      const { data: users, error: userError } = await supabaseClient
+      const { data: users, error: userError } = await supabaseClient()
         .from('users_v2')
         .select('id, name, avatar_url, role')
         .in('id', senderIds.length > 0 ? senderIds : ['00000000-0000-0000-0000-000000000000'])
@@ -351,8 +351,8 @@ function useConversationMessagesV2(conversationId: string, options?: {
       let replyToMessages: any[] = []
       const validReplyToIds = replyToIds.filter(id => id !== null) as string[]
       if (validReplyToIds.length > 0) {
-        const { data: replyData, error: replyError } = await supabaseClient
-          .from('messages_v2')
+        const { data: replyData, error: replyError } = await supabaseClient()
+        .from('messages_v2')
           .select('id, content, sender_id')
           .in('id', validReplyToIds)
         
@@ -362,7 +362,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       
       // Get read status for all participants (to show who read what)
       const messageIds = messages.map(m => m.id)
-      const { data: readStatuses, error: readError } = await supabaseClient
+      const { data: readStatuses, error: readError } = await supabaseClient()
         .from('message_read_status_v2')
         .select('message_id, user_id, is_read, read_at')
         .in('message_id', messageIds)
@@ -475,7 +475,7 @@ function useUnreadCountV2() {
     queryFn: async () => {
       if (!user) return 0
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('get_unread_message_count_v2', { p_user_id: user.id })
       
       if (error) throw error
@@ -499,7 +499,7 @@ function useConversationDetailsV2(conversationId: string) {
     queryFn: async () => {
       if (!user || !conversationId) throw new Error('User or conversation ID required')
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('conversations_v2')
         .select(`
           *,
@@ -554,7 +554,7 @@ function useSendMessageV2() {
         reply_to_id
       }
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('messages_v2')
         .insert(messageData)
         .select(`
@@ -662,7 +662,7 @@ function useMarkAsReadV2() {
       
       console.log('[useMarkAsReadV2] Marking messages as read for conversation:', conversation_id)
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('mark_messages_as_read_v2', {
           p_user_id: user.id,
           p_conversation_id: conversation_id
@@ -715,7 +715,7 @@ function useCreateConversationV2() {
       if (user.id === participant_id) throw new Error('Cannot create conversation with yourself')
       
       // Get or create conversation
-      const { data: conversationId, error } = await supabaseClient
+      const { data: conversationId, error } = await supabaseClient()
         .rpc('get_or_create_conversation_v2', {
           p_user1_id: user.id,
           p_user2_id: participant_id
@@ -725,8 +725,8 @@ function useCreateConversationV2() {
       
       // Send initial message if provided
       if (initial_message && conversationId) {
-        await supabaseClient
-          .from('messages_v2')
+        await supabaseClient()
+        .from('messages_v2')
           .insert({
             conversation_id: conversationId,
             sender_id: user.id,
@@ -754,7 +754,7 @@ function useDeleteMessageV2() {
     mutationFn: async ({ message_id }) => {
       if (!user) throw new Error('Authentication required')
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('messages_v2')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', message_id)
@@ -784,7 +784,7 @@ function useEditMessageV2() {
     mutationFn: async ({ message_id, content }) => {
       if (!user) throw new Error('Authentication required')
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('messages_v2')
         .update({ 
           content,
@@ -819,7 +819,7 @@ function useSearchMessagesV2(params: SearchMessagesParams) {
     queryFn: async () => {
       if (!user || !params.query.trim()) return []
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('search_messages_v2', {
           p_user_id: user.id,
           p_query: params.query,
@@ -848,7 +848,7 @@ function useArchiveConversationV2() {
     mutationFn: async ({ conversation_id, is_archived }) => {
       if (!user) throw new Error('Authentication required')
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('conversations_v2')
         .update({ is_archived })
         .eq('id', conversation_id)

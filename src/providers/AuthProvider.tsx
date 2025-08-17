@@ -86,7 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     queryFn: async () => {
       if (!user?.id) return null
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('*')
         .eq('id', user.id)
@@ -109,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // 초기 세션 가져오기
     const getInitialSession = async () => {
       try {
-        const { data: { session }, error } = await supabaseClient.auth.getSession()
+        const { data: { session }, error } = await supabaseClient().auth.getSession()
         if (error) {
           console.error('Session fetch error:', error)
           return
@@ -137,7 +137,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getInitialSession()
 
     // 인증 상태 변화 감지
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(
+    const { data: { subscription } } = supabaseClient().auth.onAuthStateChange(
       async (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
@@ -192,12 +192,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // 인증 메서드들
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password })
+    const { error } = await supabaseClient().auth.signInWithPassword({ email, password })
     return { error }
   }
 
   const signUp = async (email: string, password: string, metadata?: any) => {
-    const { error } = await supabaseClient.auth.signUp({
+    const { error } = await supabaseClient().auth.signUp({
       email,
       password,
       options: { data: metadata }
@@ -217,7 +217,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // 로그아웃 시 메시지 구독 정리 (signOut 전에 실행)
       userMessageSubscriptionManager.cleanup()
       
-      const { error } = await supabaseClient.auth.signOut()
+      const { error } = await supabaseClient().auth.signOut()
       if (error) {
         console.warn('AuthProvider signOut error:', error)
         // 403이나 네트워크 에러는 로컬에서 정리하고 성공으로 처리
@@ -250,8 +250,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const updateProfile = async (updates: Partial<Tables<'users_v2'>>) => {
     if (!user?.id) return { error: new Error('User not authenticated') }
     
-    const { error } = await supabaseClient
-      .from('users_v2')
+    const { error } = await supabaseClient()
+        .from('users_v2')
       .update({
         ...updates,
         updated_at: new Date().toISOString()
@@ -268,7 +268,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const resendEmailConfirmation = async (email: string) => {
-    const { error } = await supabaseClient.auth.resend({
+    const { error } = await supabaseClient().auth.resend({
       type: 'signup',
       email
     })

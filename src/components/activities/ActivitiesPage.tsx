@@ -191,8 +191,8 @@ function ActivitiesPage() {
     
     for (const activity of allActivities) {
       if (activity.id) {
-        const { data } = await supabaseClient
-          .from('activity_participants_v2')
+        const { data } = await supabaseClient()
+        .from('activity_participants_v2')
           .select('id, status')
           .eq('activity_id', activity.id)
           .eq('user_id', user.id)
@@ -381,7 +381,7 @@ function ActivitiesPage() {
 
     try {
       // 참가자 목록 조회
-      const { data: participantsData, error } = await supabaseClient
+      const { data: participantsData, error } = await supabaseClient()
         .from('activity_participants_v2')
         .select(`
           id,

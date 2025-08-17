@@ -70,14 +70,14 @@ export default function MarkdownEditor({
         const filePath = `content/${fileName}`
 
         // Upload to Supabase Storage
-        const { data, error } = await supabaseClient.storage
+        const { data, error } = await supabaseClient().storage
           .from('attachments')
           .upload(filePath, file)
 
         if (error) throw error
 
         // Get public URL
-        const { data: { publicUrl } } = supabaseClient.storage
+        const { data: { publicUrl } } = supabaseClient().storage
           .from('attachments')
           .getPublicUrl(filePath)
 

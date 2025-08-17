@@ -35,7 +35,7 @@ export default function EmailVerificationModal({
     try {
       // Supabase에서 회원가입 이메일을 다시 전송
       // 새로운 토큰이 생성되며 기존 토큰은 자동으로 무효화됩니다
-      const { error } = await supabaseClient.auth.resend({
+      const { error } = await supabaseClient().auth.resend({
         type: 'signup',
         email: email,
         options: {

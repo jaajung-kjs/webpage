@@ -63,8 +63,8 @@ export function useCommentsV2(
 
   const queryFn = async (): Promise<CommentWithAuthorV2[]> => {
     // V2 RPC 함수 사용하여 계층형 댓글 트리 가져오기
-    const { data: commentTree, error } = await supabaseClient
-      .rpc('get_comment_tree_v2', {
+    const { data: commentTree, error } = await supabaseClient()
+        .rpc('get_comment_tree_v2', {
         p_content_id: contentId,
         p_max_depth: maxDepth
       })
@@ -131,7 +131,7 @@ export function useCommentsV2(
     // 사용자의 좋아요 상태 조회 및 업데이트
     if (user && commentTree && commentTree.length > 0) {
       const commentIds = commentTree.map((c: any) => c.id)
-      const { data: userLikes } = await supabaseClient
+      const { data: userLikes } = await supabaseClient()
         .from('interactions_v2')
         .select('target_id')
         .in('target_id', commentIds)
@@ -205,8 +205,8 @@ export function useCreateCommentV2() {
       let depth = 0
 
       if (parentId) {
-        const { data: parent, error: parentError } = await supabaseClient
-          .from('comments_v2')
+        const { data: parent, error: parentError } = await supabaseClient()
+        .from('comments_v2')
           .select('path, depth')
           .eq('id', parentId)
           .single()
@@ -222,7 +222,7 @@ export function useCreateCommentV2() {
         }
       }
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('create_comment_v2', {
           p_content_id: contentId,
           p_content: comment,
@@ -281,7 +281,7 @@ export function useUpdateCommentV2() {
     comment: string
   }>({
     mutationFn: async ({ commentId, comment }) => {
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('comments_v2')
         .update({
           comment_text: comment,
@@ -363,7 +363,7 @@ export function useDeleteCommentV2() {
     contentId: string
   }>({
     mutationFn: async ({ commentId }) => {
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('comments_v2')
         .update({ 
           deleted_at: new Date().toISOString(),
@@ -445,7 +445,7 @@ export function useToggleCommentLikeV2() {
       if (!user) throw new Error('User not authenticated')
 
       // 기존 좋아요 확인
-      const { data: existing } = await supabaseClient
+      const { data: existing } = await supabaseClient()
         .from('interactions_v2')
         .select('id')
         .eq('target_id', commentId)
@@ -456,8 +456,8 @@ export function useToggleCommentLikeV2() {
 
       if (existing) {
         // 좋아요 취소
-        const { error } = await supabaseClient
-          .from('interactions_v2')
+        const { error } = await supabaseClient()
+        .from('interactions_v2')
           .delete()
           .eq('id', existing.id)
 
@@ -465,8 +465,8 @@ export function useToggleCommentLikeV2() {
         return false
       } else {
         // 좋아요 추가
-        const { error } = await supabaseClient
-          .from('interactions_v2')
+        const { error } = await supabaseClient()
+        .from('interactions_v2')
           .insert({
             target_id: commentId,
             target_type: 'comment',
@@ -556,7 +556,7 @@ export function useCommentCountV2(contentId: string) {
   return useQuery<number, Error>({
     queryKey: ['comment-count-v2', contentId],
     queryFn: async () => {
-      const { count, error } = await supabaseClient
+      const { count, error } = await supabaseClient()
         .from('comments_v2')
         .select('*', { count: 'exact', head: true })
         .eq('content_id', contentId)
@@ -584,7 +584,7 @@ export function useLoadMoreChildCommentsV2() {
     limit?: number
   }>({
     mutationFn: async ({ contentId, parentPath, currentChildCount, limit = 10 }) => {
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('comments_v2')
         .select(`
           *,

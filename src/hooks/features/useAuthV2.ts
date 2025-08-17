@@ -32,7 +32,7 @@ export const hasPermission = (requiredRole: UserRole, userRole?: UserRole): bool
 }
 
 export function useAuthV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useProviderAuth()
   const router = useRouter()
   const queryClient = useQueryClient()

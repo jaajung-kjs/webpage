@@ -40,7 +40,7 @@ export default function VerifyEmailPage() {
         try {
           // 사용자 정보를 다시 가져와서 확인
           const { supabaseClient } = await import('@/lib/core/connection-core')
-          const { data: { user: updatedUser } } = await supabaseClient.auth.getUser()
+          const { data: { user: updatedUser } } = await supabaseClient().auth.getUser()
           
 
           if (updatedUser?.email_confirmed_at && !isVerified) {

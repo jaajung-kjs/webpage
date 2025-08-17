@@ -153,8 +153,8 @@ export function useMessageNotifications() {
         if (newMessage.sender_id === user.id) return
 
         // 내가 참여한 대화방인지 확인
-        const { data: conversation } = await supabaseClient
-          .from('conversations_v2')
+        const { data: conversation } = await supabaseClient()
+        .from('conversations_v2')
           .select('id')
           .eq('id', newMessage.conversation_id)
           .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
@@ -163,8 +163,8 @@ export function useMessageNotifications() {
         if (!conversation) return
 
         // 발신자 정보 조회
-        const { data: sender } = await supabaseClient
-          .from('users_v2')
+        const { data: sender } = await supabaseClient()
+        .from('users_v2')
           .select('id, name, avatar_url')
           .eq('id', newMessage.sender_id)
           .single()

@@ -65,7 +65,7 @@ export interface ApplicationFormData {
 }
 
 export function useMembershipV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 

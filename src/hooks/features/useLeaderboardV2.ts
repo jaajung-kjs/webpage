@@ -110,7 +110,7 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const { start, end } = getPeriodDates(period)
       
       // 기본 사용자 정보와 점수 조회
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('users_v2')
         .select(`
           id,
@@ -138,7 +138,7 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const userIds = users.map(u => u.id)
       
       // 사용자 메타데이터 조회 (상세 통계용)
-      const { data: usersWithMetadata } = await supabaseClient
+      const { data: usersWithMetadata } = await supabaseClient()
         .from('users_v2')
         .select('id, metadata')
         .in('id', userIds)
@@ -201,7 +201,7 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const { start, end } = getPeriodDates(period)
       
       // 현재 사용자보다 높은 점수를 가진 사용자 수 계산
-      const { data: userData } = await supabaseClient
+      const { data: userData } = await supabaseClient()
         .from('users_v2')
         .select('metadata')
         .eq('id', user.id)
@@ -219,16 +219,16 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       const userValue = metadataKey ? userMetadata[metadataKey] || 0 : 0
       
       if (category === 'total_score') {
-        const { data: activityScoreData } = await supabaseClient
-          .from('users_v2')
+        const { data: activityScoreData } = await supabaseClient()
+        .from('users_v2')
           .select('activity_score')
           .eq('id', user.id)
           .single()
         
         if (!activityScoreData) return null
         
-        const { count } = await supabaseClient
-          .from('users_v2')
+        const { count } = await supabaseClient()
+        .from('users_v2')
           .select('*', { count: 'exact', head: true })
           .gt('activity_score', activityScoreData.activity_score)
           .is('deleted_at', null)
@@ -243,8 +243,8 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
         const currentScore = userValue
         
         // 다른 사용자들의 해당 카테고리 점수와 비교
-        const { data: allUsersData } = await supabaseClient
-          .from('users_v2')
+        const { data: allUsersData } = await supabaseClient()
+        .from('users_v2')
           .select('metadata')
           .is('deleted_at', null)
         
@@ -274,7 +274,7 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
     queryFn: async () => {
       const { start, end } = getPeriodDates(period)
       
-      const { count } = await supabaseClient
+      const { count } = await supabaseClient()
         .from('users_v2')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
@@ -283,8 +283,8 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
       let avgScore = 0, maxScore = 0
       
       if (category === 'total_score') {
-        const { data: scoreData } = await supabaseClient
-          .from('users_v2')
+        const { data: scoreData } = await supabaseClient()
+        .from('users_v2')
           .select('activity_score')
           .is('deleted_at', null)
           .gte('created_at', start)
@@ -293,8 +293,8 @@ export function useLeaderboardV2(options: LeaderboardOptions = {}) {
         
         maxScore = scoreData?.[0]?.activity_score || 0
         
-        const { data: allScores } = await supabaseClient
-          .from('users_v2')
+        const { data: allScores } = await supabaseClient()
+        .from('users_v2')
           .select('activity_score')
           .is('deleted_at', null)
           .gte('created_at', start)
@@ -405,7 +405,7 @@ export function useUserRank(userId?: string, period: LeaderboardPeriod = 'monthl
     queryFn: async () => {
       if (!targetUserId) return null
       
-      const { data: userData } = await supabaseClient
+      const { data: userData } = await supabaseClient()
         .from('users_v2')
         .select('activity_score')
         .eq('id', targetUserId)
@@ -413,7 +413,7 @@ export function useUserRank(userId?: string, period: LeaderboardPeriod = 'monthl
       
       if (!userData) return null
       
-      const { count } = await supabaseClient
+      const { count } = await supabaseClient()
         .from('users_v2')
         .select('*', { count: 'exact', head: true })
         .gt('activity_score', userData.activity_score)

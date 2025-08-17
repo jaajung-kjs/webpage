@@ -150,7 +150,7 @@ export function useReportsV2(options?: {
         throw new Error('권한이 없습니다.')
       }
       
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('interactions_v2')
         .select(`
           *,
@@ -192,8 +192,8 @@ export function useReportsV2(options?: {
         
         try {
           if (report.target_type === 'content') {
-            const { data: content } = await supabaseClient
-              .from('content_v2')
+            const { data: content } = await supabaseClient()
+        .from('content_v2')
               .select('id, title, summary, content, content_type, author_id, created_at')
               .eq('id', report.target_id)
               .single()
@@ -208,8 +208,8 @@ export function useReportsV2(options?: {
               }
               
               // 콘텐츠 작성자 정보
-              const { data: author } = await supabaseClient
-                .from('users_v2')
+              const { data: author } = await supabaseClient()
+        .from('users_v2')
                 .select('id, name, email, avatar_url, role')
                 .eq('id', content.author_id)
                 .single()
@@ -219,8 +219,8 @@ export function useReportsV2(options?: {
               }
             }
           } else if (report.target_type === 'comment') {
-            const { data: comment } = await supabaseClient
-              .from('comments_v2')
+            const { data: comment } = await supabaseClient()
+        .from('comments_v2')
               .select('id, comment_text, author_id, created_at')
               .eq('id', report.target_id)
               .single()
@@ -234,8 +234,8 @@ export function useReportsV2(options?: {
               }
               
               // 댓글 작성자 정보
-              const { data: author } = await supabaseClient
-                .from('users_v2')
+              const { data: author } = await supabaseClient()
+        .from('users_v2')
                 .select('id, name, email, avatar_url, role')
                 .eq('id', comment.author_id)
                 .single()
@@ -246,8 +246,8 @@ export function useReportsV2(options?: {
             }
           } else if (report.target_type === 'user') {
             // 사용자 직접 신고
-            const { data: reportedUserData } = await supabaseClient
-              .from('users_v2')
+            const { data: reportedUserData } = await supabaseClient()
+        .from('users_v2')
               .select('id, name, email, avatar_url, role')
               .eq('id', report.target_id)
               .single()
@@ -256,8 +256,8 @@ export function useReportsV2(options?: {
               reportedUser = reportedUserData
             }
           } else if (report.target_type === 'activity') {
-            const { data: activity } = await supabaseClient
-              .from('activities_v2')
+            const { data: activity } = await supabaseClient()
+        .from('activities_v2')
               .select(`
                 id, event_type, event_date,
                 content:content_v2!activities_v2_content_id_fkey (
@@ -277,8 +277,8 @@ export function useReportsV2(options?: {
               
               // 활동 주최자 정보
               if ((activity.content as any)?.author_id) {
-                const { data: organizer } = await supabaseClient
-                  .from('users_v2')
+                const { data: organizer } = await supabaseClient()
+        .from('users_v2')
                   .select('id, name, email, avatar_url, role')
                   .eq('id', (activity.content as any).author_id)
                   .single()
@@ -292,8 +292,8 @@ export function useReportsV2(options?: {
           
           // 처리한 관리자 정보 조회
           if (metadata.resolvedBy) {
-            const { data: adminData } = await supabaseClient
-              .from('users_v2')
+            const { data: adminData } = await supabaseClient()
+        .from('users_v2')
               .select('id, name, email')
               .eq('id', metadata.resolvedBy)
               .single()
@@ -344,7 +344,7 @@ export function useCreateReportV2() {
       if (!isMember) throw new Error('동아리 회원만 신고할 수 있습니다.')
       
       // 중복 신고 체크 (동일 사용자가 동일 대상을 24시간 내에 중복 신고 방지)
-      const { data: existing } = await supabaseClient
+      const { data: existing } = await supabaseClient()
         .from('interactions_v2')
         .select('id, created_at')
         .eq('user_id', user.id)
@@ -363,8 +363,8 @@ export function useCreateReportV2() {
       
       try {
         if (targetType === 'content') {
-          const { data: content } = await supabaseClient
-            .from('content_v2')
+          const { data: content } = await supabaseClient()
+        .from('content_v2')
             .select('title, author_id, summary, content, author:users_v2!content_v2_author_id_fkey (name)')
             .eq('id', targetId)
             .single()
@@ -378,8 +378,8 @@ export function useCreateReportV2() {
             }
           }
         } else if (targetType === 'comment') {
-          const { data: comment } = await supabaseClient
-            .from('comments_v2')
+          const { data: comment } = await supabaseClient()
+        .from('comments_v2')
             .select('comment_text, author_id, author:users_v2!comments_v2_author_id_fkey (name)')
             .eq('id', targetId)
             .single()
@@ -392,8 +392,8 @@ export function useCreateReportV2() {
             }
           }
         } else if (targetType === 'user') {
-          const { data: userData } = await supabaseClient
-            .from('users_v2')
+          const { data: userData } = await supabaseClient()
+        .from('users_v2')
             .select('name')
             .eq('id', targetId)
             .single()
@@ -430,7 +430,7 @@ export function useCreateReportV2() {
         metadata: metadata as unknown as Json
       }
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('interactions_v2')
         .insert(reportData)
         .select()
@@ -465,7 +465,7 @@ export function useUpdateReportV2() {
       }
       
       // 기존 신고 정보 조회
-      const { data: report, error: fetchError } = await supabaseClient
+      const { data: report, error: fetchError } = await supabaseClient()
         .from('interactions_v2')
         .select('metadata')
         .eq('id', reportId)
@@ -484,7 +484,7 @@ export function useUpdateReportV2() {
         resolvedBy: ['resolved', 'dismissed', 'escalated'].includes(status) ? user.id : currentMetadata.resolvedBy
       }
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('interactions_v2')
         .update({ metadata: updatedMetadata as unknown as Json })
         .eq('id', reportId)
@@ -546,7 +546,7 @@ export function useReportStatsV2() {
       }
       
       // 전체 신고 조회
-      const { data: reports, error } = await supabaseClient
+      const { data: reports, error } = await supabaseClient()
         .from('interactions_v2')
         .select('*, metadata, created_at')
         .eq('interaction_type', 'report')
@@ -685,7 +685,7 @@ export function useMyReportsV2() {
     queryFn: async () => {
       if (!user) return []
       
-      const { data: reports, error } = await supabaseClient
+      const { data: reports, error } = await supabaseClient()
         .from('interactions_v2')
         .select('*')
         .eq('user_id', user.id)

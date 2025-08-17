@@ -38,7 +38,7 @@ export function ChangePasswordDialog({
       
       try {
         // Fire and forget - 에러가 나도 무시하고 진행
-        supabaseClient.auth.updateUser({ password: password })
+        supabaseClient().auth.updateUser({ password: password })
           .then(() => console.log('[ChangePassword] Update promise resolved'))
           .catch((err) => console.error('[ChangePassword] Update promise rejected:', err))
       } catch (error) {

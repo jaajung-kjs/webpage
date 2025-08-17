@@ -41,7 +41,7 @@ export default function SearchPage() {
     setLoading(true)
     try {
       // 항상 전체 검색 수행 (탭 필터는 클라이언트 사이드에서 처리)
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('search_content_v2', {
           p_query: query.trim(),
           p_content_type: undefined, // 항상 전체 검색

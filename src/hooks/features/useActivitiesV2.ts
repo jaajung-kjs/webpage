@@ -89,7 +89,7 @@ export interface ActivityFormData {
 }
 
 export function useActivitiesV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 

@@ -31,7 +31,7 @@ function useRecentPosts() {
     queryKey: ['recent-posts'],
     queryFn: async () => {
       // Fetch recent posts from content_v2 with author relationship
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('content_v2')
         .select(`
           id,

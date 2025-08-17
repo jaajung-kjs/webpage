@@ -99,8 +99,8 @@ export function useAuditLogsV2() {
           throw new Error('Insufficient permissions to access audit logs')
         }
 
-        let query = supabaseClient
-          .from('audit_logs_v2')
+        let query = supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             *,
             user:users_v2!user_id(id, name, email, department, avatar_url, role)
@@ -146,8 +146,8 @@ export function useAuditLogsV2() {
           throw new Error('Insufficient permissions to access audit trail')
         }
 
-        const { data, error } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data, error } = await supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             *,
             user:users_v2!user_id(id, name, email, department, avatar_url, role)
@@ -202,8 +202,8 @@ export function useAuditLogsV2() {
           throw new Error('Insufficient permissions to access audit statistics')
         }
 
-        let query = supabaseClient
-          .from('audit_logs_v2')
+        let query = supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             action,
             table_name,
@@ -304,8 +304,8 @@ export function useAuditLogsV2() {
         const cutoffTime = new Date()
         cutoffTime.setHours(cutoffTime.getHours() - hoursBack)
 
-        const { data, error } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data, error } = await supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             *,
             user:users_v2!user_id(id, name, email, role)
@@ -446,8 +446,8 @@ export function useAuditLogsV2() {
           throw new Error('Insufficient permissions to generate compliance report')
         }
 
-        const { data, error } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data, error } = await supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             *,
             user:users_v2!user_id(id, name, email, department, role)

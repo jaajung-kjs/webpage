@@ -115,8 +115,8 @@ export function useActivityLogsV2() {
       queryKey: ['activity-logs-v2', filter],
       queryFn: async ({ pageParam = 0 }) => {
         // audit_logs_v2 테이블에서 사용자 활동 로그 조회
-        let query = supabaseClient
-          .from('audit_logs_v2')
+        let query = supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             *,
             user:users_v2!user_id(id, name, avatar_url, department)
@@ -176,8 +176,8 @@ export function useActivityLogsV2() {
       queryFn: async () => {
         if (!user?.id) return []
 
-        const { data, error } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data, error } = await supabaseClient()
+        .from('audit_logs_v2')
           .select(`
             action,
             table_name,
@@ -241,8 +241,8 @@ export function useActivityLogsV2() {
         const thisMonth = new Date(now.getFullYear(), now.getMonth(), 1)
 
         // 전체 활동 조회
-        const { data, error } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data, error } = await supabaseClient()
+        .from('audit_logs_v2')
           .select('action, created_at')
           .eq('user_id', targetUserId)
           .order('created_at', { ascending: false })
@@ -333,7 +333,7 @@ export function useActivityLogsV2() {
     }) => {
       if (!user?.id) throw new Error('User not authenticated')
 
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('log_activity_v2', {
           p_user_id: user.id,
           p_action: action,

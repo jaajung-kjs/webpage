@@ -94,7 +94,7 @@ export function NewPasswordModal({ open, onOpenChange, onComplete }: NewPassword
     setLoading(true)
     try {
       // Fire and forget - 비밀번호 변경 후 Promise가 resolve되지 않는 버그 우회
-      supabaseClient.auth.updateUser({
+      supabaseClient().auth.updateUser({
         password: values.password
       }).then(() => {
         console.log('[NewPasswordModal] Password update completed')

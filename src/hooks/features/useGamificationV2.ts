@@ -45,7 +45,7 @@ export function useGamificationV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
       
-      const { data, error } = await supabaseClient.rpc('get_user_stats_v2', {
+      const { data, error } = await supabaseClient().rpc('get_user_stats_v2', {
         p_user_id: targetUserId
       })
       
@@ -68,7 +68,7 @@ export function useGamificationV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('activity_score, skill_level, activity_level')
         .eq('id', targetUserId)
@@ -89,7 +89,7 @@ export function useGamificationV2(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('user_activity_logs_v2')
         .select('*')
         .eq('user_id', targetUserId)
@@ -110,7 +110,7 @@ export function useGamificationV2(userId?: string) {
       if (!user?.id) throw new Error('Authentication required')
       if (!isOwnProfile) throw new Error('Can only record own activities')
       
-      const { error } = await supabaseClient.rpc('log_user_activity', {
+      const { error } = await supabaseClient().rpc('log_user_activity', {
         p_user_id: user.id,
         p_action_type: activityData.action_type,
         p_target_type: activityData.target_type || undefined,
@@ -140,7 +140,7 @@ export function useGamificationV2(userId?: string) {
     mutationFn: async () => {
       if (!user?.id) throw new Error('Authentication required')
       
-      const { error } = await supabaseClient.rpc('update_user_levels', {
+      const { error } = await supabaseClient().rpc('update_user_levels', {
         p_user_id: user.id
       })
       
@@ -156,7 +156,7 @@ export function useGamificationV2(userId?: string) {
   // 활동 점수 수동 재계산 (관리자 기능)
   const recalculateScore = useMutation({
     mutationFn: async (userId: string) => {
-      const { data, error } = await supabaseClient.rpc('calculate_activity_score', {
+      const { data, error } = await supabaseClient().rpc('calculate_activity_score', {
         p_user_id: userId
       })
       
@@ -327,7 +327,7 @@ export function useUserLevel(userId?: string) {
     queryFn: async () => {
       if (!targetUserId) throw new Error('User ID required')
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('skill_level, activity_level, activity_score')
         .eq('id', targetUserId)

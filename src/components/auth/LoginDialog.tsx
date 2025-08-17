@@ -3,7 +3,7 @@
  * 
  * Authentication dialog with sign-in and sign-up functionality
  * Uses useAuthV2 for user state and Supabase auth directly for auth operations
- * Migration: useAuthV2 + direct supabaseClient.auth calls
+ * Migration: useAuthV2 + direct supabaseClient().auth calls
  */
 
 'use client'
@@ -103,7 +103,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onLogin = async (values: z.infer<typeof loginSchema>) => {
     setLoading(true)
     try {
-      const { error } = await supabaseClient.auth.signInWithPassword({
+      const { error } = await supabaseClient().auth.signInWithPassword({
         email: values.email,
         password: values.password,
       })
@@ -167,7 +167,7 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const onSignup = async (values: z.infer<typeof signupSchema>) => {
     setLoading(true)
     try {
-      const { error } = await supabaseClient.auth.signUp({
+      const { error } = await supabaseClient().auth.signUp({
         email: values.email,
         password: values.password,
         options: {

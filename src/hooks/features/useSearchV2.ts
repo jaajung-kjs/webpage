@@ -145,8 +145,8 @@ export function useSearchV2() {
       queryFn: async ({ pageParam = 0 }) => {
         if (!query.trim()) return { results: [], nextCursor: 0, hasMore: false, totalCount: 0 }
 
-        const { data, error } = await supabaseClient
-          .rpc('search_content_v2', {
+        const { data, error } = await supabaseClient()
+        .rpc('search_content_v2', {
             p_query: query.trim(),
             p_content_type: filter.contentType || undefined,
             p_limit: pageSize,
@@ -222,8 +222,8 @@ export function useSearchV2() {
 
         try {
           // 1. 콘텐츠 검색
-          const { data: contentResults } = await supabaseClient
-            .rpc('search_content_v2', {
+          const { data: contentResults } = await supabaseClient()
+        .rpc('search_content_v2', {
               p_query: query.trim(),
               p_limit: Math.ceil(pageSize * 0.6) // 60%
             })
@@ -244,8 +244,8 @@ export function useSearchV2() {
           }
 
           // 2. 사용자 검색
-          const { data: userResults } = await supabaseClient
-            .from('users_v2')
+          const { data: userResults } = await supabaseClient()
+        .from('users_v2')
             .select('id, name, email, bio, avatar_url, role, department')
             .or(`name.ilike.%${query.trim()}%,email.ilike.%${query.trim()}%,bio.ilike.%${query.trim()}%`)
             .is('deleted_at', null)
@@ -268,8 +268,8 @@ export function useSearchV2() {
           }
 
           // 3. 태그 검색
-          const { data: tagResults } = await supabaseClient
-            .from('tags_v2')
+          const { data: tagResults } = await supabaseClient()
+        .from('tags_v2')
             .select('*')
             .ilike('name', `%${query.trim()}%`)
             .limit(Math.ceil(pageSize * 0.15)) // 15%
@@ -313,8 +313,8 @@ export function useSearchV2() {
 
         try {
           // 1. 인기 태그 제안
-          const { data: tags } = await supabaseClient
-            .from('tags_v2')
+          const { data: tags } = await supabaseClient()
+        .from('tags_v2')
             .select('name, usage_count')
             .ilike('name', `%${query.trim()}%`)
             .order('usage_count', { ascending: false })
@@ -332,8 +332,8 @@ export function useSearchV2() {
           }
 
           // 2. 사용자 제안
-          const { data: users } = await supabaseClient
-            .from('users_v2')
+          const { data: users } = await supabaseClient()
+        .from('users_v2')
             .select('id, name, avatar_url, role')
             .ilike('name', `%${query.trim()}%`)
             .is('deleted_at', null)

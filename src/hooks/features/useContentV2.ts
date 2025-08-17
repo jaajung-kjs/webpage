@@ -75,7 +75,7 @@ const mapSortBy = (sortBy: string): ContentSortBy => {
 }
 
 export function useContentV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 

@@ -69,7 +69,7 @@ export function PasswordResetModal({ open, onOpenChange }: PasswordResetModalPro
       console.log('Password reset redirect URL:', redirectUrl)
       
       // Supabase에서 비밀번호 재설정 이메일 전송
-      const { error } = await supabaseClient.auth.resetPasswordForEmail(
+      const { error } = await supabaseClient().auth.resetPasswordForEmail(
         values.email,
         {
           redirectTo: redirectUrl

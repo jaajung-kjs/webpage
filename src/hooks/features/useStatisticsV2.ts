@@ -181,27 +181,27 @@ export function useStatisticsV2() {
           usersByDepartment
         ] = await Promise.all([
           // 전체 사용자
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .is('deleted_at', null),
 
           // 활성 사용자 (30일 내 로그인)
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .is('deleted_at', null)
             .gte('last_login_at', thirtyDaysAgo.toISOString()),
 
           // 이번 달 신규 사용자
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .is('deleted_at', null)
             .gte('created_at', thisMonth.toISOString()),
 
           // 지난 달 신규 사용자
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .is('deleted_at', null)
@@ -209,13 +209,13 @@ export function useStatisticsV2() {
             .lt('created_at', thisMonth.toISOString()),
 
           // 역할별 사용자
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('role')
             .is('deleted_at', null),
 
           // 부서별 사용자
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('department')
             .is('deleted_at', null)
@@ -233,47 +233,47 @@ export function useStatisticsV2() {
           topCategories
         ] = await Promise.all([
           // 전체 콘텐츠
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true }),
 
           // 게시된 콘텐츠
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'published'),
 
           // 초안 콘텐츠
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'draft'),
 
           // 이번 달 신규 콘텐츠
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', thisMonth.toISOString()),
 
           // 지난 달 신규 콘텐츠
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', lastMonth.toISOString())
             .lt('created_at', thisMonth.toISOString()),
 
           // 콘텐츠 타입별
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('content_type'),
 
           // 조회수, 좋아요, 댓글 수 합계
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('view_count, like_count, comment_count'),
 
           // 상위 카테고리 (content_v2.category 필드에서 직접)
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('category')
             .not('category', 'is', null)
@@ -282,13 +282,13 @@ export function useStatisticsV2() {
         // 활동 통계
         const [totalActivities, upcomingActivities, activityParticipants] = await Promise.all([
           // 전체 활동 (activities_v2가 있다면)
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .eq('content_type', 'activity'),
 
           // 다가오는 활동
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .eq('content_type', 'activity')
@@ -300,11 +300,11 @@ export function useStatisticsV2() {
 
         // 상호작용 통계
         const [totalInteractions, recentInteractions] = await Promise.all([
-          supabaseClient
+          supabaseClient()
             .from('interactions_v2')
             .select('id', { count: 'exact', head: true }),
 
-          supabaseClient
+          supabaseClient()
             .from('interactions_v2')
             .select('*')
             .gte('created_at', thirtyDaysAgo.toISOString())
@@ -435,21 +435,21 @@ export function useStatisticsV2() {
 
           const [users, content, interactions] = await Promise.all([
             // 해당 날짜 신규 사용자
-            supabaseClient
+            supabaseClient()
               .from('users_v2')
               .select('id', { count: 'exact', head: true })
               .gte('created_at', date)
               .lt('created_at', nextDate.toISOString()),
 
             // 해당 날짜 신규 콘텐츠
-            supabaseClient
+            supabaseClient()
               .from('content_v2')
               .select('id', { count: 'exact', head: true })
               .gte('created_at', date)
               .lt('created_at', nextDate.toISOString()),
 
             // 해당 날짜 상호작용
-            supabaseClient
+            supabaseClient()
               .from('interactions_v2')
               .select('id', { count: 'exact', head: true })
               .gte('created_at', date)
@@ -493,8 +493,8 @@ export function useStatisticsV2() {
         const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
 
         // 사용자 활동 빈도 분석
-        const { data: userActivities } = await supabaseClient
-          .from('audit_logs_v2')
+        const { data: userActivities } = await supabaseClient()
+        .from('audit_logs_v2')
           .select('user_id, created_at')
           .gte('created_at', oneWeekAgo.toISOString())
 
@@ -520,13 +520,13 @@ export function useStatisticsV2() {
         })
 
         // 비활성 사용자 계산
-        const { count: totalUsers } = await supabaseClient
-          .from('users_v2')
+        const { count: totalUsers } = await supabaseClient()
+        .from('users_v2')
           .select('id', { count: 'exact', head: true })
           .is('deleted_at', null)
 
-        const { count: activeUsers } = await supabaseClient
-          .from('users_v2')
+        const { count: activeUsers } = await supabaseClient()
+        .from('users_v2')
           .select('id', { count: 'exact', head: true })
           .is('deleted_at', null)
           .gte('last_login_at', thirtyDaysAgo.toISOString())
@@ -534,8 +534,8 @@ export function useStatisticsV2() {
         const inactive = (totalUsers || 0) - (activeUsers || 0)
 
         // 콘텐츠 참여도 통계
-        const { data: contentStats } = await supabaseClient
-          .from('content_v2')
+        const { data: contentStats } = await supabaseClient()
+        .from('content_v2')
           .select('view_count, like_count, comment_count')
           .eq('status', 'published')
 
@@ -563,21 +563,21 @@ export function useStatisticsV2() {
 
             return Promise.all([
               // 일일 게시글 수
-              supabaseClient
+              supabaseClient()
                 .from('content_v2')
                 .select('id', { count: 'exact', head: true })
                 .gte('created_at', date.toISOString())
                 .lt('created_at', nextDate.toISOString()),
 
               // 일일 댓글 수
-              supabaseClient
+              supabaseClient()
                 .from('comments_v2')
                 .select('id', { count: 'exact', head: true })
                 .gte('created_at', date.toISOString())
                 .lt('created_at', nextDate.toISOString()),
 
               // 일일 좋아요 수
-              supabaseClient
+              supabaseClient()
                 .from('interactions_v2')
                 .select('id', { count: 'exact', head: true })
                 .eq('interaction_type', 'like')
@@ -624,8 +624,8 @@ export function useStatisticsV2() {
       queryKey: ['content-performance-v2', limit],
       queryFn: async () => {
         // 상위 성과 콘텐츠 조회
-        const { data: topContent } = await supabaseClient
-          .from('content_v2')
+        const { data: topContent } = await supabaseClient()
+        .from('content_v2')
           .select(`
             id,
             title,
@@ -640,8 +640,8 @@ export function useStatisticsV2() {
           .limit(limit)
 
         // 전체 콘텐츠 통계
-        const { data: allContent } = await supabaseClient
-          .from('content_v2')
+        const { data: allContent } = await supabaseClient()
+        .from('content_v2')
           .select('view_count, like_count, comment_count')
           .eq('status', 'published')
 
@@ -704,12 +704,12 @@ export function useStatisticsV2() {
         const twoMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 2, 1)
 
         const [lastMonthUsers, twoMonthsAgoUsers] = await Promise.all([
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', lastMonth.toISOString()),
 
-          supabaseClient
+          supabaseClient()
             .from('users_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', twoMonthsAgo.toISOString())
@@ -720,12 +720,12 @@ export function useStatisticsV2() {
         const predictedUsers = Math.round((lastMonthUsers.count || 0) * userGrowthRate)
 
         const [lastMonthContent, twoMonthsAgoContent] = await Promise.all([
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', lastMonth.toISOString()),
 
-          supabaseClient
+          supabaseClient()
             .from('content_v2')
             .select('id', { count: 'exact', head: true })
             .gte('created_at', twoMonthsAgo.toISOString())

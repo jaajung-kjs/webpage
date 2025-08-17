@@ -104,7 +104,7 @@ export default function BackgroundRecoveryTestPage() {
   const { data: testData, isLoading, error, refetch } = useQuery({
     queryKey: ['test', 'timestamp'],
     queryFn: async () => {
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('id, created_at')
         .eq('id', user?.id || '')
@@ -174,7 +174,7 @@ export default function BackgroundRecoveryTestPage() {
     setTestResults(prev => ({ ...prev, realtimeTest: 'testing' }))
     
     try {
-      const channel = supabaseClient
+      const channel = supabaseClient()
         .channel('test-channel')
         .on('presence', { event: 'sync' }, () => {
           addLog('Realtime presence sync received')
@@ -194,7 +194,7 @@ export default function BackgroundRecoveryTestPage() {
       }
       
       // Cleanup
-      await supabaseClient.removeChannel(channel)
+      await supabaseClient().removeChannel(channel)
     } catch (error) {
       setTestResults(prev => ({ ...prev, realtimeTest: 'failed' }))
       addLog(`❌ Realtime test error: ${error}`)

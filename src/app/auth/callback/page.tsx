@@ -74,7 +74,7 @@ export default function AuthCallbackPage() {
           // detectSessionInUrl: true 설정으로 Supabase가 자동으로 처리
           // 잠시 대기 후 세션 확인
           setTimeout(async () => {
-            const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession()
+            const { data: sessionData, error: sessionError } = await supabaseClient().auth.getSession()
             
             if (sessionError) {
               console.error('Session check error:', sessionError)
@@ -108,7 +108,7 @@ export default function AuthCallbackPage() {
         if (token && (type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email')) {
           console.log('Using PKCE token-based authentication flow')
           try {
-            const { data, error: tokenError } = await supabaseClient.auth.verifyOtp({
+            const { data, error: tokenError } = await supabaseClient().auth.verifyOtp({
               token_hash: token,
               type: type as any
             })
@@ -135,7 +135,7 @@ export default function AuthCallbackPage() {
             // 회원가입의 경우 (recovery가 아닐 때만)
             if (type !== 'recovery' && data.user && data.user.email_confirmed_at) {
               // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
-              const { error: profileError } = await supabaseClient
+              const { error: profileError } = await supabaseClient()
                 .from('users_v2')
                 .insert({
                   id: data.user.id,
@@ -174,7 +174,7 @@ export default function AuthCallbackPage() {
         
         // 이메일 인증 토큰이 있는 경우 (signup, recovery, invite, email_change 등) - 기존 방식
         if ((type === 'signup' || type === 'recovery' || type === 'invite' || type === 'email_change' || type === 'email') && accessToken && refreshToken && !token) {
-          const { data, error: sessionError } = await supabaseClient.auth.setSession({
+          const { data, error: sessionError } = await supabaseClient().auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
@@ -188,7 +188,7 @@ export default function AuthCallbackPage() {
           
           if (data.user && data.user.email_confirmed_at) {
             // 이메일 인증이 완료되었으므로 public.users_v2에 프로필 생성
-            const { error: profileError } = await supabaseClient
+            const { error: profileError } = await supabaseClient()
               .from('users_v2')
               .insert({
                 id: data.user.id,
@@ -220,7 +220,7 @@ export default function AuthCallbackPage() {
         }
         
         // 일반 세션 확인
-        const { data: sessionData, error: getSessionError } = await supabaseClient.auth.getSession()
+        const { data: sessionData, error: getSessionError } = await supabaseClient().auth.getSession()
         
         if (getSessionError) {
           setStatus('error')

@@ -75,7 +75,7 @@ export default function SettingsPage() {
       // Load settings and user data in parallel
       const [settingsResult, userResult] = await Promise.allSettled([
         Promise.resolve({ data: null, error: null }), // TODO: Implement user_metadata_v2 key-value structure
-        supabaseClient.from('users_v2').select('*').eq('id', user.id).single()
+        supabaseClient().from('users_v2').select('*').eq('id', user.id).single()
       ])
       
       const data: any = {}

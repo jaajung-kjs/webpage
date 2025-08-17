@@ -52,7 +52,7 @@ export interface NotificationStats {
 }
 
 export function useNotificationsV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 

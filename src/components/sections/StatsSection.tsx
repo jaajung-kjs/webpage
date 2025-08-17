@@ -18,10 +18,10 @@ function useHomeStats() {
     queryFn: async () => {
       // Direct DB query for real statistics
       const [usersResult, casesResult, activitiesResult, resourcesResult] = await Promise.allSettled([
-        supabaseClient.from('users_v2').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
-        supabaseClient.from('content_v2').select('*', { count: 'exact', head: true }).eq('content_type', 'case').eq('status', 'published').is('deleted_at', null),
-        supabaseClient.from('activities_v2').select('*', { count: 'exact', head: true }).is('deleted_at', null),
-        supabaseClient.from('content_v2').select('*', { count: 'exact', head: true }).eq('content_type', 'resource').eq('status', 'published').is('deleted_at', null)
+        supabaseClient().from('users_v2').select('activity_score, role').in('role', ['member', 'vice-leader', 'leader', 'admin']),
+        supabaseClient().from('content_v2').select('*', { count: 'exact', head: true }).eq('content_type', 'case').eq('status', 'published').is('deleted_at', null),
+        supabaseClient().from('activities_v2').select('*', { count: 'exact', head: true }).is('deleted_at', null),
+        supabaseClient().from('content_v2').select('*', { count: 'exact', head: true }).eq('content_type', 'resource').eq('status', 'published').is('deleted_at', null)
       ])
 
       // Filter only members (member role and above)

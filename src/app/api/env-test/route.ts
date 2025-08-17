@@ -20,7 +20,7 @@ export async function GET() {
 
     try {
       // 간단한 쿼리로 연결 테스트
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .select('id')
         .limit(1)
@@ -31,7 +31,7 @@ export async function GET() {
         dbConnectionStatus = '✅ Connected'
         
         // 테이블 목록 가져오기 (추가 테스트)
-        const { data: content } = await supabaseClient
+        const { data: content } = await supabaseClient()
           .from('content_v2')
           .select('id')
           .limit(1)

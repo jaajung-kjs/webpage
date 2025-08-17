@@ -214,7 +214,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     for (const operation of operations) {
       try {
-        let query = supabaseClient.from(operation.table)
+        let query = supabaseClient().from(operation.table)
 
         switch (operation.type) {
           case 'INSERT':
@@ -256,7 +256,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
       : String(options.queryKey)
     const uniqueId = Math.random().toString(36).substr(2, 9)
     const channelName = `realtime-v2-${table}-${queryKeyString}-${uniqueId}`
-    channelRef.current = supabaseClient.channel(channelName)
+    channelRef.current = supabaseClient().channel(channelName)
 
     // 필터 적용
     let realtimeFilter: any = `${schema}:${table}`
@@ -350,7 +350,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     return () => {
       if (channelRef.current) {
-        supabaseClient.removeChannel(channelRef.current)
+        supabaseClient().removeChannel(channelRef.current)
         channelRef.current = null
       }
       setIsRealtimeConnected(false)
@@ -497,7 +497,7 @@ export function useRealtimeCountV2(
   return useRealtimeQueryV2<number>({
     queryKey: ['count', table, filter, ...(queryKey || [])],
     queryFn: async () => {
-      let query = supabaseClient
+      let query = supabaseClient()
         .from(table)
         .select('*', { count: 'exact', head: true })
 
@@ -537,8 +537,8 @@ export function useRealtimeStatusV2() {
     // 실제 구현은 Supabase 클라이언트의 내부 상태에 의존
     const interval = setInterval(() => {
       setStatus({
-        isConnected: supabaseClient.realtime.isConnected(),
-        channelCount: supabaseClient.realtime.channels.length,
+        isConnected: supabaseClient().realtime.isConnected(),
+        channelCount: supabaseClient().realtime.channels.length,
         lastHeartbeat: new Date().toISOString()
       })
     }, 5000)

@@ -102,7 +102,7 @@ export function useIsBookmarkedV2(targetId?: string, targetType?: string) {
     queryFn: async () => {
       if (!user || !targetId || !targetType) return false
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('interactions_v2')
         .select('id')
         .eq('user_id', user.id)
@@ -133,7 +133,7 @@ export function useToggleBookmarkV2() {
       if (!isMember) throw new Error('동아리 회원만 북마크할 수 있습니다.')
       
       // 현재 북마크 상태 확인
-      const { data: existing } = await supabaseClient
+      const { data: existing } = await supabaseClient()
         .from('interactions_v2')
         .select('id')
         .eq('user_id', user.id)
@@ -144,8 +144,8 @@ export function useToggleBookmarkV2() {
       
       if (existing) {
         // 북마크 제거
-        const { error } = await supabaseClient
-          .from('interactions_v2')
+        const { error } = await supabaseClient()
+        .from('interactions_v2')
           .delete()
           .eq('id', existing.id)
         
@@ -170,8 +170,8 @@ export function useToggleBookmarkV2() {
           metadata: metadata as any
         }
         
-        const { error } = await supabaseClient
-          .from('interactions_v2')
+        const { error } = await supabaseClient()
+        .from('interactions_v2')
           .insert(bookmarkData)
         
         if (error) throw error
@@ -230,7 +230,7 @@ export function useMyBookmarksV2(options?: {
     queryFn: async () => {
       if (!user) return []
       
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('interactions_v2')
         .select('*')
         .eq('user_id', user.id)
@@ -276,8 +276,8 @@ export function useMyBookmarksV2(options?: {
         
         try {
           if (bookmark.target_type === 'content') {
-            const { data: content } = await supabaseClient
-              .from('content_v2')
+            const { data: content } = await supabaseClient()
+        .from('content_v2')
               .select(`
                 id, title, content_type, author_id, created_at, 
                 view_count, like_count, comment_count, summary,
@@ -302,8 +302,8 @@ export function useMyBookmarksV2(options?: {
               authorInfo = (content as any).author
             }
           } else if (bookmark.target_type === 'comment') {
-            const { data: comment } = await supabaseClient
-              .from('comments_v2')
+            const { data: comment } = await supabaseClient()
+        .from('comments_v2')
               .select(`
                 id, comment_text, author_id, created_at,
                 author:users_v2!comments_v2_author_id_fkey (id, name, avatar_url, role)
@@ -326,8 +326,8 @@ export function useMyBookmarksV2(options?: {
               authorInfo = (comment as any).author
             }
           } else if (bookmark.target_type === 'activity') {
-            const { data: activity } = await supabaseClient
-              .from('activities_v2')
+            const { data: activity } = await supabaseClient()
+        .from('activities_v2')
               .select(`
                 id, event_type, event_date, location,
                 content:content_v2!activities_v2_content_id_fkey (
@@ -405,7 +405,7 @@ export function useBookmarkStatsV2() {
       }
       
       // 전체 북마크 조회
-      const { data: bookmarks, error } = await supabaseClient
+      const { data: bookmarks, error } = await supabaseClient()
         .from('interactions_v2')
         .select('*, metadata')
         .eq('user_id', user.id)
@@ -482,7 +482,7 @@ export function useUpdateBookmarkV2() {
       if (!user) throw new Error('로그인이 필요합니다.')
       
       // 기존 북마크 정보 조회
-      const { data: bookmark, error: fetchError } = await supabaseClient
+      const { data: bookmark, error: fetchError } = await supabaseClient()
         .from('interactions_v2')
         .select('metadata')
         .eq('id', bookmarkId)
@@ -501,7 +501,7 @@ export function useUpdateBookmarkV2() {
         ...(priority !== undefined && { priority })
       }
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('interactions_v2')
         .update({ metadata: updatedMetadata as unknown as Json })
         .eq('id', bookmarkId)
@@ -531,7 +531,7 @@ export function useDeleteBookmarksV2() {
     mutationFn: async (bookmarkIds) => {
       if (!user || bookmarkIds.length === 0) throw new Error('삭제할 북마크가 없습니다.')
       
-      const { error } = await supabaseClient
+      const { error } = await supabaseClient()
         .from('interactions_v2')
         .delete()
         .eq('user_id', user.id)
@@ -566,7 +566,7 @@ export function useSearchBookmarksV2(query: string, options?: {
     queryFn: async () => {
       if (!user || !query.trim()) return []
       
-      let searchQuery = supabaseClient
+      let searchQuery = supabaseClient()
         .from('interactions_v2')
         .select('*')
         .eq('user_id', user.id)

@@ -69,7 +69,7 @@ export function useMembersV2(
     queryKey: ['members-v2', filter, sortBy, sortOrder, limit, includeStats],
     queryFn: async () => {
       // 기본 사용자 데이터 조회
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('users_v2')
         .select(`
           *
@@ -135,7 +135,7 @@ export function useMembersV2(
       // 각 사용자의 통계 데이터 조회 (병렬)
       const [contentStats, interactionStats] = await Promise.all([
         // 콘텐츠 통계
-        supabaseClient
+        supabaseClient()
           .from('content_v2')
           .select('author_id')
           .in('author_id', userIds)
@@ -156,7 +156,7 @@ export function useMembersV2(
       ])
       
       // 댓글 통계
-      const { data: commentStats } = await supabaseClient
+      const { data: commentStats } = await supabaseClient()
         .from('comments_v2')
         .select('author_id')
         .in('author_id', userIds)
@@ -222,7 +222,7 @@ export function useMemberV2(userId: string, includeStats: boolean = true) {
     queryFn: async () => {
       if (!userId) return null
       
-      const { data: user, error } = await supabaseClient
+      const { data: user, error } = await supabaseClient()
         .from('users_v2')
         .select('*')
         .eq('id', userId)
@@ -251,7 +251,7 @@ export function useMemberV2(userId: string, includeStats: boolean = true) {
       // 통계 데이터 조회
       const [contentCount, commentCount, interactionStats] = await Promise.all([
         // 콘텐츠 수
-        supabaseClient
+        supabaseClient()
           .from('content_v2')
           .select('id', { count: 'exact', head: true })
           .eq('author_id', userId)
@@ -259,7 +259,7 @@ export function useMemberV2(userId: string, includeStats: boolean = true) {
           .then(({ count }) => count || 0),
         
         // 댓글 수
-        supabaseClient
+        supabaseClient()
           .from('comments_v2')
           .select('id', { count: 'exact', head: true })
           .eq('author_id', userId)
@@ -326,7 +326,7 @@ export function useUpdateMemberRoleV2() {
         throw new Error('자신의 역할은 변경할 수 없습니다.')
       }
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .update({
           role: newRole,
@@ -417,7 +417,7 @@ export function useToggleMemberActiveV2() {
         throw new Error('권한이 없습니다.')
       }
       
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .from('users_v2')
         .update({
           is_active: isActive,
@@ -459,7 +459,7 @@ export function useSearchMembersV2(
         return []
       }
       
-      let query = supabaseClient
+      let query = supabaseClient()
         .from('users_v2')
         .select('*')
         .or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,department.ilike.%${searchQuery}%`)
@@ -521,7 +521,7 @@ export function useMembersStatsV2() {
     queryKey: ['members-v2-stats'],
     queryFn: async () => {
       // 전체 회원 수
-      const { count: total, error: totalError } = await supabaseClient
+      const { count: total, error: totalError } = await supabaseClient()
         .from('users_v2')
         .select('*', { count: 'exact', head: true })
         .is('deleted_at', null)
@@ -529,7 +529,7 @@ export function useMembersStatsV2() {
       if (totalError) throw totalError
       
       // 활성 회원 수
-      const { count: active, error: activeError } = await supabaseClient
+      const { count: active, error: activeError } = await supabaseClient()
         .from('users_v2')
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true)
@@ -542,7 +542,7 @@ export function useMembersStatsV2() {
       thisMonthStart.setDate(1)
       thisMonthStart.setHours(0, 0, 0, 0)
       
-      const { count: newThisMonth, error: newError } = await supabaseClient
+      const { count: newThisMonth, error: newError } = await supabaseClient()
         .from('users_v2')
         .select('*', { count: 'exact', head: true })
         .gte('created_at', thisMonthStart.toISOString())
@@ -551,7 +551,7 @@ export function useMembersStatsV2() {
       if (newError) throw newError
       
       // 역할별 분포
-      const { data: roleData, error: roleError } = await supabaseClient
+      const { data: roleData, error: roleError } = await supabaseClient()
         .from('users_v2')
         .select('role')
         .is('deleted_at', null)
@@ -565,7 +565,7 @@ export function useMembersStatsV2() {
       }, {} as Record<UserRole, number>)
       
       // 상위 기여자 (간단히 최근 가입자로 대체 - 실제로는 activity_score 기반)
-      const { data: topContributors, error: topError } = await supabaseClient
+      const { data: topContributors, error: topError } = await supabaseClient()
         .from('users_v2')
         .select('id, name, avatar_url')
         .is('deleted_at', null)

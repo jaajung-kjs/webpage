@@ -30,7 +30,7 @@ export function useDeleteUserCompletely() {
       }
       
       // RPC 함수 호출 (Database 삭제)
-      const { data, error } = await supabaseClient
+      const { data, error } = await supabaseClient()
         .rpc('admin_delete_user', { 
           target_user_id: userId 
         })
@@ -103,7 +103,7 @@ export function useSendEmail() {
   >({
     mutationFn: async (emailData) => {
       // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
+      const { data: { session } } = await supabaseClient().auth.getSession()
       if (!session) {
         throw new Error('인증이 필요합니다.')
       }
@@ -158,7 +158,7 @@ export function useOptimizeImage() {
   >({
     mutationFn: async (options) => {
       // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
+      const { data: { session } } = await supabaseClient().auth.getSession()
       if (!session) {
         throw new Error('인증이 필요합니다.')
       }
@@ -209,7 +209,7 @@ export function useGenerateText() {
   >({
     mutationFn: async (options) => {
       // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
+      const { data: { session } } = await supabaseClient().auth.getSession()
       if (!session) {
         throw new Error('인증이 필요합니다.')
       }
@@ -260,7 +260,7 @@ export function useExportData() {
   >({
     mutationFn: async (options) => {
       // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
+      const { data: { session } } = await supabaseClient().auth.getSession()
       if (!session) {
         throw new Error('인증이 필요합니다.')
       }
@@ -318,7 +318,7 @@ export function useRunBatchJob() {
   >({
     mutationFn: async (options) => {
       // 세션 가져오기
-      const { data: { session } } = await supabaseClient.auth.getSession()
+      const { data: { session } } = await supabaseClient().auth.getSession()
       if (!session) {
         throw new Error('인증이 필요합니다.')
       }

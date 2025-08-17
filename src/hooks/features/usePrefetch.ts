@@ -28,8 +28,8 @@ export function useContentPrefetch() {
     await queryClient.prefetchQuery({
       queryKey: cacheKeys.content.detail(contentId),
       queryFn: async () => {
-        const { data, error } = await supabaseClient
-          .from('content_v2')
+        const { data, error } = await supabaseClient()
+        .from('content_v2')
           .select('*, author:users_v2!author_id(id, name, email)')
           .eq('id', contentId)
           .single()
@@ -150,8 +150,8 @@ export function useProfilePrefetch() {
     await queryClient.prefetchQuery({
       queryKey: cacheKeys.profile.detail(userId),
       queryFn: async () => {
-        const { data, error } = await supabaseClient
-          .from('users_v2')
+        const { data, error } = await supabaseClient()
+        .from('users_v2')
           .select('*')
           .eq('id', userId)
           .single()
@@ -198,8 +198,8 @@ export function useRoutePrefetch() {
         await queryClient.prefetchQuery({
           queryKey: cacheKeys.content.list({ content_type: 'community', page: 1 }),
           queryFn: async () => {
-            const { data } = await supabaseClient
-              .from('content_v2')
+            const { data } = await supabaseClient()
+        .from('content_v2')
               .select('*, author:users_v2!author_id(id, name, email)')
               .eq('content_type', 'community')
               .order('created_at', { ascending: false })
@@ -215,8 +215,8 @@ export function useRoutePrefetch() {
         await queryClient.prefetchQuery({
           queryKey: cacheKeys.members.list(),
           queryFn: async () => {
-            const { data } = await supabaseClient
-              .from('users_v2')
+            const { data } = await supabaseClient()
+        .from('users_v2')
               .select('*')
               .in('role', ['member', 'leader', 'vice-leader', 'admin'])
               .order('created_at', { ascending: false })
@@ -264,8 +264,8 @@ export function useSearchPrefetch() {
     await queryClient.prefetchQuery({
       queryKey: searchKey,
       queryFn: async () => {
-        const { data } = await supabaseClient
-          .from('content_v2')
+        const { data } = await supabaseClient()
+        .from('content_v2')
           .select('*, author:users_v2!author_id(id, name, email)')
           .textSearch('title', query)
           .limit(20)

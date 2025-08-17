@@ -33,7 +33,7 @@ function PasswordResetContent() {
         console.log('Search:', window.location.search)
         
         // 먼저 현재 세션 확인 - 이미 /auth/callback에서 인증되었을 수 있음
-        const { data: currentSession, error: sessionCheckError } = await supabaseClient.auth.getSession()
+        const { data: currentSession, error: sessionCheckError } = await supabaseClient().auth.getSession()
         
         if (!sessionCheckError && currentSession.session) {
           console.log('✅ Already authenticated session found, showing password change modal')
@@ -84,14 +84,14 @@ function PasswordResetContent() {
           console.log('Using PKCE token-based password reset flow')
           try {
             // 🔒 보안: 기존 세션이 있다면 먼저 로그아웃
-            const { data: existingSession } = await supabaseClient.auth.getSession()
+            const { data: existingSession } = await supabaseClient().auth.getSession()
             if (existingSession.session) {
               console.log('Clearing existing session for security')
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
             }
             
             // PKCE token으로 세션 교환 시도
-            const { data, error: tokenError } = await supabaseClient.auth.verifyOtp({
+            const { data, error: tokenError } = await supabaseClient().auth.verifyOtp({
               token_hash: token,
               type: 'recovery'
             })
@@ -104,7 +104,7 @@ function PasswordResetContent() {
                 setResetState('invalid')
               }
               // 🔒 보안: 에러 시 세션 완전히 제거
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
               return
             }
             
@@ -128,14 +128,14 @@ function PasswordResetContent() {
               })
               setResetState('invalid')
               // 🔒 보안: 실패 시 세션 완전히 제거
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
               return
             }
           } catch (tokenError) {
             console.error('PKCE token processing error:', tokenError)
             setResetState('invalid')
             // 🔒 보안: 예외 발생 시 세션 완전히 제거
-            await supabaseClient.auth.signOut()
+            await supabaseClient().auth.signOut()
             return
           }
         }
@@ -145,14 +145,14 @@ function PasswordResetContent() {
           console.log('Using new code-based password reset flow')
           try {
             // 🔒 보안: 기존 세션이 있다면 먼저 로그아웃
-            const { data: existingSession } = await supabaseClient.auth.getSession()
+            const { data: existingSession } = await supabaseClient().auth.getSession()
             if (existingSession.session) {
               console.log('Clearing existing session for security')
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
             }
             
             // exchangeCodeForSession을 사용하여 code를 세션으로 교환
-            const { data, error: exchangeError } = await supabaseClient.auth.exchangeCodeForSession(code)
+            const { data, error: exchangeError } = await supabaseClient().auth.exchangeCodeForSession(code)
             
             if (exchangeError) {
               console.error('Code exchange error:', exchangeError)
@@ -162,7 +162,7 @@ function PasswordResetContent() {
                 setResetState('invalid')
               }
               // 🔒 보안: 에러 시 세션 완전히 제거
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
               return
             }
             
@@ -186,14 +186,14 @@ function PasswordResetContent() {
               })
               setResetState('invalid')
               // 🔒 보안: 실패 시 세션 완전히 제거
-              await supabaseClient.auth.signOut()
+              await supabaseClient().auth.signOut()
               return
             }
           } catch (codeError) {
             console.error('Code processing error:', codeError)
             setResetState('invalid')
             // 🔒 보안: 예외 발생 시 세션 완전히 제거
-            await supabaseClient.auth.signOut()
+            await supabaseClient().auth.signOut()
             return
           }
         }
@@ -238,7 +238,7 @@ function PasswordResetContent() {
 
         // 기존 방식: Supabase 세션 설정 (code나 token이 없을 때만 실행)
         if (!code && !token && accessToken && refreshToken) {
-          const { data, error: sessionError } = await supabaseClient.auth.setSession({
+          const { data, error: sessionError } = await supabaseClient().auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           })
@@ -290,7 +290,7 @@ function PasswordResetContent() {
   const handleRetryReset = async () => {
     // 🔒 보안: 페이지 이동 전 세션 완전히 제거
     console.log('Clearing any existing session before retry')
-    await supabaseClient.auth.signOut()
+    await supabaseClient().auth.signOut()
     router.push('/')
   }
 
@@ -343,7 +343,7 @@ function PasswordResetContent() {
                 onClick={async () => {
                   // 🔒 보안: 새 재설정 요청 전 세션 완전히 제거
                   console.log('Clearing any existing session before redirect')
-                  await supabaseClient.auth.signOut()
+                  await supabaseClient().auth.signOut()
                   // 홈페이지로 이동 (새 창 아님)
                   router.push('/')
                 }}
@@ -356,7 +356,7 @@ function PasswordResetContent() {
                 onClick={async () => {
                   // 🔒 보안: 홈으로 가기 전 세션 완전히 제거
                   console.log('Clearing any existing session before going home')
-                  await supabaseClient.auth.signOut()
+                  await supabaseClient().auth.signOut()
                   router.push('/')
                 }}
                 className="flex-1 kepco-gradient"
@@ -423,7 +423,7 @@ function PasswordResetContent() {
               onClick={async () => {
                 // 🔒 보안: 홈으로 가기 전 세션 상태 확인 (이미 signOut 되었어야 함)
                 console.log('Ensuring no session exists before going home')
-                await supabaseClient.auth.signOut()
+                await supabaseClient().auth.signOut()
                 router.push('/')
               }}
               className="w-full kepco-gradient"

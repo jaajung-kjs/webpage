@@ -126,8 +126,8 @@ export function useConnectionV2() {
       const start = performance.now()
       const result = await PromiseManager.withTimeout(
         (async () => {
-          return await supabaseClient
-            .from('users_v2')
+          return await supabaseClient()
+        .from('users_v2')
             .select('id')
             .limit(1)
             .single()
@@ -170,8 +170,8 @@ export function useConnectionV2() {
       
       const result = await PromiseManager.withTimeout(
         (async () => {
-          return await supabaseClient
-            .from('users_v2')
+          return await supabaseClient()
+        .from('users_v2')
             .select('*', { count: 'exact', head: true })
             .gte('last_login_at', fiveMinutesAgo)
             .eq('is_active', true)
@@ -208,8 +208,8 @@ export function useConnectionV2() {
       // 간단한 health check 쿼리로 대체
       const result = await PromiseManager.withTimeout(
         (async () => {
-          return await supabaseClient
-            .from('users_v2')
+          return await supabaseClient()
+        .from('users_v2')
             .select('id')
             .eq('id', (user as any).id)
             .single()

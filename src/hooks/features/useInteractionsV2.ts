@@ -61,7 +61,7 @@ export interface InteractionFilter {
 }
 
 export function useInteractionsV2() {
-  const supabase = supabaseClient
+  const supabase = supabaseClient()
   const { user } = useAuth()
   const queryClient = useQueryClient()
 
