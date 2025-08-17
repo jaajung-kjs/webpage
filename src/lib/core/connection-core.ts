@@ -753,17 +753,19 @@ export class ConnectionCore {
       const now = Date.now()
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       
-      // 🔥 중요: WebSocket 상태를 직접 확인 (Deterministic)
+      // 🔥 중요: 백그라운드 복귀 시 무조건 Circuit Breaker 리셋 (네트워크 복귀처럼)
+      // HTTP 연결이 stale 상태일 수 있으므로 WebSocket 상태와 관계없이 리셋
+      console.log('[ConnectionCore] Background return detected, resetting Circuit Breakers')
+      this.resetCircuitBreakers()
+      this.heartbeatFailures = 0
+      
+      // WebSocket 상태를 직접 확인 (Deterministic)
       const isRealtimeHealthy = this.isRealtimeHealthy()
       console.log(`[ConnectionCore] WebSocket health check: ${isRealtimeHealthy ? 'healthy' : 'unhealthy'}`)
       
       // WebSocket이 stale하거나 장시간 백그라운드였으면 처리
       if (!isRealtimeHealthy || hiddenDuration > 300000) {
         console.log('[ConnectionCore] WebSocket is stale or long background detected')
-        
-        // Circuit Breaker 리셋
-        this.resetCircuitBreakers()
-        this.heartbeatFailures = 0
         
         if (hiddenDuration > 300000) {
           // 5분 이상: 전체 클라이언트 재초기화
@@ -794,10 +796,8 @@ export class ConnectionCore {
           }
         }
       } else if (hiddenDuration > 60000) {
-        // 1분 이상이지만 WebSocket은 정상
+        // 1분 이상이지만 WebSocket은 정상 (Circuit Breaker는 이미 리셋됨)
         console.log('[ConnectionCore] Medium background (1+ min) but WebSocket healthy')
-        this.resetCircuitBreakers()
-        this.heartbeatFailures = 0
       }
       
       // 연결 복구
