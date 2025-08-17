@@ -1105,23 +1105,45 @@ export class ConnectionCore {
         return
       }
 
-      // 기존 Realtime 연결 정리
+      // 기존 Realtime 인스턴스 확인
       if (this.client?.realtime) {
-        console.log('[ConnectionCore] Disconnecting existing realtime connection')
-        this.client.realtime.disconnect()
+        const oldRealtime = this.client.realtime
         
-        // 연결 정리 대기
+        // 1. 모든 채널 제거 (disconnect 호출 전에)
+        console.log('[ConnectionCore] Removing all channels before refresh')
+        const channels = oldRealtime.getChannels()
+        
+        for (const channel of channels) {
+          try {
+            await oldRealtime.removeChannel(channel)
+          } catch (error) {
+            console.warn('[ConnectionCore] Error removing channel:', error)
+          }
+        }
+        
+        // 2. 채널 정리 대기
+        await new Promise(resolve => setTimeout(resolve, 100))
+        
+        // 3. WebSocket 연결 종료
+        console.log('[ConnectionCore] Disconnecting old realtime connection')
+        oldRealtime.disconnect(1000, 'Refreshing connection')
+        
+        // 4. 연결 종료 대기
         await new Promise(resolve => setTimeout(resolve, 200))
+        
+        // 5. 새로운 연결 시작
+        console.log('[ConnectionCore] Starting new realtime connection')
+        oldRealtime.connect()
+        
+        // 6. 연결 안정화 대기
+        await new Promise(resolve => setTimeout(resolve, 500))
+        
+        // WebSocket 상태 확인
+        const isHealthy = this.isRealtimeHealthy()
+        console.log(`[ConnectionCore] Realtime refresh complete. WebSocket healthy: ${isHealthy}`)
+      } else {
+        console.warn('[ConnectionCore] No realtime instance to refresh')
       }
-
-      // Realtime 재연결
-      console.log('[ConnectionCore] Reconnecting realtime')
-      this.client.realtime.connect()
-      
-      // 연결 안정화 대기
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      console.log('[ConnectionCore] Realtime connection refreshed')
     } catch (error) {
       console.error('[ConnectionCore] Failed to refresh realtime connection:', error)
       throw error
