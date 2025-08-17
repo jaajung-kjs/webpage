@@ -586,7 +586,24 @@ export class ConnectionRecoveryManager {
         }
       )
       
-      // 0. FULL 복구 시 Circuit Breaker 리셋 및 세션 갱신 (백그라운드 복귀 버그 수정)
+      // 0. WebSocket 상태 확인 및 필요시 재생성 (Deterministic)
+      const isRealtimeHealthy = connectionCore.isRealtimeHealthy()
+      console.log(`[ConnectionRecovery] WebSocket health check: ${isRealtimeHealthy ? 'healthy' : 'unhealthy'}`)
+      
+      // WebSocket이 stale하면 즉시 재생성 (휴리스틱 제거)
+      if (!isRealtimeHealthy) {
+        console.log('[ConnectionRecovery] Stale WebSocket detected, requesting refresh')
+        
+        try {
+          // ConnectionCore에 Realtime 재생성 요청
+          await connectionCore.refreshRealtimeConnection()
+          console.log('[ConnectionRecovery] WebSocket refreshed successfully')
+        } catch (error) {
+          console.error('[ConnectionRecovery] Failed to refresh WebSocket:', error)
+        }
+      }
+      
+      // FULL 복구 시 추가 처리
       if (strategy === RecoveryStrategy.FULL) {
         // Circuit Breaker 상태 확인 및 리셋
         if (connectionCore.isCircuitBreakerOpen()) {

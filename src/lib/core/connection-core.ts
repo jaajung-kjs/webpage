@@ -753,53 +753,70 @@ export class ConnectionCore {
       const now = Date.now()
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       
-      // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋 및 재초기화 여부 결정
-      if (hiddenDuration > 300000) { // 5분 이상
-        console.log('[ConnectionCore] Long background period (5+ min), performing full recovery')
+      // 🔥 중요: WebSocket 상태를 직접 확인 (Deterministic)
+      const isRealtimeHealthy = this.isRealtimeHealthy()
+      console.log(`[ConnectionCore] WebSocket health check: ${isRealtimeHealthy ? 'healthy' : 'unhealthy'}`)
+      
+      // WebSocket이 stale하거나 장시간 백그라운드였으면 처리
+      if (!isRealtimeHealthy || hiddenDuration > 300000) {
+        console.log('[ConnectionCore] WebSocket is stale or long background detected')
         
-        // 🔥 중요: Circuit Breaker를 먼저 리셋 (재초기화 전에!)
-        // 이렇게 하면 reinitializeClient()의 세션 검증이 정상 동작
+        // Circuit Breaker 리셋
         this.resetCircuitBreakers()
         this.heartbeatFailures = 0
         
-        // RealtimeCore에 재초기화 시작 알림
-        const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
-        await realtimeCore.prepareForClientReinit()
-        
-        // 클라이언트 재초기화 (장시간 백그라운드 후)
-        try {
-          await this.reinitializeClient()
+        if (hiddenDuration > 300000) {
+          // 5분 이상: 전체 클라이언트 재초기화
+          console.log('[ConnectionCore] Long background (5+ min), full client reinitialization')
           
-          // RealtimeCore에 새 클라이언트 준비 알림
-          await realtimeCore.handleClientReady()
-        } catch (error) {
-          console.error('[ConnectionCore] Failed to reinitialize after long background:', error)
+          const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
+          await realtimeCore.prepareForClientReinit()
+          
+          try {
+            await this.reinitializeClient()
+            await realtimeCore.handleClientReady()
+          } catch (error) {
+            console.error('[ConnectionCore] Failed to reinitialize client:', error)
+          }
+        } else {
+          // WebSocket만 stale: Realtime만 재생성
+          console.log('[ConnectionCore] Refreshing stale WebSocket connection')
+          
+          try {
+            // Realtime만 재생성 (클라이언트는 유지)
+            await this.refreshRealtimeConnection()
+            
+            // RealtimeCore에 재구독 요청
+            const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
+            await realtimeCore.handleReconnection()
+          } catch (error) {
+            console.error('[ConnectionCore] Failed to refresh realtime:', error)
+          }
         }
-      } else if (hiddenDuration > 60000) { // 1분 이상
-        console.log('[ConnectionCore] Medium background period (1+ min), resetting Circuit Breakers')
+      } else if (hiddenDuration > 60000) {
+        // 1분 이상이지만 WebSocket은 정상
+        console.log('[ConnectionCore] Medium background (1+ min) but WebSocket healthy')
         this.resetCircuitBreakers()
         this.heartbeatFailures = 0
       }
       
-      // DB 테스트 제거 - Supabase 자체 연결 관리에 의존
-      
-      // 점진적 연결 복구 시작 (재초기화가 완료된 후)
-      if (hiddenDuration <= 300000) {
-        // 5분 미만이면 일반 재연결 (재초기화는 이미 위에서 처리됨)
+      // 연결 복구
+      if (hiddenDuration <= 300000 && isRealtimeHealthy) {
+        // WebSocket 정상이고 5분 미만이면 일반 재연결
         this.handleEvent({ type: 'RECONNECT' })
       } else {
-        // 5분 이상이면 재초기화 후 연결 시도
+        // WebSocket 재생성 후 연결
         this.handleEvent({ type: 'CONNECT' })
       }
       
-      // ConnectionRecovery에도 복구 트리거 (통합 관리)
-      // visibility 복구는 'visibility' source로 전달
+      // ConnectionRecovery에 복구 전략 전달
       import('../core/connection-recovery').then(({ connectionRecovery, RecoveryStrategy }) => {
-        if (hiddenDuration > 300000) { // 5분 이상
+        // WebSocket이 stale했거나 장시간 백그라운드면 FULL
+        if (!isRealtimeHealthy || hiddenDuration > 300000) {
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.FULL)
-        } else if (hiddenDuration > 60000) { // 1분 이상
+        } else if (hiddenDuration > 60000) {
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.PARTIAL)
-        } else if (hiddenDuration > 30000) { // 30초 이상
+        } else if (hiddenDuration > 30000) {
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.LIGHT)
         }
       })
@@ -1037,6 +1054,78 @@ export class ConnectionCore {
   isCircuitBreakerOpen(): boolean {
     if (!this.connectionCircuitBreaker) return false
     return this.connectionCircuitBreaker.getState() === 'open'
+  }
+
+  /**
+   * Realtime WebSocket 상태 확인 (Deterministic)
+   * @returns WebSocket이 정상 연결 상태인지 여부
+   */
+  isRealtimeHealthy(): boolean {
+    try {
+      // Supabase Realtime 인스턴스 확인
+      const realtime = this.client?.realtime
+      if (!realtime) {
+        console.log('[ConnectionCore] No realtime instance')
+        return false
+      }
+
+      // WebSocket 연결 상태 직접 확인
+      const ws = realtime.conn
+      if (!ws) {
+        console.log('[ConnectionCore] No WebSocket connection')
+        return false
+      }
+
+      // WebSocket readyState 확인
+      // 0: CONNECTING, 1: OPEN, 2: CLOSING, 3: CLOSED
+      const isOpen = ws.readyState === WebSocket.OPEN
+      
+      if (!isOpen) {
+        console.log(`[ConnectionCore] WebSocket not open. State: ${ws.readyState} (0:CONNECTING, 1:OPEN, 2:CLOSING, 3:CLOSED)`)
+      }
+
+      return isOpen
+    } catch (error) {
+      console.error('[ConnectionCore] Error checking realtime health:', error)
+      return false
+    }
+  }
+
+  /**
+   * Realtime 연결만 재생성 (클라이언트는 유지)
+   * Stale WebSocket 문제를 근본적으로 해결
+   */
+  async refreshRealtimeConnection(): Promise<void> {
+    console.log('[ConnectionCore] Refreshing Realtime connection')
+    
+    try {
+      // Circuit Breaker가 열려있으면 스킵
+      if (this.isCircuitBreakerOpen()) {
+        console.warn('[ConnectionCore] Circuit Breaker is open, skipping realtime refresh')
+        return
+      }
+
+      // 기존 Realtime 연결 정리
+      if (this.client?.realtime) {
+        console.log('[ConnectionCore] Disconnecting existing realtime connection')
+        this.client.realtime.disconnect()
+        
+        // 연결 정리 대기
+        await new Promise(resolve => setTimeout(resolve, 200))
+      }
+
+      // Realtime 재연결
+      console.log('[ConnectionCore] Reconnecting realtime')
+      this.client.realtime.connect()
+      
+      // 연결 안정화 대기
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      console.log('[ConnectionCore] Realtime connection refreshed')
+    } catch (error) {
+      console.error('[ConnectionCore] Failed to refresh realtime connection:', error)
+      throw error
+    }
   }
 
   /**
