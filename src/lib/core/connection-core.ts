@@ -756,12 +756,22 @@ export class ConnectionCore {
       // 장시간 백그라운드에 있었으면 Circuit Breaker 리셋 및 재초기화 여부 결정
       if (hiddenDuration > 300000) { // 5분 이상
         console.log('[ConnectionCore] Long background period (5+ min), performing full recovery')
+        
+        // 🔥 중요: Circuit Breaker를 먼저 리셋 (재초기화 전에!)
+        // 이렇게 하면 reinitializeClient()의 세션 검증이 정상 동작
         this.resetCircuitBreakers()
         this.heartbeatFailures = 0
+        
+        // RealtimeCore에 재초기화 시작 알림
+        const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
+        await realtimeCore.prepareForClientReinit()
         
         // 클라이언트 재초기화 (장시간 백그라운드 후)
         try {
           await this.reinitializeClient()
+          
+          // RealtimeCore에 새 클라이언트 준비 알림
+          await realtimeCore.handleClientReady()
         } catch (error) {
           console.error('[ConnectionCore] Failed to reinitialize after long background:', error)
         }

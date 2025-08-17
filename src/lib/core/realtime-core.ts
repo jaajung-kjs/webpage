@@ -464,6 +464,12 @@ export class RealtimeCore {
    * 모든 구독 재설정 (Realtime WebSocket 연결 확인 포함)
    */
   private async resubscribeAll(): Promise<void> {
+    // Circuit Breaker 상태 확인 (백그라운드 복귀 버그 수정)
+    if (connectionCore.isCircuitBreakerOpen()) {
+      console.warn('[RealtimeCore] Circuit Breaker is open, cannot resubscribe')
+      return
+    }
+    
     // 연결 상태 확인
     if (!connectionCore.isConnected()) {
       console.log('[RealtimeCore] Not connected, skipping resubscribe')
@@ -696,6 +702,60 @@ export class RealtimeCore {
         console.error('[RealtimeCore] Listener error:', error)
       }
     })
+  }
+
+  /**
+   * 클라이언트 재초기화 준비
+   * ConnectionCore가 클라이언트를 재생성하기 전에 호출
+   */
+  async prepareForClientReinit(): Promise<void> {
+    console.log('[RealtimeCore] Preparing for client reinitialization')
+    
+    // 모든 기존 구독 정리
+    this.cleanupAll()
+    
+    // 준비 상태 해제
+    this.setReady(false)
+    
+    // 구독 상태 초기화 (설정은 유지)
+    this.subscriptions.forEach((sub) => {
+      sub.status.isSubscribed = false
+      sub.status.error = null
+      sub.status.subscribedAt = null
+    })
+    
+    console.log('[RealtimeCore] Ready for client reinitialization')
+  }
+  
+  /**
+   * 새 클라이언트 준비 완료 처리
+   * ConnectionCore가 새 클라이언트 생성 후 호출
+   */
+  async handleClientReady(): Promise<void> {
+    console.log('[RealtimeCore] Handling new client ready state')
+    
+    // Circuit Breaker가 열려있으면 대기
+    if (connectionCore.isCircuitBreakerOpen()) {
+      console.warn('[RealtimeCore] Circuit Breaker is open, waiting for reset')
+      return
+    }
+    
+    // 세션 확인
+    const { data: { session }, error } = await connectionCore.getClient().auth.getSession()
+    
+    if (error) {
+      console.error('[RealtimeCore] Failed to get session after client reinit:', error)
+      return
+    }
+    
+    // 세션이 없어도 public 데이터는 구독 가능
+    console.log('[RealtimeCore] Client ready with session:', !!session)
+    
+    // 준비 상태 설정
+    this.setReady(true)
+    
+    // 재구독 시작
+    await this.resubscribeAll()
   }
 
   /**

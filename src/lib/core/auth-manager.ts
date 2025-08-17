@@ -533,6 +533,47 @@ export class AuthManager {
   }
 
   /**
+   * 백그라운드 복귀 후 세션 갱신
+   * Circuit Breaker를 우회하여 직접 세션 갱신
+   */
+  async refreshSessionAfterBackground(): Promise<{ error: Error | null }> {
+    console.log('[AuthManager] Refreshing session after background')
+    
+    try {
+      const client = connectionCore.getClient()
+      
+      // Circuit Breaker를 우회하여 직접 세션 갱신 시도
+      const { data, error } = await client.auth.refreshSession()
+      
+      if (error) {
+        console.error('[AuthManager] Failed to refresh session:', error)
+        return { error }
+      }
+      
+      if (data.session) {
+        console.log('[AuthManager] Session refreshed successfully')
+        // 세션 상태 업데이트
+        this.updateState({
+          session: data.session,
+          user: data.session.user,
+          loading: false,
+          error: null
+        })
+        // 프로필 재로드
+        await this.loadProfile(data.session.user.id)
+        return { error: null }
+      }
+      
+      console.warn('[AuthManager] No session returned from refresh')
+      return { error: new Error('No session available') }
+      
+    } catch (error) {
+      console.error('[AuthManager] Exception during session refresh:', error)
+      return { error: error as Error }
+    }
+  }
+
+  /**
    * 이메일 재인증 요청
    */
   async resendEmailConfirmation(email: string): Promise<{ error: AuthError | null }> {

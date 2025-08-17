@@ -11,6 +11,7 @@
 import { QueryClient } from '@tanstack/react-query'
 import { connectionCore } from './connection-core'
 import { realtimeCore } from './realtime-core'
+import { authManager } from './auth-manager'
 import { PromiseManager } from '../utils/promise-manager'
 import { CircuitBreaker, CircuitBreakerPresets } from '../utils/circuit-breaker'
 
@@ -584,6 +585,30 @@ export class ConnectionRecoveryManager {
           errorMessage: 'Recovery delay timeout'
         }
       )
+      
+      // 0. FULL 복구 시 Circuit Breaker 리셋 및 세션 갱신 (백그라운드 복귀 버그 수정)
+      if (strategy === RecoveryStrategy.FULL) {
+        // Circuit Breaker 상태 확인 및 리셋
+        if (connectionCore.isCircuitBreakerOpen()) {
+          console.log('[ConnectionRecovery] Circuit Breaker is open, resetting for FULL recovery')
+          connectionCore.resetCircuitBreakers()
+        }
+        
+        // 백그라운드/네트워크 복귀 시 세션 갱신
+        if (source === 'visibility' || source === 'network') {
+          console.log('[ConnectionRecovery] Refreshing session after background/network recovery')
+          try {
+            const { error } = await authManager.refreshSessionAfterBackground()
+            if (error) {
+              console.warn('[ConnectionRecovery] Session refresh failed, continuing with recovery:', error)
+            } else {
+              console.log('[ConnectionRecovery] Session refreshed successfully')
+            }
+          } catch (sessionError) {
+            console.warn('[ConnectionRecovery] Session refresh exception, continuing:', sessionError)
+          }
+        }
+      }
       
       // 1. Supabase 연결 복구 (모든 전략에서 수행)
       const connectionStatus = connectionCore.getStatus()
