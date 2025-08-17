@@ -587,7 +587,8 @@ export class ConnectionCore {
   private startHeartbeat(): void {
     this.stopHeartbeat()
     this.heartbeatFailures = 0
-
+    
+    console.log('[ConnectionCore] Starting heartbeat timer (interval: ' + this.config.heartbeatInterval + 'ms)')
     this.heartbeatTimer = setInterval(async () => {
       await this.performHeartbeat()
     }, this.config.heartbeatInterval)
@@ -775,6 +776,13 @@ export class ConnectionCore {
   private async resumeConnection(): Promise<void> {
     console.log('[ConnectionCore] Resuming connection (foreground return)')
     
+    // 🔥 CRITICAL: Circuit Breaker 즉시 리셋 (DB 쿼리 차단 해제)
+    // 백그라운드에서 heartbeat timeout으로 Circuit Breaker가 Open되어 DB 쿼리가 막힘
+    // suspended 상태 체크보다 먼저 해야 함!
+    console.log('[ConnectionCore] IMMEDIATE Circuit Breaker reset to unblock DB queries')
+    this.resetCircuitBreakers()
+    this.stopHeartbeat() // Heartbeat도 정리
+    
     // suspended 상태에서만 복구 진행
     if (this.status.state === 'suspended') {
       // 먼저 connecting 상태로 변경
@@ -792,11 +800,11 @@ export class ConnectionCore {
       const now = Date.now()
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       
-      // 🔥 STEP 1: 인증 토큰 갱신 (401 에러 해결의 핵심)
+      // STEP 1: 인증 토큰 갱신 (401 에러 해결)
       // 백그라운드에서 오래 있으면 JWT 토큰이 만료되므로 가장 먼저 갱신
       let tokenRefreshed = false
       try {
-        console.log('[ConnectionCore] Step 1: Refreshing auth token first to prevent 401 errors...')
+        console.log('[ConnectionCore] Step 1: Refreshing auth token to prevent 401 errors...')
         const { data, error } = await this.client.auth.refreshSession()
         
         if (error) {
@@ -821,18 +829,15 @@ export class ConnectionCore {
         // 에러가 나도 계속 진행
       }
       
-      // 🔥 STEP 2: Circuit Breaker 리셋 (네트워크 요청이 정상 작동하도록)
-      // 401 에러로 Open 상태가 되었을 수 있으므로 반드시 리셋
-      console.log('[ConnectionCore] Step 2: Force resetting Circuit Breakers to clear 401-induced blocks')
+      // 🔥 STEP 2: Circuit Breaker 완전 리셋 (가장 중요!)
+      // 백그라운드에서 heartbeat timeout으로 Circuit Breaker가 Open되어 있을 수 있음
+      // 이게 Open 상태면 모든 DB 쿼리가 차단되므로 반드시 먼저 리셋
+      console.log('[ConnectionCore] Step 2: Force resetting Circuit Breakers - CRITICAL for DB queries')
       this.resetCircuitBreakers()
-      this.heartbeatFailures = 0
       
-      // Circuit Breaker가 Open 상태였다면 강제로 Half-Open으로 전환
-      if (this.connectionCircuitBreaker?.getState() === 'open') {
-        console.log('[ConnectionCore] Force transitioning Circuit Breaker from Open to Half-Open')
-        ;(this.connectionCircuitBreaker as any).state = 'half-open'
-        ;(this.connectionCircuitBreaker as any).metrics.consecutiveFailures = 0
-      }
+      // Heartbeat 재시작 준비
+      this.stopHeartbeat()
+      console.log('[ConnectionCore] Heartbeat stopped, will restart after connection')
       
       // 🔥 STEP 3: WebSocket 상태 확인 및 재연결 (실시간 기능 복구)
       console.log('[ConnectionCore] Step 3: Checking WebSocket health and reconnecting if needed')
@@ -1084,18 +1089,69 @@ export class ConnectionCore {
   }
 
   /**
-   * Circuit Breaker 수동 리셋
+   * Circuit Breaker 수동 리셋 (강화된 버전)
    */
   resetCircuitBreakers(): void {
+    // Connection Circuit Breaker 완전 리셋
     if (this.connectionCircuitBreaker) {
-      this.connectionCircuitBreaker.reset()
-      console.log('[ConnectionCore] Connection circuit breaker reset')
+      // 상태를 강제로 closed로 변경
+      ;(this.connectionCircuitBreaker as any).state = 'closed'
+      
+      // 메트릭 완전 초기화
+      ;(this.connectionCircuitBreaker as any).metrics = {
+        totalRequests: 0,
+        successCount: 0,
+        failureCount: 0,
+        consecutiveFailures: 0,
+        lastFailureTime: null,
+        lastSuccessTime: null,
+        circuitOpenedAt: null,
+        failureRate: 0
+      }
+      
+      // 요청 히스토리 초기화
+      ;(this.connectionCircuitBreaker as any).requests = []
+      
+      // 타이머 정리
+      if ((this.connectionCircuitBreaker as any).resetTimer) {
+        clearTimeout((this.connectionCircuitBreaker as any).resetTimer)
+        ;(this.connectionCircuitBreaker as any).resetTimer = null
+      }
+      
+      console.log('[ConnectionCore] Connection circuit breaker force reset complete')
     }
     
+    // Heartbeat Circuit Breaker 완전 리셋
     if (this.heartbeatCircuitBreaker) {
-      this.heartbeatCircuitBreaker.reset()
-      console.log('[ConnectionCore] Heartbeat circuit breaker reset')
+      // 상태를 강제로 closed로 변경
+      ;(this.heartbeatCircuitBreaker as any).state = 'closed'
+      
+      // 메트릭 완전 초기화
+      ;(this.heartbeatCircuitBreaker as any).metrics = {
+        totalRequests: 0,
+        successCount: 0,
+        failureCount: 0,
+        consecutiveFailures: 0,
+        lastFailureTime: null,
+        lastSuccessTime: null,
+        circuitOpenedAt: null,
+        failureRate: 0
+      }
+      
+      // 요청 히스토리 초기화
+      ;(this.heartbeatCircuitBreaker as any).requests = []
+      
+      // 타이머 정리
+      if ((this.heartbeatCircuitBreaker as any).resetTimer) {
+        clearTimeout((this.heartbeatCircuitBreaker as any).resetTimer)
+        ;(this.heartbeatCircuitBreaker as any).resetTimer = null
+      }
+      
+      console.log('[ConnectionCore] Heartbeat circuit breaker force reset complete')
     }
+    
+    // Heartbeat 실패 카운터도 리셋
+    this.heartbeatFailures = 0
     
     // 상태 업데이트
     this.updateStatus({})
