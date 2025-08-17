@@ -753,23 +753,76 @@ export class ConnectionCore {
       const now = Date.now()
       const hiddenDuration = now - (this.lastVisibilityChange || now)
       
-      // 🔥 중요: 백그라운드 복귀 시 무조건 Circuit Breaker 리셋 (네트워크 복귀처럼)
-      // HTTP 연결이 stale 상태일 수 있으므로 WebSocket 상태와 관계없이 리셋
-      console.log('[ConnectionCore] Background return detected, resetting Circuit Breakers')
+      // 🔥 STEP 1: 인증 토큰 갱신 (401 에러 해결의 핵심)
+      // 백그라운드에서 오래 있으면 JWT 토큰이 만료되므로 가장 먼저 갱신
+      let tokenRefreshed = false
+      try {
+        console.log('[ConnectionCore] Step 1: Refreshing auth token first to prevent 401 errors...')
+        const { data, error } = await this.client.auth.refreshSession()
+        
+        if (error) {
+          console.error('[ConnectionCore] Failed to refresh auth token:', error)
+          // 토큰 갱신 실패해도 계속 진행 (사용자가 로그아웃 상태일 수 있음)
+        } else if (data.session) {
+          console.log('[ConnectionCore] ✅ Auth token refreshed successfully')
+          tokenRefreshed = true
+          
+          // Realtime 클라이언트에도 새 토큰 설정하고 완료 대기
+          console.log('[ConnectionCore] Setting new token on Realtime client...')
+          await this.client.realtime.setAuth(data.session.access_token)
+          
+          // setAuth 완료 후 약간의 지연을 주어 토큰이 적용되도록 함
+          await new Promise(resolve => setTimeout(resolve, 100))
+          console.log('[ConnectionCore] ✅ New token applied to Realtime client')
+        } else {
+          console.log('[ConnectionCore] No active session found (user might be logged out)')
+        }
+      } catch (error) {
+        console.error('[ConnectionCore] Exception during token refresh:', error)
+        // 에러가 나도 계속 진행
+      }
+      
+      // 🔥 STEP 2: Circuit Breaker 리셋 (네트워크 요청이 정상 작동하도록)
+      // 401 에러로 Open 상태가 되었을 수 있으므로 반드시 리셋
+      console.log('[ConnectionCore] Step 2: Force resetting Circuit Breakers to clear 401-induced blocks')
       this.resetCircuitBreakers()
       this.heartbeatFailures = 0
       
-      // WebSocket 상태를 직접 확인 (Deterministic)
+      // Circuit Breaker가 Open 상태였다면 강제로 Half-Open으로 전환
+      if (this.connectionCircuitBreaker?.getState() === 'open') {
+        console.log('[ConnectionCore] Force transitioning Circuit Breaker from Open to Half-Open')
+        ;(this.connectionCircuitBreaker as any).state = 'half-open'
+        ;(this.connectionCircuitBreaker as any).metrics.consecutiveFailures = 0
+      }
+      
+      // 🔥 STEP 3: WebSocket 상태 확인 및 재연결 (실시간 기능 복구)
+      console.log('[ConnectionCore] Step 3: Checking WebSocket health and reconnecting if needed')
       const isRealtimeHealthy = this.isRealtimeHealthy()
       console.log(`[ConnectionCore] WebSocket health check: ${isRealtimeHealthy ? 'healthy' : 'unhealthy'}`)
       
       // WebSocket이 stale하거나 장시간 백그라운드였으면 처리
-      if (!isRealtimeHealthy || hiddenDuration > 300000) {
-        console.log('[ConnectionCore] WebSocket is stale or long background detected')
+      // 단, 토큰이 성공적으로 갱신되었으면 굳이 전체 재초기화는 하지 않음
+      if (!isRealtimeHealthy) {
+        console.log('[ConnectionCore] WebSocket is unhealthy, need to refresh')
         
-        if (hiddenDuration > 300000) {
-          // 5분 이상: 전체 클라이언트 재초기화
-          console.log('[ConnectionCore] Long background (5+ min), full client reinitialization')
+        // 토큰이 갱신되었고 5분 미만이면 Realtime만 재생성
+        if (tokenRefreshed && hiddenDuration < 300000) {
+          console.log('[ConnectionCore] Token refreshed and < 5min, refreshing Realtime only')
+          
+          try {
+            // Realtime 재생성 (토큰은 이미 갱신됨)
+            await this.refreshRealtimeConnection()
+            
+            // RealtimeCore에 재구독 요청
+            const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
+            await realtimeCore.handleReconnection()
+          } catch (error) {
+            console.error('[ConnectionCore] Failed to refresh realtime:', error)
+          }
+        } 
+        // 토큰 갱신 실패했거나 5분 이상이면 전체 재초기화
+        else if (!tokenRefreshed || hiddenDuration > 300000) {
+          console.log('[ConnectionCore] Token not refreshed or >5min, full client reinitialization')
           
           const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
           await realtimeCore.prepareForClientReinit()
@@ -780,24 +833,16 @@ export class ConnectionCore {
           } catch (error) {
             console.error('[ConnectionCore] Failed to reinitialize client:', error)
           }
-        } else {
-          // WebSocket만 stale: Realtime만 재생성
-          console.log('[ConnectionCore] Refreshing stale WebSocket connection')
-          
-          try {
-            // Realtime만 재생성 (클라이언트는 유지)
-            await this.refreshRealtimeConnection()
-            
-            // RealtimeCore에 재구독 요청
-            const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
-            await realtimeCore.handleReconnection()
-          } catch (error) {
-            console.error('[ConnectionCore] Failed to refresh realtime:', error)
-          }
         }
       } else if (hiddenDuration > 60000) {
-        // 1분 이상이지만 WebSocket은 정상 (Circuit Breaker는 이미 리셋됨)
-        console.log('[ConnectionCore] Medium background (1+ min) but WebSocket healthy')
+        // 1분 이상이지만 WebSocket은 정상이고 토큰도 갱신됨
+        console.log('[ConnectionCore] Medium background (1+ min) but WebSocket healthy and token refreshed')
+        
+        // RealtimeCore 재구독만 시도 (WebSocket은 정상이지만 구독이 만료되었을 수 있음)
+        if (tokenRefreshed) {
+          const realtimeCore = await import('../core/realtime-core').then(m => m.realtimeCore)
+          await realtimeCore.handleReconnection()
+        }
       }
       
       // 연결 복구
@@ -811,13 +856,18 @@ export class ConnectionCore {
       
       // ConnectionRecovery에 복구 전략 전달
       import('../core/connection-recovery').then(({ connectionRecovery, RecoveryStrategy }) => {
-        // WebSocket이 stale했거나 장시간 백그라운드면 FULL
-        if (!isRealtimeHealthy || hiddenDuration > 300000) {
+        // 토큰이 갱신되지 않았거나 WebSocket이 재초기화되었으면 FULL
+        if (!tokenRefreshed || !isRealtimeHealthy || hiddenDuration > 300000) {
+          console.log('[ConnectionCore] Triggering FULL recovery (token or WebSocket issues)')
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.FULL)
         } else if (hiddenDuration > 60000) {
+          console.log('[ConnectionCore] Triggering PARTIAL recovery (medium background)')
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.PARTIAL)
         } else if (hiddenDuration > 30000) {
+          console.log('[ConnectionCore] Triggering LIGHT recovery (short background)')
           connectionRecovery.triggerProgressiveRecovery('visibility', RecoveryStrategy.LIGHT)
+        } else {
+          console.log('[ConnectionCore] No recovery needed (very short background)')
         }
       })
     } else if (this.status.state === 'disconnected' || this.status.state === 'error') {
