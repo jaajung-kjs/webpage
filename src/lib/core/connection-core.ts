@@ -108,7 +108,10 @@ export class ConnectionCore {
           console.log('[ConnectionCore] WebSocket dead after background, recreating...')
           await this.recreateClient()
         } else {
-          console.log('[ConnectionCore] WebSocket still alive, continuing...')
+          console.log('[ConnectionCore] WebSocket still alive, checking channel subscriptions...')
+          // WebSocket은 살아있으니 채널만 체크하고 필요시 재구독
+          const { realtimeCore } = await import('./realtime-core')
+          await realtimeCore.checkAndResubscribe()
         }
       } else {
         console.log('[ConnectionCore] Still offline, waiting for connection...')
