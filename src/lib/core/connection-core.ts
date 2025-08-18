@@ -79,14 +79,10 @@ export class ConnectionCore {
   private async handleOnline(): Promise<void> {
     console.log('[ConnectionCore] Network online')
     
-    // WebSocket 살아있는지 체크
-    if (!this.client.realtime?.isConnected()) {
-      console.log('[ConnectionCore] WebSocket dead, recreating client...')
-      await this.recreateClient()
-    } else {
-      console.log('[ConnectionCore] WebSocket alive, continuing...')
-      this.status = { state: 'online', needsReconnect: false }
-    }
+    // 네트워크가 끊어졌다가 복구되면 무조건 재생성
+    // isConnected()는 stale connection을 감지 못함
+    console.log('[ConnectionCore] Network restored, recreating client for fresh connection...')
+    await this.recreateClient()
   }
 
   private handleOffline(): void {
