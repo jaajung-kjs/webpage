@@ -28,7 +28,7 @@ export class ConnectionCore {
   private recreateCount: number = 0
   private backgroundTimer: NodeJS.Timeout | null = null
   private readonly MIN_RECREATE_INTERVAL = 5 * 1000 // 최소 5초 간격
-  private readonly BACKGROUND_DISCONNECT_DELAY = 30 * 1000 // 백그라운드 30초 후 끊기
+  private readonly BACKGROUND_DISCONNECT_DELAY = 5 * 60 * 1000 // 백그라운드 5분 후 끊기
   
   private constructor() {
     this.status = {
@@ -99,19 +99,22 @@ export class ConnectionCore {
   
   private async handleVisibilityChange(): Promise<void> {
     if (document.hidden) {
-      // 백그라운드로 전환 - 30초 후에 WebSocket 끊기
-      console.log('[ConnectionCore] Going to background, will disconnect WebSocket after 30s...')
+      // 백그라운드로 전환 - 5분 후에 WebSocket 끊기
+      console.log('[ConnectionCore] Going to background, will disconnect WebSocket after 5 minutes...')
       
       // 기존 타이머가 있으면 취소 (이미 백그라운드였다가 다시 백그라운드)
       if (this.backgroundTimer) {
         clearTimeout(this.backgroundTimer)
       }
       
-      // 30초 후 WebSocket 끊기
+      // 5분 후 WebSocket 끊기
       this.backgroundTimer = setTimeout(() => {
         if (document.hidden && this.client.realtime) {
-          console.log('[ConnectionCore] Background timeout - disconnecting WebSocket')
+          console.log('[ConnectionCore] Background timeout - disconnecting WebSocket to free memory')
+          // WebSocket 연결 끊기 - 메모리는 가비지 컬렉터가 자동으로 정리
           this.client.realtime.disconnect()
+          // disconnect() 하면 WebSocket 객체와 관련 이벤트 리스너들이 정리되어
+          // 가비지 컬렉터가 메모리를 회수할 수 있게 됨
         }
         this.backgroundTimer = null
       }, this.BACKGROUND_DISCONNECT_DELAY)
