@@ -26,7 +26,9 @@ export class ConnectionCore {
   private listeners: Set<(client: SupabaseClient<Database>) => void>
   private lastRecreateTime: number = 0
   private recreateCount: number = 0
+  private backgroundTimer: NodeJS.Timeout | null = null
   private readonly MIN_RECREATE_INTERVAL = 5 * 1000 // 최소 5초 간격
+  private readonly BACKGROUND_DISCONNECT_DELAY = 30 * 1000 // 백그라운드 30초 후 끊기
   
   private constructor() {
     this.status = {
@@ -97,14 +99,33 @@ export class ConnectionCore {
   
   private async handleVisibilityChange(): Promise<void> {
     if (document.hidden) {
-      // 백그라운드로 전환 - 메모리 최소화
-      console.log('[ConnectionCore] Going to background, disconnecting WebSocket...')
-      if (this.client.realtime) {
-        this.client.realtime.disconnect()
+      // 백그라운드로 전환 - 30초 후에 WebSocket 끊기
+      console.log('[ConnectionCore] Going to background, will disconnect WebSocket after 30s...')
+      
+      // 기존 타이머가 있으면 취소 (이미 백그라운드였다가 다시 백그라운드)
+      if (this.backgroundTimer) {
+        clearTimeout(this.backgroundTimer)
       }
+      
+      // 30초 후 WebSocket 끊기
+      this.backgroundTimer = setTimeout(() => {
+        if (document.hidden && this.client.realtime) {
+          console.log('[ConnectionCore] Background timeout - disconnecting WebSocket')
+          this.client.realtime.disconnect()
+        }
+        this.backgroundTimer = null
+      }, this.BACKGROUND_DISCONNECT_DELAY)
+      
     } else {
       // 포그라운드로 복귀
       console.log('[ConnectionCore] Returning to foreground')
+      
+      // 백그라운드 타이머 취소
+      if (this.backgroundTimer) {
+        clearTimeout(this.backgroundTimer)
+        this.backgroundTimer = null
+        console.log('[ConnectionCore] Cancelled background disconnect timer')
+      }
       
       // 온라인 상태이고 WebSocket이 죽었으면 재생성
       if (navigator.onLine) {
@@ -212,6 +233,12 @@ export class ConnectionCore {
   // 완전한 정리 (앱 종료 시 사용)
   async destroy(): Promise<void> {
     console.log('[ConnectionCore] Destroying connection core...')
+    
+    // 백그라운드 타이머 정리
+    if (this.backgroundTimer) {
+      clearTimeout(this.backgroundTimer)
+      this.backgroundTimer = null
+    }
     
     // 이벤트 리스너 제거
     if (typeof window !== 'undefined') {
