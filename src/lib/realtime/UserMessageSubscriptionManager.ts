@@ -25,25 +25,31 @@ export class UserMessageSubscriptionManager {
   private userConversations: Set<string> = new Set() // 사용자가 속한 대화방 ID들
 
   async initialize(userId: string, queryClient: QueryClient): Promise<void> {
-    if (this.isInitialized && this.userId === userId) {
-      // 같은 사용자라도 QueryClient 참조가 변경되었을 수 있으므로 업데이트
-      if (this.queryClient !== queryClient) {
-        console.log('[UserMessageSubscriptionManager] Updating QueryClient reference for existing user')
-        this.queryClient = queryClient
-        
-        // 재연결 후 캐시 무효화
-        if (userId) {
-          console.log('[UserMessageSubscriptionManager] Invalidating message queries after reconnection')
-          queryClient.invalidateQueries({ queryKey: ['conversations-v2', userId] })
-          queryClient.invalidateQueries({ queryKey: ['unread-count-v2', userId] })
-          queryClient.invalidateQueries({ queryKey: ['conversation-messages-v2'] })
-        }
-      }
-      return // 이미 같은 사용자로 초기화됨
+    // 정확히 같은 사용자 ID와 QueryClient로 이미 초기화된 경우 스킵
+    if (this.isInitialized && 
+        this.userId === userId && 
+        this.queryClient === queryClient) {
+      console.log('[UserMessageSubscriptionManager] Already initialized for same user and QueryClient, skipping')
+      return
     }
 
-    // 기존 구독 정리
+    // 같은 사용자지만 QueryClient가 다른 경우 (재연결 시)
+    if (this.isInitialized && this.userId === userId && this.queryClient !== queryClient) {
+      console.log('[UserMessageSubscriptionManager] Updating QueryClient reference for existing user')
+      this.queryClient = queryClient
+      
+      // 재연결 후 캐시 무효화
+      console.log('[UserMessageSubscriptionManager] Invalidating message queries after reconnection')
+      queryClient.invalidateQueries({ queryKey: ['conversations-v2', userId] })
+      queryClient.invalidateQueries({ queryKey: ['unread-count-v2', userId] })
+      queryClient.invalidateQueries({ queryKey: ['conversation-messages-v2'] })
+      
+      return // QueryClient만 업데이트하고 구독은 유지
+    }
+
+    // 기존 구독 정리 (다른 사용자로 초기화되거나 처음 초기화하는 경우)
     if (this.isInitialized) {
+      console.log('[UserMessageSubscriptionManager] Cleaning up previous subscriptions')
       this.cleanup()
     }
 

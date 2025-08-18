@@ -118,14 +118,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session)
         setUser(session?.user ?? null)
         
-        // 초기 세션이 있으면 메시지 구독 초기화 (에러 처리 포함)
-        if (session?.user) {
+        // 초기 세션이 있으면 메시지 구독 초기화 (중복 방지)
+        if (session?.user && !userMessageSubscriptionManager.isActive()) {
           try {
+            console.log('[AuthProvider] Initial session found, initializing message subscriptions')
             await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
           } catch (error) {
-            console.error('[AuthProvider] Message subscription initialization failed:', error)
+            console.error('[AuthProvider] Initial message subscription initialization failed:', error)
             // 실패해도 앱은 계속 실행
           }
+        } else if (session?.user) {
+          console.log('[AuthProvider] Initial session found, but message subscriptions already active')
         }
       } catch (err) {
         console.error('Initial session error:', err)
@@ -140,10 +143,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const unsubscribeConnectionChange = connectionCore.onClientChange(async (newClient) => {
       console.log('[AuthProvider] ConnectionCore client changed, updating UserMessageSubscriptionManager')
       
-      // UserMessageSubscriptionManager의 QueryClient 참조 업데이트
-      if (user?.id) {
+      // UserMessageSubscriptionManager의 QueryClient 참조 업데이트 (재연결만 처리)
+      if (user?.id && userMessageSubscriptionManager.isActive()) {
+        console.log('[AuthProvider] Updating QueryClient reference for reconnection')
         await userMessageSubscriptionManager.initialize(user.id, queryClient)
-        console.log('[AuthProvider] UserMessageSubscriptionManager updated with new QueryClient')
+        console.log('[AuthProvider] UserMessageSubscriptionManager QueryClient updated')
       }
     })
 
@@ -162,21 +166,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else if (event === 'SIGNED_IN' && session?.user) {
           // 로그인 시 프로필 새로고침
           queryClient.invalidateQueries({ queryKey: ['user-profile-v2', session.user.id] })
-          // 로그인 시 메시지 구독 초기화 (에러 처리 포함)
-          try {
-            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
-          } catch (error) {
-            console.error('[AuthProvider] SIGNED_IN: Message subscription initialization failed:', error)
-            // 실패해도 앱은 계속 실행
+          // 로그인 시 메시지 구독 초기화 (중복 방지)
+          if (!userMessageSubscriptionManager.isActive()) {
+            try {
+              console.log('[AuthProvider] SIGNED_IN: User not subscribed, initializing message subscriptions')
+              await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+            } catch (error) {
+              console.error('[AuthProvider] SIGNED_IN: Message subscription initialization failed:', error)
+            }
+          } else {
+            console.log('[AuthProvider] SIGNED_IN: User already subscribed, skipping initialization')
           }
         } else if (event === 'USER_UPDATED' && session?.user) {
-          // 사용자 정보 업데이트 시 재초기화 (에러 처리 포함)
-          try {
-            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
-          } catch (error) {
-            console.error('[AuthProvider] USER_UPDATED: Message subscription initialization failed:', error)
-            // 실패해도 앱은 계속 실행
-          }
+          // 사용자 정보 업데이트 시에는 구독 재초기화 불필요
+          console.log('[AuthProvider] USER_UPDATED: Skipping message subscription re-initialization')
         }
       }
     )
@@ -185,7 +188,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       subscription.unsubscribe()
       unsubscribeConnectionChange()
     }
-  }, [queryClient, user?.id])
+  }, [queryClient]) // user?.id 제거 - 초기화는 한 번만 실행하고 onAuthStateChange에서 사용자 변경 처리
 
   // 권한 체크 계산
   const isAuthenticated = !!(session && user && profile)

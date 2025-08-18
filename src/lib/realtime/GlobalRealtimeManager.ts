@@ -31,11 +31,9 @@ class GlobalRealtimeManager {
       // 재연결 후 QueryClient가 업데이트되면 캐시를 한 번 무효화
       if (this.isInitialized) {
         console.log('[GlobalRealtime] Triggering cache refresh after QueryClient update')
-        // 주요 쿼리들을 무효화하여 최신 상태 반영
+        // 글로벌 쿼리들만 무효화 (메시지 관련 쿼리는 UserMessageSubscriptionManager에서 처리)
         queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
         queryClient.invalidateQueries({ queryKey: ['users_v2'] })
-        queryClient.invalidateQueries({ queryKey: ['conversations-v2'] })
-        queryClient.invalidateQueries({ queryKey: ['unread-count-v2'] })
       }
     }
   }
@@ -53,7 +51,7 @@ class GlobalRealtimeManager {
     console.log('[GlobalRealtime] Initializing global subscriptions...')
     
     try {
-      // 모든 사용자가 구독하는 테이블들
+      // 모든 사용자가 구독하는 테이블들 (메시지 관련 테이블 제외)
       await Promise.all([
         this.subscribeToContentTable(),
         this.subscribeToUsersTable(),
