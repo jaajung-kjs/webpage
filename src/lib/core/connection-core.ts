@@ -1,7 +1,8 @@
 /**
- * ConnectionCore - 단순화된 연결 관리
+ * ConnectionCore - 심플한 연결 관리
  * 
- * 장시간 네트워크 끊김 시 Supabase 클라이언트 재생성으로 해결
+ * 포그라운드 복귀/온라인 복귀 시 WebSocket 체크 후 필요시 재생성
+ * 백그라운드 진입 시 메모리 최소화
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
@@ -23,11 +24,9 @@ export class ConnectionCore {
   private client: SupabaseClient<Database>
   private status: ConnectionStatus
   private listeners: Set<(client: SupabaseClient<Database>) => void>
-  private offlineStartTime: number | null = null
   private lastRecreateTime: number = 0
   private recreateCount: number = 0
-  private readonly RECREATE_THRESHOLD = 3 * 60 * 1000 // 3분 이상 끊기면 재생성
-  private readonly MIN_RECREATE_INTERVAL = 30 * 1000 // 최소 30초 간격
+  private readonly MIN_RECREATE_INTERVAL = 5 * 1000 // 최소 5초 간격
   
   private constructor() {
     this.status = {
@@ -68,41 +67,66 @@ export class ConnectionCore {
 
   private initialize(): void {
     if (typeof window !== 'undefined') {
+      // 네트워크 상태 변경
       window.addEventListener('online', this.handleOnline.bind(this))
       window.addEventListener('offline', this.handleOffline.bind(this))
+      
+      // 백그라운드/포그라운드 전환
+      document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this))
     }
   }
 
   private async handleOnline(): Promise<void> {
     console.log('[ConnectionCore] Network online')
     
-    if (this.offlineStartTime) {
-      const offlineDuration = Date.now() - this.offlineStartTime
-      console.log(`[ConnectionCore] Was offline for ${Math.round(offlineDuration / 1000)}s`)
-      
-      if (offlineDuration > this.RECREATE_THRESHOLD) {
-        console.log('[ConnectionCore] Long offline detected, recreating client...')
-        await this.recreateClient()
-      }
+    // WebSocket 살아있는지 체크
+    if (!this.client.realtime?.isConnected()) {
+      console.log('[ConnectionCore] WebSocket dead, recreating client...')
+      await this.recreateClient()
+    } else {
+      console.log('[ConnectionCore] WebSocket alive, continuing...')
+      this.status = { state: 'online', needsReconnect: false }
     }
-    
-    this.offlineStartTime = null
-    this.status = { state: 'online', needsReconnect: false }
   }
 
   private handleOffline(): void {
     console.log('[ConnectionCore] Network offline')
-    this.offlineStartTime = Date.now()
     this.status = { state: 'offline', needsReconnect: false }
+    // 오프라인 시에는 아무것도 안함 - WebSocket이 알아서 끊김
+  }
+  
+  private async handleVisibilityChange(): Promise<void> {
+    if (document.hidden) {
+      // 백그라운드로 전환 - 메모리 최소화
+      console.log('[ConnectionCore] Going to background, disconnecting WebSocket...')
+      if (this.client.realtime) {
+        this.client.realtime.disconnect()
+      }
+    } else {
+      // 포그라운드로 복귀
+      console.log('[ConnectionCore] Returning to foreground')
+      
+      // 온라인 상태이고 WebSocket이 죽었으면 재생성
+      if (navigator.onLine) {
+        if (!this.client.realtime?.isConnected()) {
+          console.log('[ConnectionCore] WebSocket dead after background, recreating...')
+          await this.recreateClient()
+        } else {
+          console.log('[ConnectionCore] WebSocket still alive')
+        }
+      } else {
+        console.log('[ConnectionCore] Still offline, waiting for connection...')
+      }
+    }
   }
 
   async recreateClient(): Promise<void> {
-    // 재생성 빈도 제한 체크 (30초 간격)
+    // 재생성 빈도 제한 체크 (5초 간격)
     const now = Date.now()
     const timeSinceLastRecreate = now - this.lastRecreateTime
     
     if (timeSinceLastRecreate < this.MIN_RECREATE_INTERVAL) {
-      console.warn('[ConnectionCore] Recreate attempted too soon, skipping')
+      console.warn(`[ConnectionCore] Recreate attempted too soon (${Math.round(timeSinceLastRecreate / 1000)}s ago), skipping`)
       return
     }
     
@@ -193,6 +217,7 @@ export class ConnectionCore {
     if (typeof window !== 'undefined') {
       window.removeEventListener('online', this.handleOnline.bind(this))
       window.removeEventListener('offline', this.handleOffline.bind(this))
+      document.removeEventListener('visibilitychange', this.handleVisibilityChange.bind(this))
     }
     
     // 클라이언트 정리
