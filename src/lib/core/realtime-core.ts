@@ -54,10 +54,13 @@ export class RealtimeCore {
     this.cleanupAllChannels()
     
     // 잠시 대기하여 정리 완료 보장
-    await new Promise(resolve => setTimeout(resolve, 50))
+    await new Promise(resolve => setTimeout(resolve, 100))
     
     // 새 클라이언트로 교체
     this.client = newClient
+    
+    // WebSocket 연결 대기
+    await this.waitForConnection()
     
     // React Query 캐시 정리 (선택적)
     // 너무 자주 발생하면 사용자 경험이 나빠질 수 있으므로 제한적으로 사용
@@ -67,6 +70,31 @@ export class RealtimeCore {
     
     // 모든 구독 재생성
     await this.resubscribeAll()
+  }
+  
+  private async waitForConnection(): Promise<void> {
+    console.log('[RealtimeCore] Waiting for WebSocket connection...')
+    
+    // Realtime 인스턴스가 준비될 때까지 대기
+    let attempts = 0
+    const maxAttempts = 30 // 최대 15초 대기 (500ms * 30)
+    
+    while (attempts < maxAttempts) {
+      if (this.client.realtime) {
+        // WebSocket 상태 확인
+        const state = this.client.realtime.isConnected()
+        
+        if (state) {
+          console.log('[RealtimeCore] WebSocket connected')
+          return
+        }
+      }
+      
+      await new Promise(resolve => setTimeout(resolve, 500))
+      attempts++
+    }
+    
+    console.warn('[RealtimeCore] WebSocket connection timeout, proceeding anyway')
   }
 
   private cleanupAllChannels(): void {
@@ -93,37 +121,63 @@ export class RealtimeCore {
     
     const subscriptions = Array.from(this.subscriptions.entries())
     
-    for (const [key, info] of subscriptions) {
+    // 병렬로 모든 구독 시도
+    const promises = subscriptions.map(async ([key, info]) => {
       try {
         await this.createSubscription(key, info)
       } catch (error) {
-        console.error(`[RealtimeCore] Failed to resubscribe ${key}:`, error)
+        console.warn(`[RealtimeCore] Failed to resubscribe ${key}, will retry later:`, error)
       }
-    }
+    })
+    
+    // 모든 구독 시도 완료 대기
+    await Promise.allSettled(promises)
+    
+    // 구독 상태 확인
+    const successCount = Array.from(this.channels.keys()).length
+    console.log(`[RealtimeCore] Resubscription complete: ${successCount}/${this.subscriptions.size} channels active`)
   }
 
   private async createSubscription(key: string, info: SubscriptionInfo): Promise<void> {
-    const channel = this.client
-      .channel(key)
-      .on(
-        'postgres_changes' as any,
-        {
-          event: info.event,
-          schema: 'public',
-          table: info.table,
-          filter: info.filter
-        },
-        info.handler
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`[RealtimeCore] Successfully subscribed to ${key}`)
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`[RealtimeCore] Failed to subscribe to ${key}`)
+    return new Promise((resolve) => {
+      const channel = this.client
+        .channel(key)
+        .on(
+          'postgres_changes' as any,
+          {
+            event: info.event,
+            schema: 'public',
+            table: info.table,
+            filter: info.filter
+          },
+          info.handler
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            console.log(`[RealtimeCore] Successfully subscribed to ${key}`)
+            this.channels.set(key, channel)
+            resolve()
+          } else if (status === 'CHANNEL_ERROR') {
+            console.error(`[RealtimeCore] Failed to subscribe to ${key}`)
+            // 실패해도 채널은 저장 (나중에 재시도 가능)
+            this.channels.set(key, channel)
+            resolve() // 다른 구독 진행을 위해 resolve
+          } else if (status === 'TIMED_OUT') {
+            console.warn(`[RealtimeCore] Subscription timeout for ${key}`)
+            this.channels.set(key, channel)
+            resolve()
+          }
+        })
+      
+      // 5초 타임아웃
+      setTimeout(() => {
+        if (!this.channels.has(key)) {
+          console.warn(`[RealtimeCore] Subscription timeout for ${key}, saving channel anyway`)
+          this.channels.set(key, channel)
+          resolve()
         }
-      })
-
-    this.channels.set(key, channel)
+      }, 5000)
+    })
   }
 
   /**
@@ -146,9 +200,13 @@ export class RealtimeCore {
     const info: SubscriptionInfo = { table, event, filter, handler }
     this.subscriptions.set(key, info)
 
-    // 즉시 구독 생성
+    // 즉시 구독 생성 (에러는 무시)
     if (this.isReady) {
-      await this.createSubscription(key, info)
+      try {
+        await this.createSubscription(key, info)
+      } catch (error) {
+        console.warn(`[RealtimeCore] Initial subscription failed for ${key}, will retry on reconnect:`, error)
+      }
     }
 
     // 구독 해제 함수 반환
