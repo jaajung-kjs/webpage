@@ -108,12 +108,9 @@ export class AuthManager {
     })
 
     // ConnectionCore 상태 구독
-    connectionCore.subscribe(async (status) => {
-      if (status.state === 'connected' && status.isVisible) {
-        // 연결 복구 시 세션 확인
-        // getSession()을 사용하므로 항상 안전하게 동기화됨
-        await this.validateSession()
-      }
+    connectionCore.onClientChange(async () => {
+      // 클라이언트 재생성 시 세션 확인
+      await this.validateSession()
     })
   }
 
@@ -315,29 +312,28 @@ export class AuthManager {
         // 타임아웃 발생 시 CircuitBreaker 리셋 시도
         console.warn('[AuthManager] Session validation timeout, checking CircuitBreaker status')
         
-        // CircuitBreaker가 Open 상태인지 확인
-        if (connectionCore.isCircuitBreakerOpen()) {
-          console.log('[AuthManager] CircuitBreaker is open, attempting force reset')
-          try {
-            await connectionCore.forceReset()
-            // 리셋 후 재시도
-            const { data: { session }, error } = await client.auth.getSession()
-            
-            if (!error && session) {
-              this.updateState({ 
-                session, 
-                user: session.user,
-                error: null 
-              })
-              this.scheduleTokenRefresh(session)
-              if (!this.state.profile) {
-                await this.loadProfile(session.user.id)
-              }
-              return
+        // 클라이언트 재생성 시도
+        console.log('[AuthManager] Session validation timeout, recreating client')
+        try {
+          await connectionCore.recreateClient()
+          // 재생성 후 재시도
+          const newClient = connectionCore.getClient()
+          const { data: { session }, error } = await newClient.auth.getSession()
+          
+          if (!error && session) {
+            this.updateState({ 
+              session, 
+              user: session.user,
+              error: null 
+            })
+            this.scheduleTokenRefresh(session)
+            if (!this.state.profile) {
+              await this.loadProfile(session.user.id)
             }
-          } catch (resetError) {
-            console.error('[AuthManager] Force reset failed:', resetError)
+            return
           }
+        } catch (resetError) {
+          console.error('[AuthManager] Client recreation failed:', resetError)
         }
         
         // 타임아웃이나 리셋 실패 시 로그아웃 처리

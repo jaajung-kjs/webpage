@@ -117,11 +117,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
 
     switch (updateStrategy) {
       case 'smart':
-        // 네트워크 품질에 따라 전략 선택
-        if (networkQuality === 'poor' || networkQuality === 'offline') {
-          return 'invalidate' // 느린 연결에서는 무효화만
-        }
-        // 빠른 연결에서는 병합
+        // 항상 merge 사용 (네트워크는 안정적이라고 가정)
         return smartUpdate(payload, 'merge', currentData)
 
       case 'merge':
@@ -282,11 +278,8 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
         const currentData = queryClient.getQueryData<T>(options.queryKey!)
 
         if (updateStrategy === 'invalidate') {
-          // 네트워크 품질에 따른 지연 무효화
-          const delay = networkQuality === 'poor' ? 1000 : 0
-          setTimeout(() => {
-            queryClient.invalidateQueries({ queryKey: options.queryKey })
-          }, delay)
+          // 즉시 무효화 (네트워크는 안정적이라고 가정)
+          queryClient.invalidateQueries({ queryKey: options.queryKey })
         } else if (currentData) {
           // 데이터 직접 업데이트
           const updatedData = smartUpdate(payload, updateStrategy, currentData)

@@ -56,7 +56,7 @@ export class RealtimeSync {
   /**
    * 실시간 동기화 설정
    */
-  setupSync(id: string, config: SyncConfig): () => void {
+  async setupSync(id: string, config: SyncConfig): Promise<() => void> {
     if (!this.queryClient) {
       console.error('[RealtimeSync] QueryClient not set. Call setQueryClient first.')
       return () => {}
@@ -75,18 +75,14 @@ export class RealtimeSync {
     })
     
     // Realtime 구독
-    const unsubscribe = realtimeCore.subscribe({
-      id: `sync-${id}`,
-      table: config.table,
-      event: config.event,
-      filter: config.filter,
-      callback: (payload) => {
+    const unsubscribe = await realtimeCore.subscribe(
+      config.table,
+      config.event,
+      (payload) => {
         this.handleRealtimeEvent(config, payload)
       },
-      onError: (error) => {
-        console.error(`[RealtimeSync] Error in ${id}:`, error)
-      }
-    })
+      config.filter
+    )
     
     // 동기화 정보 저장
     this.syncs.set(id, {
@@ -244,8 +240,8 @@ export const realtimeSync = RealtimeSync.getInstance()
 /**
  * 콘텐츠 목록 동기화
  */
-export function syncContentList(): () => void {
-  return realtimeSync.setupSync('content-list', {
+export async function syncContentList(): Promise<() => void> {
+  return await realtimeSync.setupSync('content-list', {
     table: 'content',
     queryKeys: (payload) => {
       // 모든 콘텐츠 목록 쿼리 무효화
@@ -269,8 +265,8 @@ export function syncContentList(): () => void {
 /**
  * 콘텐츠 상세 동기화
  */
-export function syncContentDetail(contentId: string): () => void {
-  return realtimeSync.setupSync(`content-${contentId}`, {
+export async function syncContentDetail(contentId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`content-${contentId}`, {
     table: 'content',
     filter: `id=eq.${contentId}`,
     queryKeys: () => [
@@ -283,8 +279,8 @@ export function syncContentDetail(contentId: string): () => void {
 /**
  * 댓글 동기화
  */
-export function syncComments(contentId: string): () => void {
-  return realtimeSync.setupSync(`comments-${contentId}`, {
+export async function syncComments(contentId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`comments-${contentId}`, {
     table: 'comments',
     filter: `content_id=eq.${contentId}`,
     queryKeys: () => [
@@ -298,8 +294,8 @@ export function syncComments(contentId: string): () => void {
 /**
  * 메시지 인박스 동기화
  */
-export function syncMessageInbox(userId: string): () => void {
-  return realtimeSync.setupSync(`inbox-${userId}`, {
+export async function syncMessageInbox(userId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`inbox-${userId}`, {
     table: 'messages',
     filter: `recipient_id=eq.${userId}`,
     queryKeys: () => [
@@ -313,8 +309,8 @@ export function syncMessageInbox(userId: string): () => void {
 /**
  * 대화 메시지 동기화
  */
-export function syncConversation(conversationId: string): () => void {
-  return realtimeSync.setupSync(`conversation-${conversationId}`, {
+export async function syncConversation(conversationId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`conversation-${conversationId}`, {
     table: 'messages',
     filter: `conversation_id=eq.${conversationId}`,
     queryKeys: () => [
@@ -327,8 +323,8 @@ export function syncConversation(conversationId: string): () => void {
 /**
  * 사용자 프로필 동기화
  */
-export function syncUserProfile(userId: string): () => void {
-  return realtimeSync.setupSync(`user-${userId}`, {
+export async function syncUserProfile(userId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`user-${userId}`, {
     table: 'users',
     filter: `id=eq.${userId}`,
     queryKeys: () => [
@@ -342,8 +338,8 @@ export function syncUserProfile(userId: string): () => void {
 /**
  * 알림 카운트 동기화
  */
-export function syncNotificationCount(userId: string): () => void {
-  return realtimeSync.setupSync(`notifications-${userId}`, {
+export async function syncNotificationCount(userId: string): Promise<() => void> {
+  return await realtimeSync.setupSync(`notifications-${userId}`, {
     table: 'user_message_stats',
     filter: `user_id=eq.${userId}`,
     queryKeys: () => [
