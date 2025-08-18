@@ -159,8 +159,12 @@ export class RealtimeCore {
     return new Promise((resolve) => {
       let subscribed = false
       
+      // 타임스탬프를 추가하여 채널명을 유니크하게 만듦
+      // 이렇게 하면 서버에 남아있는 이전 채널과 충돌하지 않음
+      const uniqueChannelName = `${key}-${Date.now()}`
+      
       const channel = this.client
-        .channel(key)
+        .channel(uniqueChannelName)
         .on(
           'postgres_changes' as any,
           {
@@ -178,7 +182,7 @@ export class RealtimeCore {
           
           if (status === 'SUBSCRIBED') {
             console.log(`[RealtimeCore] Successfully subscribed to ${key}`)
-            this.channels.set(key, channel)
+            this.channels.set(key, channel) // 원래 key로 저장
             subscribed = true
             resolve(true)
           } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
