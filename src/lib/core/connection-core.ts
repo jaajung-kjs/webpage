@@ -79,10 +79,13 @@ export class ConnectionCore {
   private async handleOnline(): Promise<void> {
     console.log('[ConnectionCore] Network online')
     
-    // 네트워크가 끊어졌다가 복구되면 무조건 재생성
-    // isConnected()는 stale connection을 감지 못함
-    console.log('[ConnectionCore] Network restored, recreating client for fresh connection...')
-    await this.recreateClient()
+    // WebSocket이 실제로 살아있는지 확인 후 필요시에만 재생성
+    if (!this.isWebSocketAlive()) {
+      console.log('[ConnectionCore] WebSocket dead after network restore, recreating...')
+      await this.recreateClient()
+    } else {
+      console.log('[ConnectionCore] WebSocket still alive after network restore, continuing...')
+    }
   }
 
   private handleOffline(): void {
@@ -101,7 +104,7 @@ export class ConnectionCore {
       
       // 온라인 상태이고 WebSocket이 죽었으면 재생성
       if (navigator.onLine) {
-        if (!this.client.realtime?.isConnected()) {
+        if (!this.isWebSocketAlive()) {
           console.log('[ConnectionCore] WebSocket dead after background, recreating...')
           await this.recreateClient()
         } else {
@@ -110,6 +113,36 @@ export class ConnectionCore {
       } else {
         console.log('[ConnectionCore] Still offline, waiting for connection...')
       }
+    }
+  }
+
+  /**
+   * WebSocket이 실제로 살아있는지 확인
+   * isConnected()는 stale connection을 감지 못하므로 readyState 직접 확인
+   */
+  private isWebSocketAlive(): boolean {
+    try {
+      // @ts-ignore - 내부 WebSocket 접근 (conn이 실제 WebSocket 객체)
+      const ws = this.client.realtime?.conn
+      if (!ws) {
+        console.log('[ConnectionCore] WebSocket not found')
+        return false
+      }
+      
+      // WebSocket readyState 확인
+      // 0 = CONNECTING (연결 중)
+      // 1 = OPEN (연결됨 - 정상)
+      // 2 = CLOSING (닫히는 중 - 죽음)
+      // 3 = CLOSED (닫힘 - 죽음)
+      const isAlive = ws.readyState === 1
+      
+      const stateNames = ['CONNECTING', 'OPEN', 'CLOSING', 'CLOSED']
+      console.log(`[ConnectionCore] WebSocket state: ${stateNames[ws.readyState]} (${isAlive ? 'alive' : 'dead'})`)
+      
+      return isAlive
+    } catch (error) {
+      console.warn('[ConnectionCore] Error checking WebSocket state:', error)
+      return false
     }
   }
 

@@ -11,7 +11,6 @@ import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetDescri
 import { Menu, User, LogOut, Settings, Shield, MessageCircle } from 'lucide-react'
 import { useAuth } from '@/providers'
 import { MessageModal, useMessageModal, MessageNotificationBadge } from '@/components/messages'
-import { useMessageNotifications } from '@/hooks/features/useMessageNotifications'
 import LoginDialog from '@/components/auth/LoginDialog'
 
 const navigation = [
@@ -34,8 +33,8 @@ export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const { user, profile, loading, isMember, signOut, isSigningOut } = useAuth()
   const { openModal, modalProps } = useMessageModal()
-  const { requestPermission, permission } = useMessageNotifications()
   const router = useRouter()
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>('default')
   
   const handleSignOut = async () => {
     if (isSigningOut) return // 이미 로그아웃 진행중이면 무시
@@ -57,15 +56,22 @@ export default function Header() {
   
   // 로그인한 멤버에게 알림 권한 요청
   useEffect(() => {
-    if (user && isMember && permission === 'default') {
+    if ('Notification' in window) {
+      setNotificationPermission(Notification.permission)
+    }
+    
+    if (user && isMember && notificationPermission === 'default') {
       // 로그인 후 5초 후에 알림 권한 요청 (사용자 경험 개선)
-      const timer = setTimeout(() => {
-        requestPermission()
+      const timer = setTimeout(async () => {
+        if ('Notification' in window) {
+          const result = await Notification.requestPermission()
+          setNotificationPermission(result)
+        }
       }, 5000)
       
       return () => clearTimeout(timer)
     }
-  }, [user, isMember, permission, requestPermission])
+  }, [user, isMember, notificationPermission])
   
   // Listen for login dialog open events
   useEffect(() => {
