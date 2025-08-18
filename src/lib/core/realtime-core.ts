@@ -206,35 +206,6 @@ export class RealtimeCore {
     })
   }
 
-  /**
-   * 채널 상태 확인 및 재구독
-   * 백그라운드에서 복귀 시 채널이 손상되었는지 확인하고 필요시 재구독
-   */
-  async checkAndResubscribe(): Promise<void> {
-    console.log('[RealtimeCore] Checking channel health...')
-    
-    // 실제로 활성화된 채널만 카운트 (channels Map 크기)
-    const activeChannels = this.channels.size
-    const totalSubscriptions = this.subscriptions.size
-    
-    console.log(`[RealtimeCore] Active channels: ${activeChannels}/${totalSubscriptions}`)
-    
-    // 채널이 누락된 경우 재구독
-    if (activeChannels < totalSubscriptions) {
-      console.log(`[RealtimeCore] ${totalSubscriptions - activeChannels} channels missing, resubscribing all...`)
-      
-      // 기존 채널 정리
-      this.cleanupAllChannels()
-      
-      // 잠시 대기
-      await new Promise(resolve => setTimeout(resolve, 200))
-      
-      // 모든 구독 재생성
-      await this.resubscribeAll()
-    } else {
-      console.log('[RealtimeCore] All channels healthy')
-    }
-  }
 
   /**
    * 구독 추가

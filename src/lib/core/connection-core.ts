@@ -26,9 +26,7 @@ export class ConnectionCore {
   private listeners: Set<(client: SupabaseClient<Database>) => void>
   private lastRecreateTime: number = 0
   private recreateCount: number = 0
-  private backgroundTimer: NodeJS.Timeout | null = null
   private readonly MIN_RECREATE_INTERVAL = 5 * 1000 // 최소 5초 간격
-  private readonly BACKGROUND_DISCONNECT_DELAY = 5 * 60 * 1000 // 백그라운드 5분 후 끊기
   
   private constructor() {
     this.status = {
@@ -99,36 +97,11 @@ export class ConnectionCore {
   
   private async handleVisibilityChange(): Promise<void> {
     if (document.hidden) {
-      // 백그라운드로 전환 - 5분 후에 WebSocket 끊기
-      console.log('[ConnectionCore] Going to background, will disconnect WebSocket after 5 minutes...')
-      
-      // 기존 타이머가 있으면 취소 (이미 백그라운드였다가 다시 백그라운드)
-      if (this.backgroundTimer) {
-        clearTimeout(this.backgroundTimer)
-      }
-      
-      // 5분 후 WebSocket 끊기
-      this.backgroundTimer = setTimeout(() => {
-        if (document.hidden && this.client.realtime) {
-          console.log('[ConnectionCore] Background timeout - disconnecting WebSocket to free memory')
-          // WebSocket 연결 끊기 - 메모리는 가비지 컬렉터가 자동으로 정리
-          this.client.realtime.disconnect()
-          // disconnect() 하면 WebSocket 객체와 관련 이벤트 리스너들이 정리되어
-          // 가비지 컬렉터가 메모리를 회수할 수 있게 됨
-        }
-        this.backgroundTimer = null
-      }, this.BACKGROUND_DISCONNECT_DELAY)
-      
+      // 백그라운드로 전환 - WebSocket은 그대로 유지
+      console.log('[ConnectionCore] Going to background')
     } else {
       // 포그라운드로 복귀
       console.log('[ConnectionCore] Returning to foreground')
-      
-      // 백그라운드 타이머 취소
-      if (this.backgroundTimer) {
-        clearTimeout(this.backgroundTimer)
-        this.backgroundTimer = null
-        console.log('[ConnectionCore] Cancelled background disconnect timer')
-      }
       
       // 온라인 상태이고 WebSocket이 죽었으면 재생성
       if (navigator.onLine) {
@@ -136,11 +109,7 @@ export class ConnectionCore {
           console.log('[ConnectionCore] WebSocket dead after background, recreating...')
           await this.recreateClient()
         } else {
-          console.log('[ConnectionCore] WebSocket still alive, checking channel health...')
-          // WebSocket은 살아있지만 채널 구독이 손상되었을 수 있으므로
-          // RealtimeCore에 채널 상태 확인 요청
-          const { realtimeCore } = await import('@/lib/core/realtime-core')
-          await realtimeCore.checkAndResubscribe()
+          console.log('[ConnectionCore] WebSocket still alive, continuing...')
         }
       } else {
         console.log('[ConnectionCore] Still offline, waiting for connection...')
@@ -240,12 +209,6 @@ export class ConnectionCore {
   // 완전한 정리 (앱 종료 시 사용)
   async destroy(): Promise<void> {
     console.log('[ConnectionCore] Destroying connection core...')
-    
-    // 백그라운드 타이머 정리
-    if (this.backgroundTimer) {
-      clearTimeout(this.backgroundTimer)
-      this.backgroundTimer = null
-    }
     
     // 이벤트 리스너 제거
     if (typeof window !== 'undefined') {
