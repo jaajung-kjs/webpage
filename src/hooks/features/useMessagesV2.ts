@@ -285,8 +285,10 @@ function useConversationMessagesV2(conversationId: string, options?: {
       conversationId,
       () => {
         console.log('[ConversationMessages] 실시간 변경 감지, 무효화 실행')
+        // exact: false로 해야 options에 관계없이 모든 관련 쿼리가 무효화됨
         queryClient.invalidateQueries({ 
-          queryKey: ['conversation-messages-v2', conversationId, user.id, options] 
+          queryKey: ['conversation-messages-v2', conversationId],
+          exact: false
         })
       }
     )
@@ -635,15 +637,18 @@ function useSendMessageV2() {
       }
     },
     onSettled: (data, error, variables) => {
-      // Invalidate related queries - user?.id 포함해야 함!
+      // Invalidate related queries - exact: false로 모든 관련 쿼리 무효화
       queryClient.invalidateQueries({ 
-        queryKey: ['conversation-messages-v2', variables.conversation_id] 
+        queryKey: ['conversation-messages-v2', variables.conversation_id],
+        exact: false
       })
       queryClient.invalidateQueries({ 
-        queryKey: ['conversations-v2', user?.id] 
+        queryKey: ['conversations-v2', user?.id],
+        exact: false
       })
       queryClient.invalidateQueries({ 
-        queryKey: ['unread-count-v2', user?.id] 
+        queryKey: ['unread-count-v2', user?.id],
+        exact: false
       })
     }
   })
@@ -681,20 +686,23 @@ function useMarkAsReadV2() {
       
       // 실제로 읽음 처리된 메시지가 있을 때만 최소한의 쿼리 무효화
       if (updatedCount > 0) {
-        // 메시지 목록 즉시 무효화 (읽음 상태 업데이트를 위해)
+        // 메시지 목록 즉시 무효화 (읽음 상태 업데이트를 위해) - exact: false 중요!
         queryClient.invalidateQueries({ 
-          queryKey: ['conversation-messages-v2', conversation_id] 
+          queryKey: ['conversation-messages-v2', conversation_id],
+          exact: false
         })
         
         // 읽지 않은 메시지 수만 즉시 업데이트
         queryClient.invalidateQueries({ 
-          queryKey: ['unread-count-v2', user?.id] 
+          queryKey: ['unread-count-v2', user?.id],
+          exact: false
         })
         
         // 대화 목록은 debounce로 업데이트 (무한 루프 방지)
         setTimeout(() => {
           queryClient.invalidateQueries({ 
-            queryKey: ['conversations-v2', user?.id] 
+            queryKey: ['conversations-v2', user?.id],
+            exact: false
           })
         }, 300)
       }

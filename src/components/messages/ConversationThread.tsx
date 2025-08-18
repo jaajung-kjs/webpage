@@ -563,15 +563,7 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
                   transition={{ duration: 0.2 }}
                 >
                   {(() => {
-                    // 디버깅을 위한 로그
-                    if (isDev) {
-                      console.log(`[Message ${message.id}] Read status:`, {
-                        is_read: message.read_status?.is_read,
-                        read_at: message.read_status?.read_at,
-                        sender_id: message.sender_id,
-                        isOwn
-                      })
-                    }
+                    // 디버깅 로그 제거 (너무 많이 출력됨)
                     
                     return message.read_status?.is_read ? (
                       <motion.div
