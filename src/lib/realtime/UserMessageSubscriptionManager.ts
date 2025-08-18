@@ -7,6 +7,7 @@
 
 import { QueryClient } from '@tanstack/react-query'
 import { realtimeCore } from '@/lib/core/realtime-core'
+import { toast } from 'sonner'
 
 interface MessageCallbacks {
   onNewMessage?: (payload: any) => void
@@ -88,11 +89,11 @@ export class UserMessageSubscriptionManager {
         
         // 내가 보낸 메시지는 캐시 무효화 하지 않음 (이미 optimistic update로 처리됨)
         if (senderId === this.userId) {
-          console.log(`[UserMessageSubscriptionManager] Own message in conversation ${conversationId} - skip cache invalidation`)
           return
         }
-        
-        console.log(`[UserMessageSubscriptionManager] New message from other user in conversation ${conversationId}`)
+
+        // 새 메시지 toast 표시
+        toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
 
         // 캐시 무효화 - 상대방 메시지만
         this.queryClient?.invalidateQueries({ 
@@ -118,7 +119,6 @@ export class UserMessageSubscriptionManager {
       '*',
       (payload) => {
         // 모든 읽음 상태 변경을 처리 (나 또는 상대방이 읽었을 때)
-        console.log('[UserMessageSubscriptionManager] Read status change:', payload.new)
         
         // 콜백 실행
         this.callbacks.forEach((callback) => {
@@ -161,8 +161,6 @@ export class UserMessageSubscriptionManager {
             payload.old?.user1_id === this.userId ||
             payload.old?.user2_id === this.userId) {
           
-          console.log('[UserMessageSubscriptionManager] Conversation updated for user')
-          
           // 대화 목록 캐시 무효화
           this.queryClient?.invalidateQueries({ 
             queryKey: ['conversations-v2', this.userId] 
@@ -188,15 +186,12 @@ export class UserMessageSubscriptionManager {
     // 대화방별 콜백 관리 (실제 구독은 이미 전역에서 하고 있음)
     const key = `conversation-${conversationId}`
     
-    console.log(`[UserMessageSubscriptionManager] Registering callback for conversation ${conversationId}`)
-    
     // 콜백 저장 - onMessagesChange와 onNewMessage 둘 다 설정
     const callbacks: MessageCallbacks = { 
       onNewMessage: (payload) => {
         // 해당 대화방의 메시지만 처리
         const msgConversationId = payload?.new?.conversation_id || payload?.old?.conversation_id
         if (msgConversationId === conversationId) {
-          console.log(`[UserMessageSubscriptionManager] New message in conversation ${conversationId}`)
           callback()
         }
       },
@@ -204,7 +199,6 @@ export class UserMessageSubscriptionManager {
         // 해당 대화방의 메시지만 처리
         const msgConversationId = payload?.new?.conversation_id || payload?.old?.conversation_id
         if (msgConversationId === conversationId) {
-          console.log(`[UserMessageSubscriptionManager] Message change in conversation ${conversationId}`)
           callback()
         }
       }
@@ -213,7 +207,6 @@ export class UserMessageSubscriptionManager {
     
     return () => {
       // 콜백만 제거 (실제 구독은 유지)
-      console.log(`[UserMessageSubscriptionManager] Unregistering callback for conversation ${conversationId}`)
       this.callbacks.delete(key)
     }
   }
