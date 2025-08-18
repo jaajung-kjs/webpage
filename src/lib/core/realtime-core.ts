@@ -153,6 +153,8 @@ export class RealtimeCore {
           info.handler
         )
         .subscribe((status) => {
+          console.log(`[RealtimeCore] Channel ${key} status: ${status}`)
+          
           if (status === 'SUBSCRIBED') {
             console.log(`[RealtimeCore] Successfully subscribed to ${key}`)
             this.channels.set(key, channel)
@@ -166,6 +168,10 @@ export class RealtimeCore {
             console.warn(`[RealtimeCore] Subscription timeout for ${key}`)
             this.channels.set(key, channel)
             resolve()
+          } else if (status === 'CLOSED') {
+            console.warn(`[RealtimeCore] Channel ${key} closed`)
+            // 채널이 닫혔으면 재구독 필요
+            resolve()
           }
         })
       
@@ -178,6 +184,37 @@ export class RealtimeCore {
         }
       }, 5000)
     })
+  }
+
+  /**
+   * 채널 상태 확인 및 재구독
+   * 백그라운드에서 복귀 시 채널이 손상되었는지 확인하고 필요시 재구독
+   */
+  async checkAndResubscribe(): Promise<void> {
+    console.log('[RealtimeCore] Checking channel health...')
+    
+    // 활성 채널 수와 구독 수 비교
+    const activeChannels = Array.from(this.channels.entries()).filter(([key, channel]) => {
+      const state = (channel as any).state
+      return state === 'joined' || state === 'joining'
+    }).length
+    
+    const totalSubscriptions = this.subscriptions.size
+    
+    console.log(`[RealtimeCore] Active channels: ${activeChannels}/${totalSubscriptions}`)
+    
+    // 채널이 손상되었거나 누락된 경우 재구독
+    if (activeChannels < totalSubscriptions) {
+      console.log('[RealtimeCore] Some channels are broken, resubscribing all...')
+      
+      // 기존 채널 정리
+      this.cleanupAllChannels()
+      
+      // 모든 구독 재생성
+      await this.resubscribeAll()
+    } else {
+      console.log('[RealtimeCore] All channels healthy')
+    }
   }
 
   /**
