@@ -576,19 +576,19 @@ function useSendMessageV2() {
       }
     },
     onMutate: async (variables) => {
-      // Optimistic update
-      await queryClient.cancelQueries({ 
-        queryKey: ['conversation-messages-v2', variables.conversation_id] 
-      })
+      // Optimistic update - 즉시 화면에 표시
+      const tempId = `temp-${Date.now()}-${Math.random()}`
       
-      const previous = queryClient.getQueryData<MessageV2[]>([
-        'conversation-messages-v2', 
-        variables.conversation_id, 
-        user?.id
-      ])
+      // 캐시 업데이트를 위한 모든 가능한 키 패턴
+      const cacheKeys = [
+        ['conversation-messages-v2', variables.conversation_id],
+        ['conversation-messages-v2', variables.conversation_id, user?.id],
+        ['conversation-messages-v2', variables.conversation_id, user?.id, undefined],
+        ['conversation-messages-v2', variables.conversation_id, user?.id, {}]
+      ]
       
       const optimisticMessage: MessageV2 = {
-        id: `temp-${Date.now()}`,
+        id: tempId,
         conversation_id: variables.conversation_id,
         sender_id: user!.id,
         content: variables.content,
@@ -611,46 +611,73 @@ function useSendMessageV2() {
         read_status: { is_read: true, read_at: new Date().toISOString() }
       } as MessageV2
       
-      queryClient.setQueryData(
-        ['conversation-messages-v2', variables.conversation_id, user?.id],
-        (old: MessageV2[] = []) => {
-          // 중복 체크: temp ID가 이미 있으면 교체, 없으면 추가
-          const existingIndex = old.findIndex(msg => msg.id === optimisticMessage.id)
-          if (existingIndex !== -1) {
-            const updated = [...old]
-            updated[existingIndex] = optimisticMessage
-            return updated
+      // 모든 관련 캐시에 optimistic message 추가
+      let previousData: MessageV2[] | undefined
+      
+      for (const key of cacheKeys) {
+        const data = queryClient.getQueryData<MessageV2[]>(key)
+        if (data && !previousData) {
+          previousData = data
+        }
+        
+        queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+          // temp ID 중복 체크 방지
+          if (old.some(msg => msg.id === tempId)) {
+            return old
           }
           return [...old, optimisticMessage]
-        }
-      )
-      
-      return { previousData: previous }
-    },
-    onError: (err, variables, context) => {
-      // Rollback on error
-      if ((context as any)?.previousData) {
-        queryClient.setQueryData(
-          ['conversation-messages-v2', variables.conversation_id, user?.id],
-          (context as any).previousData
-        )
+        })
       }
+      
+      return { previousData, tempId, optimisticMessage }
     },
-    onSettled: (data, error, variables) => {
-      // Invalidate related queries - exact: false로 모든 관련 쿼리 무효화
-      queryClient.invalidateQueries({ 
-        queryKey: ['conversation-messages-v2', variables.conversation_id],
-        exact: false
-      })
+    onSuccess: (data, variables, context) => {
+      // temp 메시지를 실제 서버 응답으로 교체
+      const tempId = (context as any)?.tempId
+      
+      if (tempId && data) {
+        const cacheKeys = [
+          ['conversation-messages-v2', variables.conversation_id],
+          ['conversation-messages-v2', variables.conversation_id, user?.id],
+          ['conversation-messages-v2', variables.conversation_id, user?.id, undefined],
+          ['conversation-messages-v2', variables.conversation_id, user?.id, {}]
+        ]
+        
+        for (const key of cacheKeys) {
+          queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+            return old.map(msg => msg.id === tempId ? data : msg)
+          })
+        }
+      }
+      
+      // 대화 목록만 업데이트 (last message 갱신을 위해)
       queryClient.invalidateQueries({ 
         queryKey: ['conversations-v2', user?.id],
         exact: false
       })
-      queryClient.invalidateQueries({ 
-        queryKey: ['unread-count-v2', user?.id],
-        exact: false
-      })
+    },
+    onError: (err, variables, context) => {
+      // Rollback on error - 모든 캐시에서 temp 메시지 제거
+      const tempId = (context as any)?.tempId
+      
+      if (tempId) {
+        const cacheKeys = [
+          ['conversation-messages-v2', variables.conversation_id],
+          ['conversation-messages-v2', variables.conversation_id, user?.id],
+          ['conversation-messages-v2', variables.conversation_id, user?.id, undefined],
+          ['conversation-messages-v2', variables.conversation_id, user?.id, {}]
+        ]
+        
+        for (const key of cacheKeys) {
+          queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+            return old.filter(msg => msg.id !== tempId)
+          })
+        }
+      }
+      
+      // 에러 토스트는 컴포넌트에서 처리
     }
+    // onSettled 제거 - 불필요한 캐시 무효화 방지
   })
 }
 

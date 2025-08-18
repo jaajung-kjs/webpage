@@ -55,11 +55,18 @@ export class UserMessageSubscriptionManager {
       '*',
       (payload) => {
         const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
+        const senderId = payload.new?.sender_id
         
         // 대화방 ID가 없으면 무시
         if (!conversationId) return
         
-        console.log(`[UserMessageSubscriptionManager] Message event in conversation ${conversationId}`)
+        // 내가 보낸 메시지는 무시 (이미 optimistic update로 처리됨)
+        if (senderId === this.userId) {
+          console.log(`[UserMessageSubscriptionManager] Ignoring own message in conversation ${conversationId}`)
+          return
+        }
+        
+        console.log(`[UserMessageSubscriptionManager] New message from other user in conversation ${conversationId}`)
         
         // 모든 콜백 실행 (전역 콜백 + 대화방별 콜백)
         this.callbacks.forEach((callback) => {
@@ -67,7 +74,7 @@ export class UserMessageSubscriptionManager {
           callback.onMessagesChange?.(payload) // 대화방별 콜백도 실행
         })
 
-        // 캐시 무효화 - useMessagesV2와 일치하는 키 사용
+        // 캐시 무효화 - 상대방 메시지만
         this.queryClient?.invalidateQueries({ 
           queryKey: ['conversations-v2', this.userId],
           exact: false

@@ -555,7 +555,6 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
             {/* 상태 아이콘 (내가 보낸 메시지만) */}
             {isOwn && (
               <div className="flex items-center gap-1 ml-1">
-                {/* V2에서는 optimistic updates 처리가 내장되어 있음 */}
                 <motion.div 
                   className="flex items-center"
                   initial={{ scale: 0.8, opacity: 0.5 }}
@@ -563,8 +562,22 @@ const MessageBubble = memo(function MessageBubble({ message, isOwn, showAvatar, 
                   transition={{ duration: 0.2 }}
                 >
                   {(() => {
-                    // 디버깅 로그 제거 (너무 많이 출력됨)
+                    // temp 메시지인지 확인 (전송 중)
+                    const isSending = message.id.startsWith('temp-')
                     
+                    if (isSending) {
+                      // 전송 중 상태
+                      return (
+                        <motion.div
+                          animate={{ rotate: 360 }}
+                          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                        >
+                          <Loader2 className="h-3 w-3 text-muted-foreground" />
+                        </motion.div>
+                      )
+                    }
+                    
+                    // 읽음 상태 표시
                     return message.read_status?.is_read ? (
                       <motion.div
                         initial={{ scale: 0.8 }}
