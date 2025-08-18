@@ -57,9 +57,10 @@ export class UserMessageSubscriptionManager {
         if (payload.new?.recipient_id === this.userId || 
             payload.new?.sender_id === this.userId) {
           
-          // 콜백 실행
+          // 모든 콜백 실행 (전역 콜백 + 대화방별 콜백)
           this.callbacks.forEach((callback) => {
             callback.onNewMessage?.(payload)
+            callback.onMessagesChange?.(payload) // 대화방별 콜백도 실행
           })
 
           // 캐시 무효화 - useMessagesV2와 일치하는 키 사용
@@ -123,67 +124,27 @@ export class UserMessageSubscriptionManager {
   }
 
   subscribeToConversation(conversationId: string, callback: () => void): () => void {
-    // 대화방별 구독 - 실제로 특정 대화방 메시지 구독
+    // 대화방별 콜백 관리 (실제 구독은 이미 전역에서 하고 있음)
     const key = `conversation-${conversationId}`
     
-    // 이미 구독 중인지 확인
-    if (this.unsubscribers.has(key)) {
-      console.log(`[UserMessageSubscriptionManager] Already subscribed to conversation ${conversationId}`)
-      // 콜백만 추가
-      const existingCallbacks = this.callbacks.get(key) || { onMessagesChange: callback }
-      this.callbacks.set(key, existingCallbacks)
-      return () => {
-        this.callbacks.delete(key)
-      }
-    }
-    
-    // 새로운 구독 생성
-    console.log(`[UserMessageSubscriptionManager] Subscribing to conversation ${conversationId}`)
-    
-    // 비동기로 구독 설정
-    realtimeCore.subscribe(
-      'messages_v2',
-      '*',
-      (payload) => {
-        // 해당 대화방의 메시지만 처리
-        if (payload.new?.conversation_id === conversationId ||
-            payload.old?.conversation_id === conversationId) {
-          console.log(`[UserMessageSubscriptionManager] Message change in conversation ${conversationId}`)
-          
-          // 콜백 실행
-          this.callbacks.forEach((cb, cbKey) => {
-            if (cbKey === key || cbKey.startsWith('conversation-')) {
-              cb.onMessagesChange?.(payload)
-            }
-          })
-          
-          // 캐시 무효화
-          this.queryClient?.invalidateQueries({ 
-            queryKey: ['conversation-messages-v2', conversationId],
-            exact: false
-          })
-          this.queryClient?.invalidateQueries({ 
-            queryKey: ['conversations-v2', this.userId] 
-          })
-        }
-      }
-    ).then(unsub => {
-      this.unsubscribers.set(key, unsub)
-    }).catch(error => {
-      console.error(`[UserMessageSubscriptionManager] Failed to subscribe to conversation ${conversationId}:`, error)
-    })
+    console.log(`[UserMessageSubscriptionManager] Registering callback for conversation ${conversationId}`)
     
     // 콜백 저장
-    const callbacks: MessageCallbacks = { onMessagesChange: callback }
+    const callbacks: MessageCallbacks = { 
+      onMessagesChange: (payload) => {
+        // 해당 대화방의 메시지만 처리
+        if (payload?.new?.conversation_id === conversationId ||
+            payload?.old?.conversation_id === conversationId) {
+          console.log(`[UserMessageSubscriptionManager] Message change in conversation ${conversationId}`)
+          callback()
+        }
+      }
+    }
     this.callbacks.set(key, callbacks)
     
     return () => {
-      // 구독 해제
-      const unsub = this.unsubscribers.get(key)
-      if (unsub) {
-        unsub()
-        this.unsubscribers.delete(key)
-      }
+      // 콜백만 제거 (실제 구독은 유지)
+      console.log(`[UserMessageSubscriptionManager] Unregistering callback for conversation ${conversationId}`)
       this.callbacks.delete(key)
     }
   }
