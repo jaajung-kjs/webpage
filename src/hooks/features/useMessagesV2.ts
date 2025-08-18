@@ -572,7 +572,7 @@ function useSendMessageV2() {
       return {
         ...data,
         sender: (data as any).sender,
-        read_status: { is_read: true, read_at: new Date().toISOString() } // Sender has read by default
+        read_status: { is_read: false, read_at: null } // 방금 보낸 메시지는 상대방이 아직 안 읽음
       }
     },
     onMutate: async (variables) => {
@@ -595,8 +595,8 @@ function useSendMessageV2() {
         message_type: variables.message_type || 'text',
         attachments: variables.attachments as any,
         reply_to_id: variables.reply_to_id || null,
-        is_read: true, // 송신자는 읽은 상태로 시작
-        read_at: new Date().toISOString(),
+        is_read: false, // 기본값은 안읽음 (상대방이 아직 안 읽었을 가능성이 높음)
+        read_at: null,
         is_edited: false,
         edited_at: null,
         created_at: new Date().toISOString(),
@@ -608,7 +608,7 @@ function useSendMessageV2() {
           avatar_url: null,
           role: 'member'
         },
-        read_status: { is_read: true, read_at: new Date().toISOString() }
+        read_status: { is_read: false, read_at: null } // 안읽음이 기본
       } as MessageV2
       
       // 모든 관련 캐시에 optimistic message 추가
