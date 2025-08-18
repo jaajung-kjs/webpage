@@ -60,19 +60,19 @@ export class UserMessageSubscriptionManager {
         // 대화방 ID가 없으면 무시
         if (!conversationId) return
         
-        // 내가 보낸 메시지는 무시 (이미 optimistic update로 처리됨)
-        if (senderId === this.userId) {
-          console.log(`[UserMessageSubscriptionManager] Ignoring own message in conversation ${conversationId}`)
-          return
-        }
-        
-        console.log(`[UserMessageSubscriptionManager] New message from other user in conversation ${conversationId}`)
-        
-        // 모든 콜백 실행 (전역 콜백 + 대화방별 콜백)
+        // 모든 콜백 실행 (알림 등을 위해 내 메시지도 전달)
         this.callbacks.forEach((callback) => {
           callback.onNewMessage?.(payload)
           callback.onMessagesChange?.(payload) // 대화방별 콜백도 실행
         })
+        
+        // 내가 보낸 메시지는 캐시 무효화 하지 않음 (이미 optimistic update로 처리됨)
+        if (senderId === this.userId) {
+          console.log(`[UserMessageSubscriptionManager] Own message in conversation ${conversationId} - skip cache invalidation`)
+          return
+        }
+        
+        console.log(`[UserMessageSubscriptionManager] New message from other user in conversation ${conversationId}`)
 
         // 캐시 무효화 - 상대방 메시지만
         this.queryClient?.invalidateQueries({ 
