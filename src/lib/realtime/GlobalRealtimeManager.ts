@@ -67,8 +67,10 @@ class GlobalRealtimeManager {
       'INSERT',
       (payload) => {
         console.log('[GlobalRealtime] Content inserted:', payload.new)
-        // 콘텐츠 목록 캐시 무효화
-        this.queryClient?.invalidateQueries({ queryKey: ['content'] })
+        // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
+        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+        this.queryClient?.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
       }
     )
 
@@ -78,9 +80,10 @@ class GlobalRealtimeManager {
       'UPDATE',
       (payload) => {
         console.log('[GlobalRealtime] Content updated:', payload.new?.id)
-        // 특정 콘텐츠 및 목록 캐시 무효화
-        this.queryClient?.invalidateQueries({ queryKey: ['content', payload.new?.id] })
-        this.queryClient?.invalidateQueries({ queryKey: ['content'] })
+        // 특정 콘텐츠 및 목록 캐시 무효화 - 올바른 키 사용
+        this.queryClient?.invalidateQueries({ queryKey: ['content-v2', payload.new?.id] })
+        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
       }
     )
 
@@ -90,8 +93,9 @@ class GlobalRealtimeManager {
       'DELETE',
       (payload) => {
         console.log('[GlobalRealtime] Content deleted:', payload.old?.id)
-        // 콘텐츠 목록 캐시 무효화
-        this.queryClient?.invalidateQueries({ queryKey: ['content'] })
+        // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
+        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
       }
     )
 
@@ -130,10 +134,12 @@ class GlobalRealtimeManager {
       '*',
       (payload) => {
         console.log('[GlobalRealtime] Comment changed')
-        // 댓글 관련 캐시 무효화
+        // 댓글 관련 캐시 무효화 - 올바른 키 사용
         const contentId = payload.new?.content_id || payload.old?.content_id
         if (contentId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['comments', contentId] })
+          this.queryClient?.invalidateQueries({ queryKey: ['comments-v2', contentId] })
+          // 콘텐츠의 댓글 수도 업데이트되어야 함
+          this.queryClient?.invalidateQueries({ queryKey: ['content-v2', contentId] })
         }
       }
     )
@@ -171,11 +177,13 @@ class GlobalRealtimeManager {
       '*',
       (payload) => {
         console.log('[GlobalRealtime] Interaction changed')
-        // 상호작용 관련 캐시 무효화
-        const contentId = payload.new?.content_id || payload.old?.content_id
-        if (contentId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['interactions', contentId] })
-          this.queryClient?.invalidateQueries({ queryKey: ['content', contentId] })
+        // 상호작용 관련 캐시 무효화 - 올바른 키 사용
+        const targetId = payload.new?.target_id || payload.old?.target_id
+        if (targetId) {
+          this.queryClient?.invalidateQueries({ queryKey: ['interactions-v2', targetId] })
+          this.queryClient?.invalidateQueries({ queryKey: ['content-v2', targetId] })
+          // 목록에서도 좋아요 수 업데이트 필요
+          this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
         }
       }
     )
