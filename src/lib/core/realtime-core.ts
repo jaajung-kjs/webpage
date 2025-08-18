@@ -22,30 +22,44 @@ export class RealtimeCore {
   private channels: Map<string, RealtimeChannel>
   private subscriptions: Map<string, SubscriptionInfo>
   private isReady: boolean = false
+  private isInitialized: boolean = false
+  private unsubscribeFromConnectionCore: (() => void) | null = null
 
   private constructor() {
     this.client = connectionCore.getClient()
     this.channels = new Map()
     this.subscriptions = new Map()
-    this.initialize()
+    // initialize는 getInstance에서 한 번만 호출됨
   }
 
   static getInstance(): RealtimeCore {
     if (!RealtimeCore.instance) {
       RealtimeCore.instance = new RealtimeCore()
+      RealtimeCore.instance.initialize() // 생성 후 한 번만 초기화
     }
     return RealtimeCore.instance
   }
 
   private initialize(): void {
+    if (this.isInitialized) {
+      console.log('[RealtimeCore] Already initialized, skipping')
+      return
+    }
+
+    // 이전 리스너 정리 (혹시나)
+    if (this.unsubscribeFromConnectionCore) {
+      this.unsubscribeFromConnectionCore()
+    }
+
     // 클라이언트가 재생성되면 자동으로 재구독
-    connectionCore.onClientChange((newClient) => {
+    this.unsubscribeFromConnectionCore = connectionCore.onClientChange((newClient) => {
       console.log('[RealtimeCore] Client changed, resubscribing all...')
       this.handleClientChange(newClient)
     })
 
     // 초기 ready 상태 설정
     this.isReady = true
+    this.isInitialized = true
     console.log('[RealtimeCore] Initialized and ready')
   }
 
@@ -53,20 +67,14 @@ export class RealtimeCore {
     // 기존 채널 완전 정리
     this.cleanupAllChannels()
     
-    // 잠시 대기하여 정리 완료 보장
-    await new Promise(resolve => setTimeout(resolve, 100))
+    // 충분한 대기 시간으로 기존 연결이 완전히 정리되도록 함
+    await new Promise(resolve => setTimeout(resolve, 200))
     
     // 새 클라이언트로 교체
     this.client = newClient
     
     // WebSocket 연결 대기
     await this.waitForConnection()
-    
-    // React Query 캐시 정리 (선택적)
-    // 너무 자주 발생하면 사용자 경험이 나빠질 수 있으므로 제한적으로 사용
-    if (this.subscriptions.size > 0) {
-      console.log('[RealtimeCore] Keeping cache, will refresh on resubscribe')
-    }
     
     // 모든 구독 재생성
     await this.resubscribeAll()
@@ -120,26 +128,37 @@ export class RealtimeCore {
     console.log(`[RealtimeCore] Resubscribing ${this.subscriptions.size} subscriptions`)
     
     const subscriptions = Array.from(this.subscriptions.entries())
+    let successCount = 0
+    let failedCount = 0
     
     // 병렬로 모든 구독 시도
     const promises = subscriptions.map(async ([key, info]) => {
-      try {
-        await this.createSubscription(key, info)
-      } catch (error) {
-        console.warn(`[RealtimeCore] Failed to resubscribe ${key}, will retry later:`, error)
+      const success = await this.createSubscription(key, info)
+      if (success) {
+        successCount++
+      } else {
+        failedCount++
+        console.warn(`[RealtimeCore] Failed to subscribe: ${key}`)
       }
+      return success
     })
     
     // 모든 구독 시도 완료 대기
     await Promise.allSettled(promises)
     
     // 구독 상태 확인
-    const successCount = Array.from(this.channels.keys()).length
-    console.log(`[RealtimeCore] Resubscription complete: ${successCount}/${this.subscriptions.size} channels active`)
+    console.log(`[RealtimeCore] Resubscription complete: ${successCount} succeeded, ${failedCount} failed out of ${this.subscriptions.size} total`)
+    
+    // 모든 구독이 실패한 경우 경고
+    if (successCount === 0 && this.subscriptions.size > 0) {
+      console.error('[RealtimeCore] All subscriptions failed - WebSocket connection may be broken')
+    }
   }
 
-  private async createSubscription(key: string, info: SubscriptionInfo): Promise<void> {
+  private async createSubscription(key: string, info: SubscriptionInfo): Promise<boolean> {
     return new Promise((resolve) => {
+      let subscribed = false
+      
       const channel = this.client
         .channel(key)
         .on(
@@ -153,34 +172,31 @@ export class RealtimeCore {
           info.handler
         )
         .subscribe((status) => {
+          if (subscribed) return // 이미 처리됨
+          
           console.log(`[RealtimeCore] Channel ${key} status: ${status}`)
           
           if (status === 'SUBSCRIBED') {
             console.log(`[RealtimeCore] Successfully subscribed to ${key}`)
             this.channels.set(key, channel)
-            resolve()
-          } else if (status === 'CHANNEL_ERROR') {
-            console.error(`[RealtimeCore] Failed to subscribe to ${key}`)
-            // 실패해도 채널은 저장 (나중에 재시도 가능)
-            this.channels.set(key, channel)
-            resolve() // 다른 구독 진행을 위해 resolve
-          } else if (status === 'TIMED_OUT') {
-            console.warn(`[RealtimeCore] Subscription timeout for ${key}`)
-            this.channels.set(key, channel)
-            resolve()
-          } else if (status === 'CLOSED') {
-            console.warn(`[RealtimeCore] Channel ${key} closed`)
-            // 채널이 닫혔으면 재구독 필요
-            resolve()
+            subscribed = true
+            resolve(true)
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            console.warn(`[RealtimeCore] Failed to subscribe to ${key}: ${status}`)
+            // 실패한 채널은 저장하지 않음
+            channel.unsubscribe()
+            subscribed = true
+            resolve(false)
           }
         })
       
       // 5초 타임아웃
       setTimeout(() => {
-        if (!this.channels.has(key)) {
-          console.warn(`[RealtimeCore] Subscription timeout for ${key}, saving channel anyway`)
-          this.channels.set(key, channel)
-          resolve()
+        if (!subscribed) {
+          console.warn(`[RealtimeCore] Subscription timeout for ${key}`)
+          channel.unsubscribe()
+          subscribed = true
+          resolve(false)
         }
       }, 5000)
     })
@@ -193,22 +209,21 @@ export class RealtimeCore {
   async checkAndResubscribe(): Promise<void> {
     console.log('[RealtimeCore] Checking channel health...')
     
-    // 활성 채널 수와 구독 수 비교
-    const activeChannels = Array.from(this.channels.entries()).filter(([key, channel]) => {
-      const state = (channel as any).state
-      return state === 'joined' || state === 'joining'
-    }).length
-    
+    // 실제로 활성화된 채널만 카운트 (channels Map 크기)
+    const activeChannels = this.channels.size
     const totalSubscriptions = this.subscriptions.size
     
     console.log(`[RealtimeCore] Active channels: ${activeChannels}/${totalSubscriptions}`)
     
-    // 채널이 손상되었거나 누락된 경우 재구독
+    // 채널이 누락된 경우 재구독
     if (activeChannels < totalSubscriptions) {
-      console.log('[RealtimeCore] Some channels are broken, resubscribing all...')
+      console.log(`[RealtimeCore] ${totalSubscriptions - activeChannels} channels missing, resubscribing all...`)
       
       // 기존 채널 정리
       this.cleanupAllChannels()
+      
+      // 잠시 대기
+      await new Promise(resolve => setTimeout(resolve, 200))
       
       // 모든 구독 재생성
       await this.resubscribeAll()
@@ -237,12 +252,11 @@ export class RealtimeCore {
     const info: SubscriptionInfo = { table, event, filter, handler }
     this.subscriptions.set(key, info)
 
-    // 즉시 구독 생성 (에러는 무시)
+    // 즉시 구독 생성
     if (this.isReady) {
-      try {
-        await this.createSubscription(key, info)
-      } catch (error) {
-        console.warn(`[RealtimeCore] Initial subscription failed for ${key}, will retry on reconnect:`, error)
+      const success = await this.createSubscription(key, info)
+      if (!success) {
+        console.warn(`[RealtimeCore] Initial subscription failed for ${key}`)
       }
     }
 
@@ -269,7 +283,16 @@ export class RealtimeCore {
   cleanup(): void {
     this.cleanupAllChannels()
     this.subscriptions.clear()
-    console.log('[RealtimeCore] All subscriptions cleaned up')
+    
+    // ConnectionCore 리스너 정리
+    if (this.unsubscribeFromConnectionCore) {
+      this.unsubscribeFromConnectionCore()
+      this.unsubscribeFromConnectionCore = null
+    }
+    
+    this.isInitialized = false
+    this.isReady = false
+    console.log('[RealtimeCore] All subscriptions and listeners cleaned up')
   }
 
   getStatus(): { isReady: boolean; subscriptionCount: number } {
