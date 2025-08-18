@@ -9,7 +9,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { supabaseClient } from '@/lib/core/connection-core'
+import { supabaseClient, connectionCore } from '@/lib/core/connection-core'
 import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Tables } from '@/lib/database.types'
@@ -136,6 +136,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialSession()
 
+    // ConnectionCore 클라이언트 변경 감지 (재연결 시)
+    const unsubscribeConnectionChange = connectionCore.onClientChange(async (newClient) => {
+      console.log('[AuthProvider] ConnectionCore client changed, updating UserMessageSubscriptionManager')
+      
+      // UserMessageSubscriptionManager의 QueryClient 참조 업데이트
+      if (user?.id) {
+        await userMessageSubscriptionManager.initialize(user.id, queryClient)
+        console.log('[AuthProvider] UserMessageSubscriptionManager updated with new QueryClient')
+      }
+    })
+
     // 인증 상태 변화 감지
     const { data: { subscription } } = supabaseClient().auth.onAuthStateChange(
       async (event, session) => {
@@ -170,8 +181,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     )
 
-    return () => subscription.unsubscribe()
-  }, [queryClient])
+    return () => {
+      subscription.unsubscribe()
+      unsubscribeConnectionChange()
+    }
+  }, [queryClient, user?.id])
 
   // 권한 체크 계산
   const isAuthenticated = !!(session && user && profile)

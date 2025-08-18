@@ -62,12 +62,23 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
         
         // 클라이언트 변경 감지 (재연결 시)
         connectionCore.onClientChange(async (newClient) => {
-          console.log('[CoreProvider] Client recreated, refreshing data...')
+          console.log('[CoreProvider] Client recreated, updating all managers...')
           setIsReconnecting(true)
           
-          // 캐시 클리어 및 재조회
-          queryClient.clear()
-          await queryClient.refetchQueries()
+          // GlobalRealtimeManager QueryClient 참조 업데이트
+          globalRealtimeManager.setQueryClient(queryClient)
+          console.log('[CoreProvider] Updated GlobalRealtimeManager QueryClient reference')
+          
+          // UserMessageSubscriptionManager도 업데이트 필요
+          // 이는 AuthProvider에서 관리하지만, 재연결 시 참조가 유효한지 확인
+          const { userMessageSubscriptionManager } = await import('@/lib/realtime/UserMessageSubscriptionManager')
+          if (userMessageSubscriptionManager.isActive()) {
+            console.log('[CoreProvider] UserMessageSubscriptionManager is active, will be updated by AuthProvider')
+          }
+          
+          // 캐시 무효화 (clear 대신 invalidate 사용 - 데이터는 유지하되 재조회 트리거)
+          await queryClient.invalidateQueries()
+          console.log('[CoreProvider] Invalidated all queries for refresh')
           
           setIsReconnecting(false)
         })

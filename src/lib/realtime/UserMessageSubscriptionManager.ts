@@ -26,6 +26,19 @@ export class UserMessageSubscriptionManager {
 
   async initialize(userId: string, queryClient: QueryClient): Promise<void> {
     if (this.isInitialized && this.userId === userId) {
+      // 같은 사용자라도 QueryClient 참조가 변경되었을 수 있으므로 업데이트
+      if (this.queryClient !== queryClient) {
+        console.log('[UserMessageSubscriptionManager] Updating QueryClient reference for existing user')
+        this.queryClient = queryClient
+        
+        // 재연결 후 캐시 무효화
+        if (userId) {
+          console.log('[UserMessageSubscriptionManager] Invalidating message queries after reconnection')
+          queryClient.invalidateQueries({ queryKey: ['conversations-v2', userId] })
+          queryClient.invalidateQueries({ queryKey: ['unread-count-v2', userId] })
+          queryClient.invalidateQueries({ queryKey: ['conversation-messages-v2'] })
+        }
+      }
       return // 이미 같은 사용자로 초기화됨
     }
 
@@ -41,6 +54,7 @@ export class UserMessageSubscriptionManager {
       // 사용자별 메시지 구독 설정
       await this.setupMessageSubscriptions()
       this.isInitialized = true
+      console.log('[UserMessageSubscriptionManager] Initialized for user:', userId)
     } catch (error) {
       console.error('[UserMessageSubscriptionManager] Initialization failed:', error)
     }
