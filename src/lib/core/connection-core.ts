@@ -112,6 +112,11 @@ export class ConnectionCore {
           // WebSocket은 살아있으니 채널만 체크하고 필요시 재구독
           const { realtimeCore } = await import('./realtime-core')
           await realtimeCore.checkAndResubscribe()
+          
+          // UserMessageSubscriptionManager의 QueryClient 참조도 업데이트 필요
+          // (백그라운드에서 오래 있으면 QueryClient 참조가 stale해질 수 있음)
+          console.log('[ConnectionCore] Notifying listeners for QueryClient refresh...')
+          this.listeners.forEach(listener => listener(this.client))
         }
       } else {
         console.log('[ConnectionCore] Still offline, waiting for connection...')
