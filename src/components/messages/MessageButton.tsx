@@ -11,7 +11,7 @@ import { useState } from 'react'
 import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -121,6 +121,9 @@ export function MessageButton({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>메시지 보내기</DialogTitle>
+          <DialogDescription>
+            {recipientName}님에게 메시지를 보냅니다
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

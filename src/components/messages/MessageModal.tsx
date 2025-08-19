@@ -12,7 +12,7 @@ import { useAuth } from '@/providers'
 import { MessageInbox } from './MessageInbox'
 import { ConversationThread } from './ConversationThread'
 import { NewMessageDialog } from './NewMessageDialog'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { MessageCircle, Plus } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -123,6 +123,9 @@ export function MessageModal({
               <MessageCircle className="h-5 w-5" />
               메시지
             </DialogTitle>
+            <DialogDescription>
+              메시지 기능 이용 권한 안내
+            </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <MessageCircle className="h-16 w-16 text-muted-foreground mb-4" />
@@ -146,6 +149,9 @@ export function MessageModal({
                 <MessageCircle className="h-4 w-4 sm:h-5 sm:w-5" />
                 {viewState.type === 'inbox' ? '메시지함' : '대화'}
               </DialogTitle>
+              <DialogDescription className="sr-only">
+                {viewState.type === 'inbox' ? '메시지 목록을 확인하고 대화를 선택하세요' : '대화 내용을 확인하고 메시지를 보내세요'}
+              </DialogDescription>
               
               {viewState.type === 'inbox' && (
                 <Button

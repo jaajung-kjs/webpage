@@ -11,7 +11,7 @@ import { useState, useEffect } from 'react'
 import { useAuthV2 } from '@/hooks/features/useAuthV2'
 import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
 import { useProfileList } from '@/hooks/features/useProfileV2'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -134,6 +134,9 @@ export function NewMessageDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>새 메시지</DialogTitle>
+          <DialogDescription>
+            받는 사람을 선택하고 메시지를 작성하세요
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
