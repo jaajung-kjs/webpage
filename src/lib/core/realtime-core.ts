@@ -64,6 +64,14 @@ export class RealtimeCore {
   }
 
   private async handleClientChange(newClient: SupabaseClient<Database>): Promise<void> {
+    // 클라이언트가 실제로 변경되었는지 확인 (같은 인스턴스면 재구독 안함)
+    if (this.client === newClient) {
+      console.log('[RealtimeCore] Same client instance, skipping resubscription')
+      return
+    }
+    
+    console.log('[RealtimeCore] New client instance detected, resubscribing all...')
+    
     // 기존 채널 완전 정리
     this.cleanupAllChannels()
     

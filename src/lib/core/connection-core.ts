@@ -110,10 +110,8 @@ export class ConnectionCore {
         } else {
           console.log('[ConnectionCore] WebSocket still alive, refreshing QueryClient references only...')
           
-          // WebSocket은 살아있으니 QueryClient 참조만 갱신
-          // 채널 재구독은 하지 않음 (이미 살아있으므로)
-          // UserMessageSubscriptionManager의 QueryClient 참조 업데이트
-          console.log('[ConnectionCore] Notifying listeners for QueryClient refresh...')
+          // WebSocket과 채널은 살아있지만 QueryClient 참조가 stale해질 수 있음
+          // listeners에게 알리되, 같은 클라이언트를 전달 (재구독 방지)
           this.listeners.forEach(listener => listener(this.client))
         }
       } else {
