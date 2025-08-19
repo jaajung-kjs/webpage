@@ -282,7 +282,8 @@ export class RealtimeCore {
     this.channels.forEach((channel, key) => {
       // CLOSED, CHANNEL_ERROR, TIMED_OUT만 죽은 것으로 처리
       // joined, SUBSCRIBED는 살아있는 것으로 간주
-      if (channel.state === 'CLOSED' || channel.state === 'CHANNEL_ERROR' || channel.state === 'TIMED_OUT') {
+      const state = channel.state as string
+      if (state === 'CLOSED' || state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
         deadKeys.push(key)
       }
     })
