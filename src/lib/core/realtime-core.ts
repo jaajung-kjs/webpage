@@ -270,44 +270,6 @@ export class RealtimeCore {
     console.log('[RealtimeCore] All subscriptions and listeners cleaned up')
   }
 
-  /**
-   * 죽은 채널만 재구독 (WebSocket은 살아있을 때)
-   */
-  async checkAndResubscribe(): Promise<void> {
-    if (!this.isReady || this.subscriptions.size === 0) return
-    
-    // 죽은 채널 찾기
-    const deadKeys: string[] = []
-    
-    this.channels.forEach((channel, key) => {
-      // CLOSED, CHANNEL_ERROR, TIMED_OUT만 죽은 것으로 처리
-      // joined, SUBSCRIBED는 살아있는 것으로 간주
-      const state = channel.state as string
-      if (state === 'CLOSED' || state === 'CHANNEL_ERROR' || state === 'TIMED_OUT') {
-        deadKeys.push(key)
-      }
-    })
-    
-    if (deadKeys.length > 0) {
-      console.log(`[RealtimeCore] Found ${deadKeys.length} dead channels, resubscribing...`)
-      
-      // 죽은 채널만 재구독
-      for (const key of deadKeys) {
-        const info = this.subscriptions.get(key)
-        if (info) {
-          // 기존 채널 정리
-          const oldChannel = this.channels.get(key)
-          if (oldChannel) {
-            oldChannel.unsubscribe()
-            this.channels.delete(key)
-          }
-          
-          // 재구독
-          await this.createSubscription(key, info)
-        }
-      }
-    }
-  }
 
   getStatus(): { isReady: boolean; subscriptionCount: number } {
     return {

@@ -108,13 +108,11 @@ export class ConnectionCore {
           console.log('[ConnectionCore] WebSocket dead after background, recreating...')
           await this.recreateClient()
         } else {
-          console.log('[ConnectionCore] WebSocket still alive, checking channel subscriptions...')
-          // WebSocket은 살아있으니 채널만 체크하고 필요시 재구독
-          const { realtimeCore } = await import('./realtime-core')
-          await realtimeCore.checkAndResubscribe()
+          console.log('[ConnectionCore] WebSocket still alive, refreshing QueryClient references only...')
           
-          // UserMessageSubscriptionManager의 QueryClient 참조도 업데이트 필요
-          // (백그라운드에서 오래 있으면 QueryClient 참조가 stale해질 수 있음)
+          // WebSocket은 살아있으니 QueryClient 참조만 갱신
+          // 채널 재구독은 하지 않음 (이미 살아있으므로)
+          // UserMessageSubscriptionManager의 QueryClient 참조 업데이트
           console.log('[ConnectionCore] Notifying listeners for QueryClient refresh...')
           this.listeners.forEach(listener => listener(this.client))
         }
