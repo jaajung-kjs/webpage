@@ -139,7 +139,8 @@ function useConversationsV2() {
   useEffect(() => {
     if (!user) return
 
-    const componentId = `conversations-${Date.now()}`
+    // 안정적인 컴포넌트 ID 사용 (사용자 ID 기반)
+    const componentId = `conversations-hook-${user.id}`
     
     // Manager에 콜백 등록 (이미 구독은 되어 있음)
     userMessageSubscriptionManager.registerCallbacks(componentId, {
@@ -453,7 +454,8 @@ function useUnreadCountV2() {
   useEffect(() => {
     if (!user) return
 
-    const componentId = `unread-count-${Date.now()}`
+    // 안정적인 컴포넌트 ID 사용 (사용자 ID 기반)
+    const componentId = `unread-count-hook-${user.id}`
     
     // Manager에 콜백 등록 (이미 구독은 되어 있음)
     userMessageSubscriptionManager.registerCallbacks(componentId, {
