@@ -51,8 +51,8 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
       try {
         console.log('[CoreProvider] Initializing...')
         
-        // GlobalRealtimeManager 초기화
-        globalRealtimeManager.setQueryClient(queryClient)
+        // GlobalRealtimeManager 초기화 - getter 방식으로 변경
+        globalRealtimeManager.setQueryClientGetter(() => queryClient)
         
         try {
           await globalRealtimeManager.initialize()
@@ -61,13 +61,12 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
         }
         
         // 클라이언트 변경 감지 (재연결 시)
-        connectionCore.onClientChange(async (newClient) => {
-          console.log('[CoreProvider] Client recreated, updating all managers...')
+        connectionCore.onClientChange(async () => {
+          console.log('[CoreProvider] Client recreated')
           setIsReconnecting(true)
           
-          // GlobalRealtimeManager QueryClient 참조 업데이트
-          globalRealtimeManager.setQueryClient(queryClient)
-          console.log('[CoreProvider] Updated GlobalRealtimeManager QueryClient reference')
+          // QueryClient getter는 이미 설정되어 있으므로 업데이트 불필요
+          console.log('[CoreProvider] Realtime will use existing QueryClient')
           
           // UserMessageSubscriptionManager도 업데이트 필요
           // 이는 AuthProvider에서 관리하지만, 재연결 시 참조가 유효한지 확인

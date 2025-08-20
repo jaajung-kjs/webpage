@@ -64,53 +64,18 @@ export class RealtimeCore {
   }
 
   private async handleClientChange(newClient: SupabaseClient<Database>): Promise<void> {
-    // 클라이언트가 실제로 변경되었는지 확인 (같은 인스턴스면 재구독 안함)
+    // 클라이언트가 실제로 변경되었는지 확인
     if (this.client === newClient) {
-      console.log('[RealtimeCore] Same client instance, skipping resubscription')
+      console.log('[RealtimeCore] Same client instance, skipping')
       return
     }
     
-    console.log('[RealtimeCore] New client instance detected, resubscribing all...')
+    console.log('[RealtimeCore] Client changed, updating reference')
     
-    // 기존 채널 완전 정리
-    this.cleanupAllChannels()
-    
-    // 충분한 대기 시간으로 기존 연결이 완전히 정리되도록 함
-    await new Promise(resolve => setTimeout(resolve, 200))
-    
-    // 새 클라이언트로 교체
+    // 새 클라이언트로 교체만 하고 Supabase가 자동으로 재연결 처리
     this.client = newClient
     
-    // WebSocket 연결 대기
-    await this.waitForConnection()
-    
-    // 모든 구독 재생성
-    await this.resubscribeAll()
-  }
-  
-  private async waitForConnection(): Promise<void> {
-    console.log('[RealtimeCore] Waiting for WebSocket connection...')
-    
-    // Realtime 인스턴스가 준비될 때까지 대기
-    let attempts = 0
-    const maxAttempts = 30 // 최대 15초 대기 (500ms * 30)
-    
-    while (attempts < maxAttempts) {
-      if (this.client.realtime) {
-        // WebSocket 상태 확인
-        const state = this.client.realtime.isConnected()
-        
-        if (state) {
-          console.log('[RealtimeCore] WebSocket connected')
-          return
-        }
-      }
-      
-      await new Promise(resolve => setTimeout(resolve, 500))
-      attempts++
-    }
-    
-    console.warn('[RealtimeCore] WebSocket connection timeout, proceeding anyway')
+    // Supabase Realtime이 자동으로 채널을 복구하므로 수동 재구독 불필요
   }
 
   private cleanupAllChannels(): void {
@@ -118,9 +83,7 @@ export class RealtimeCore {
     
     this.channels.forEach((channel, key) => {
       try {
-        // 명시적으로 구독 해제 및 채널 제거
         channel.unsubscribe()
-        // Supabase 클라이언트에서도 채널 제거 (메모리 누수 방지)
         if (this.client && this.client.removeChannel) {
           this.client.removeChannel(channel)
         }
@@ -132,47 +95,15 @@ export class RealtimeCore {
     this.channels.clear()
   }
 
-  private async resubscribeAll(): Promise<void> {
-    console.log(`[RealtimeCore] Resubscribing ${this.subscriptions.size} subscriptions`)
-    
-    const subscriptions = Array.from(this.subscriptions.entries())
-    let successCount = 0
-    let failedCount = 0
-    
-    // 병렬로 모든 구독 시도
-    const promises = subscriptions.map(async ([key, info]) => {
-      const success = await this.createSubscription(key, info)
-      if (success) {
-        successCount++
-      } else {
-        failedCount++
-        console.warn(`[RealtimeCore] Failed to subscribe: ${key}`)
-      }
-      return success
-    })
-    
-    // 모든 구독 시도 완료 대기
-    await Promise.allSettled(promises)
-    
-    // 구독 상태 확인
-    console.log(`[RealtimeCore] Resubscription complete: ${successCount} succeeded, ${failedCount} failed out of ${this.subscriptions.size} total`)
-    
-    // 모든 구독이 실패한 경우 경고
-    if (successCount === 0 && this.subscriptions.size > 0) {
-      console.error('[RealtimeCore] All subscriptions failed - WebSocket connection may be broken')
-    }
-  }
-
   private async createSubscription(key: string, info: SubscriptionInfo): Promise<boolean> {
     return new Promise((resolve) => {
       let subscribed = false
       
-      // 타임스탬프를 추가하여 채널명을 유니크하게 만듦
-      // 이렇게 하면 서버에 남아있는 이전 채널과 충돌하지 않음
-      const uniqueChannelName = `${key}-${Date.now()}`
+      // 고정 채널명 사용 - Supabase가 자동으로 재사용/관리
+      const channelName = key
       
       const channel = this.client
-        .channel(uniqueChannelName)
+        .channel(channelName)
         .on(
           'postgres_changes' as any,
           {

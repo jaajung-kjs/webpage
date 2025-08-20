@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (session?.user && !userMessageSubscriptionManager.isActive()) {
           try {
             console.log('[AuthProvider] Initial session found, initializing message subscriptions')
-            await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+            await userMessageSubscriptionManager.initialize(session.user.id, () => queryClient)
           } catch (error) {
             console.error('[AuthProvider] Initial message subscription initialization failed:', error)
             // 실패해도 앱은 계속 실행
@@ -171,7 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // UserMessageSubscriptionManager의 QueryClient 참조 업데이트 (재연결만 처리)
       if (user?.id && userMessageSubscriptionManager.isActive()) {
         console.log('[AuthProvider] Updating QueryClient reference for reconnection')
-        await userMessageSubscriptionManager.initialize(user.id, queryClient)
+        await userMessageSubscriptionManager.initialize(user.id, () => queryClient)
         console.log('[AuthProvider] UserMessageSubscriptionManager QueryClient updated')
       }
     })
@@ -195,7 +195,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           if (!userMessageSubscriptionManager.isActive()) {
             try {
               console.log('[AuthProvider] SIGNED_IN: User not subscribed, initializing message subscriptions')
-              await userMessageSubscriptionManager.initialize(session.user.id, queryClient)
+              await userMessageSubscriptionManager.initialize(session.user.id, () => queryClient)
             } catch (error) {
               console.error('[AuthProvider] SIGNED_IN: Message subscription initialization failed:', error)
             }

@@ -19,33 +19,17 @@ interface MessageCallbacks {
 
 export class UserMessageSubscriptionManager {
   private userId: string | null = null
-  private queryClient: QueryClient | null = null
+  private getQueryClient: (() => QueryClient | null) | null = null
   private isInitialized = false
   private unsubscribers: Map<string, () => void> = new Map()
   private callbacks: Map<string, MessageCallbacks> = new Map()
   private userConversations: Set<string> = new Set() // 사용자가 속한 대화방 ID들
 
-  async initialize(userId: string, queryClient: QueryClient): Promise<void> {
-    // 정확히 같은 사용자 ID와 QueryClient로 이미 초기화된 경우 스킵
-    if (this.isInitialized && 
-        this.userId === userId && 
-        this.queryClient === queryClient) {
-      console.log('[UserMessageSubscriptionManager] Already initialized for same user and QueryClient, skipping')
+  async initialize(userId: string, queryClientGetter: () => QueryClient | null): Promise<void> {
+    // 같은 사용자로 이미 초기화된 경우 스킵
+    if (this.isInitialized && this.userId === userId) {
+      console.log('[UserMessageSubscriptionManager] Already initialized for same user, skipping')
       return
-    }
-
-    // 같은 사용자지만 QueryClient가 다른 경우 (재연결 시)
-    if (this.isInitialized && this.userId === userId && this.queryClient !== queryClient) {
-      console.log('[UserMessageSubscriptionManager] Updating QueryClient reference for existing user')
-      this.queryClient = queryClient
-      
-      // 재연결 후 캐시 무효화
-      console.log('[UserMessageSubscriptionManager] Invalidating message queries after reconnection')
-      queryClient.invalidateQueries({ queryKey: ['conversations-v2', userId] })
-      queryClient.invalidateQueries({ queryKey: ['unread-count-v2', userId] })
-      queryClient.invalidateQueries({ queryKey: ['conversation-messages-v2'] })
-      
-      return // QueryClient만 업데이트하고 구독은 유지
     }
 
     // 기존 구독 정리 (다른 사용자로 초기화되거나 처음 초기화하는 경우)
@@ -55,7 +39,7 @@ export class UserMessageSubscriptionManager {
     }
 
     this.userId = userId
-    this.queryClient = queryClient
+    this.getQueryClient = queryClientGetter
     
     try {
       // 사용자별 메시지 구독 설정
@@ -96,17 +80,17 @@ export class UserMessageSubscriptionManager {
         toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
 
         // 캐시 무효화 - 상대방 메시지만
-        this.queryClient?.invalidateQueries({ 
+        this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['conversations-v2', this.userId],
           exact: false
         })
-        this.queryClient?.invalidateQueries({ 
+        this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['unread-count-v2', this.userId],
           exact: false
         })
         
         // 특정 대화방의 메시지도 무효화 - exact: false로 모든 관련 쿼리 무효화
-        this.queryClient?.invalidateQueries({ 
+        this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId],
           exact: false
         })
@@ -128,7 +112,7 @@ export class UserMessageSubscriptionManager {
 
         // 캐시 무효화 - 나의 읽지 않은 메시지 수
         if (payload.new?.user_id === this.userId) {
-          this.queryClient?.invalidateQueries({ 
+          this.getQueryClient?.()?.invalidateQueries({ 
             queryKey: ['unread-count-v2', this.userId],
             exact: false
           })
@@ -137,13 +121,13 @@ export class UserMessageSubscriptionManager {
         // 메시지가 속한 대화방의 메시지 목록 갱신 (읽음 표시 업데이트)
         // 여기서는 conversation_id를 알 수 없으므로 모든 대화방 메시지를 갱신
         // 비효율적이지만 읽음 표시를 위해 필요
-        this.queryClient?.invalidateQueries({ 
+        this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['conversation-messages-v2'],
           exact: false
         })
         
         // 대화 목록도 갱신
-        this.queryClient?.invalidateQueries({ 
+        this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['conversations-v2'],
           exact: false
         })
@@ -162,7 +146,7 @@ export class UserMessageSubscriptionManager {
             payload.old?.user2_id === this.userId) {
           
           // 대화 목록 캐시 무효화
-          this.queryClient?.invalidateQueries({ 
+          this.getQueryClient?.()?.invalidateQueries({ 
             queryKey: ['conversations-v2', this.userId] 
           })
         }
@@ -220,7 +204,7 @@ export class UserMessageSubscriptionManager {
     this.callbacks.clear()
     
     this.userId = null
-    this.queryClient = null
+    this.getQueryClient = null
     this.isInitialized = false
   }
 

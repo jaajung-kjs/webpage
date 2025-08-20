@@ -10,7 +10,7 @@ import { realtimeCore } from '@/lib/core/realtime-core'
 
 class GlobalRealtimeManager {
   private static instance: GlobalRealtimeManager
-  private queryClient: QueryClient | null = null
+  private getQueryClient: (() => QueryClient | null) | null = null
   private isInitialized = false
   private unsubscribers: Map<string, () => void> = new Map()
 
@@ -23,19 +23,10 @@ class GlobalRealtimeManager {
     return GlobalRealtimeManager.instance
   }
 
-  setQueryClient(queryClient: QueryClient): void {
-    if (this.queryClient !== queryClient) {
-      console.log('[GlobalRealtime] Updating QueryClient reference')
-      this.queryClient = queryClient
-      
-      // 재연결 후 QueryClient가 업데이트되면 캐시를 한 번 무효화
-      if (this.isInitialized) {
-        console.log('[GlobalRealtime] Triggering cache refresh after QueryClient update')
-        // 글로벌 쿼리들만 무효화 (메시지 관련 쿼리는 UserMessageSubscriptionManager에서 처리)
-        queryClient.invalidateQueries({ queryKey: ['contents-v2'] })
-        queryClient.invalidateQueries({ queryKey: ['users_v2'] })
-      }
-    }
+  // QueryClient를 저장하지 않고 getter 함수만 저장
+  setQueryClientGetter(getter: () => QueryClient | null): void {
+    console.log('[GlobalRealtime] Setting QueryClient getter')
+    this.getQueryClient = getter
   }
 
   async initialize(): Promise<void> {
@@ -44,8 +35,8 @@ class GlobalRealtimeManager {
       return
     }
 
-    if (!this.queryClient) {
-      throw new Error('[GlobalRealtime] QueryClient not set')
+    if (!this.getQueryClient) {
+      throw new Error('[GlobalRealtime] QueryClient getter not set')
     }
 
     console.log('[GlobalRealtime] Initializing global subscriptions...')
@@ -79,9 +70,10 @@ class GlobalRealtimeManager {
       (payload) => {
         console.log('[GlobalRealtime] Content inserted:', payload.new)
         // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
-        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
-        this.queryClient?.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
+        const queryClient = this.getQueryClient?.()
+        queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+        queryClient?.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
       }
     )
 
@@ -92,9 +84,9 @@ class GlobalRealtimeManager {
       (payload) => {
         console.log('[GlobalRealtime] Content updated:', payload.new?.id)
         // 특정 콘텐츠 및 목록 캐시 무효화 - 올바른 키 사용
-        this.queryClient?.invalidateQueries({ queryKey: ['content-v2', payload.new?.id] })
-        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', payload.new?.id] })
+        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
       }
     )
 
@@ -105,8 +97,8 @@ class GlobalRealtimeManager {
       (payload) => {
         console.log('[GlobalRealtime] Content deleted:', payload.old?.id)
         // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
-        this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        this.queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
+        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
       }
     )
 
@@ -127,8 +119,8 @@ class GlobalRealtimeManager {
         // 사용자 관련 캐시 무효화
         const userId = payload.new?.id || payload.old?.id
         if (userId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['user', userId] })
-          this.queryClient?.invalidateQueries({ queryKey: ['profile', userId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['user', userId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['profile', userId] })
         }
       }
     )
@@ -148,9 +140,9 @@ class GlobalRealtimeManager {
         // 댓글 관련 캐시 무효화 - 올바른 키 사용
         const contentId = payload.new?.content_id || payload.old?.content_id
         if (contentId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['comments-v2', contentId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['comments-v2', contentId] })
           // 콘텐츠의 댓글 수도 업데이트되어야 함
-          this.queryClient?.invalidateQueries({ queryKey: ['content-v2', contentId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', contentId] })
         }
       }
     )
@@ -170,8 +162,8 @@ class GlobalRealtimeManager {
         // 활동 참여 관련 캐시 무효화
         const activityId = payload.new?.activity_id || payload.old?.activity_id
         if (activityId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['participants', activityId] })
-          this.queryClient?.invalidateQueries({ queryKey: ['activity', activityId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['participants', activityId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['activity', activityId] })
         }
       }
     )
@@ -191,10 +183,10 @@ class GlobalRealtimeManager {
         // 상호작용 관련 캐시 무효화 - 올바른 키 사용
         const targetId = payload.new?.target_id || payload.old?.target_id
         if (targetId) {
-          this.queryClient?.invalidateQueries({ queryKey: ['interactions-v2', targetId] })
-          this.queryClient?.invalidateQueries({ queryKey: ['content-v2', targetId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['interactions-v2', targetId] })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', targetId] })
           // 목록에서도 좋아요 수 업데이트 필요
-          this.queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
+          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
         }
       }
     )
