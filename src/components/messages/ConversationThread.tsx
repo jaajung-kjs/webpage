@@ -10,7 +10,7 @@
 
 import { useState, useRef, useEffect, memo } from 'react'
 import { useAuth } from '@/providers'
-import { useConversationMessagesV2, useSendMessageV2, useMarkAsReadV2, type MessageV2 } from '@/hooks/features/useMessagesV2'
+import { useConversationMessagesPaginated, useSendMessageV2, useMarkAsReadV2, type MessageV2 } from '@/hooks/features/useMessagesV2'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -54,7 +54,15 @@ export function ConversationThread({
   className
 }: ConversationThreadProps) {
   const { user } = useAuth()
-  const { data: messages, isLoading: loading, error, refetch } = useConversationMessagesV2(conversationId)
+  const { 
+    messages, 
+    isLoading: loading, 
+    error, 
+    hasMore, 
+    isLoadingMore, 
+    loadMore, 
+    refetch 
+  } = useConversationMessagesPaginated(conversationId)
   const sendMessageMutation = useSendMessageV2()
   const { mutate: markAsRead } = useMarkAsReadV2()
   const [newMessage, setNewMessage] = useState('')
@@ -352,17 +360,17 @@ export function ConversationThread({
             <EmptyConversation recipientName={recipientName} />
           ) : (
             <div className="space-y-4">
-              {/* 이전 대화 보기 버튼 - TODO: Implement pagination
+              {/* 이전 대화 보기 버튼 */}
               {hasMore && (
                 <div className="flex justify-center pb-4">
                   <Button
-                    onClick={loadMoreMessages}
-                    disabled={loadingMore}
+                    onClick={loadMore}
+                    disabled={isLoadingMore}
                     variant="outline"
                     size="sm"
                     className="gap-2"
                   >
-                    {loadingMore ? (
+                    {isLoadingMore ? (
                       <>
                         <Loader2 className="h-3 w-3 animate-spin" />
                         이전 대화 불러오는 중...
@@ -375,7 +383,7 @@ export function ConversationThread({
                     )}
                   </Button>
                 </div>
-              )} */}
+              )}
               
               <AnimatePresence initial={false}>
                 {messages

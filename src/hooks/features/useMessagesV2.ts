@@ -23,7 +23,7 @@
 
 'use client'
 
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
@@ -266,8 +266,9 @@ function useConversationsV2() {
 }
 
 /**
- * Get messages for a specific conversation
- * Optimized with proper pagination and real-time updates
+ * Get messages for a specific conversation with pagination
+ * Returns messages in descending order (newest first) for pagination
+ * Then reverses for display (oldest first in UI)
  */
 function useConversationMessagesV2(conversationId: string, options?: {
   limit?: number
@@ -317,20 +318,20 @@ function useConversationMessagesV2(conversationId: string, options?: {
       
       // Get messages with sender info and read status in one query
       // Get messages first
+      // Note: We order by descending to get the newest messages first for pagination
+      // Then we'll reverse the array before returning for proper display order
       let query = supabaseClient()
         .from('messages_v2')
         .select('*')
         .eq('conversation_id', conversationId)
         .is('deleted_at', null)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false }) // Changed to descending for pagination
       
-      if (options?.limit) {
-        query = query.limit(options.limit)
-      }
+      // Default limit is 20 for initial load
+      const limit = options?.limit || 20
+      const offset = options?.offset || 0
       
-      if (options?.offset) {
-        query = query.range(options.offset, options.offset + (options.limit || 50) - 1)
-      }
+      query = query.range(offset, offset + limit - 1)
       
       const { data: messages, error: msgError } = await query
       
@@ -363,13 +364,33 @@ function useConversationMessagesV2(conversationId: string, options?: {
       }
       
       // Get read status for all participants (to show who read what)
+      // Split message IDs into chunks to avoid URL length limit
       const messageIds = messages.map(m => m.id)
-      const { data: readStatuses, error: readError } = await supabaseClient()
-        .from('message_read_status_v2')
-        .select('message_id, user_id, is_read, read_at')
-        .in('message_id', messageIds)
+      const chunkSize = 50 // Process 50 messages at a time to avoid URL limit
+      const chunks = []
       
-      if (readError) throw readError
+      for (let i = 0; i < messageIds.length; i += chunkSize) {
+        chunks.push(messageIds.slice(i, i + chunkSize))
+      }
+      
+      // Fetch read statuses for each chunk
+      const readStatusPromises = chunks.map(chunk => 
+        supabaseClient()
+          .from('message_read_status_v2')
+          .select('message_id, user_id, is_read, read_at')
+          .in('message_id', chunk)
+      )
+      
+      const readStatusResults = await Promise.all(readStatusPromises)
+      
+      // Combine all read statuses
+      let readStatuses: any[] = []
+      for (const result of readStatusResults) {
+        if (result.error) throw result.error
+        if (result.data) {
+          readStatuses = [...readStatuses, ...result.data]
+        }
+      }
       
       // Combine all data
       const data = messages.map(msg => {
@@ -429,7 +450,9 @@ function useConversationMessagesV2(conversationId: string, options?: {
         } : undefined
       }))
       
-      return transformedMessages
+      // Reverse the array to show oldest first (for proper chat display)
+      // Since we fetched in descending order for pagination
+      return transformedMessages.reverse()
     },
     enabled: !!user && !!conversationId,
     gcTime: 10 * 60 * 1000, // 10 minutes
@@ -898,6 +921,152 @@ function useArchiveConversationV2() {
   })
 }
 
+/**
+ * Hook for paginated conversation messages with infinite scroll support
+ */
+function useConversationMessagesPaginated(conversationId: string) {
+  const { user } = useAuth()
+  const [messages, setMessages] = useState<MessageV2[]>([])
+  const [hasMore, setHasMore] = useState(true)
+  const [isLoadingMore, setIsLoadingMore] = useState(false)
+  const [offset, setOffset] = useState(0)
+  const pageSize = 20
+  
+  // Initial load
+  const { data: initialMessages, isLoading, error, refetch } = useConversationMessagesV2(
+    conversationId,
+    { limit: pageSize, offset: 0 }
+  )
+  
+  // Set initial messages
+  useEffect(() => {
+    if (initialMessages) {
+      setMessages(initialMessages)
+      setHasMore(initialMessages.length === pageSize)
+      setOffset(initialMessages.length)
+    }
+  }, [initialMessages])
+  
+  // Load more function
+  const loadMore = useCallback(async () => {
+    if (!user || !conversationId || isLoadingMore || !hasMore) return
+    
+    setIsLoadingMore(true)
+    
+    try {
+      // Fetch more messages using the same query logic
+      const { data: moreMessages } = await supabaseClient()
+        .from('messages_v2')
+        .select('*')
+        .eq('conversation_id', conversationId)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .range(offset, offset + pageSize - 1)
+      
+      if (!moreMessages || moreMessages.length === 0) {
+        setHasMore(false)
+        return
+      }
+      
+      // Process and add to existing messages
+      // We need to fetch sender info for these messages too
+      const senderIds = [...new Set(moreMessages.map(m => m.sender_id).filter(Boolean))]
+      const { data: users } = await supabaseClient()
+        .from('users_v2')
+        .select('id, name, avatar_url, role')
+        .in('id', senderIds.length > 0 ? senderIds : ['00000000-0000-0000-0000-000000000000'])
+      
+      // Get read statuses (with chunking)
+      const messageIds = moreMessages.map(m => m.id)
+      const chunkSize = 50
+      const chunks = []
+      
+      for (let i = 0; i < messageIds.length; i += chunkSize) {
+        chunks.push(messageIds.slice(i, i + chunkSize))
+      }
+      
+      const readStatusPromises = chunks.map(chunk => 
+        supabaseClient()
+          .from('message_read_status_v2')
+          .select('message_id, user_id, is_read, read_at')
+          .in('message_id', chunk)
+      )
+      
+      const readStatusResults = await Promise.all(readStatusPromises)
+      let readStatuses: any[] = []
+      for (const result of readStatusResults) {
+        if (result.data) {
+          readStatuses = [...readStatuses, ...result.data]
+        }
+      }
+      
+      // Transform messages
+      const transformedMessages: MessageV2[] = moreMessages.map(msg => {
+        const sender = users?.find(u => u.id === msg.sender_id)
+        const isMyMessage = msg.sender_id === user.id
+        
+        let readStatus = null
+        if (isMyMessage) {
+          const otherUserStatus = readStatuses?.find(rs => 
+            rs.message_id === msg.id && rs.user_id !== user.id
+          )
+          readStatus = otherUserStatus ? {
+            is_read: otherUserStatus.is_read,
+            read_at: otherUserStatus.read_at
+          } : { is_read: false, read_at: null }
+        } else {
+          const myStatus = readStatuses?.find(rs => 
+            rs.message_id === msg.id && rs.user_id === user.id
+          )
+          readStatus = myStatus ? {
+            is_read: myStatus.is_read,
+            read_at: myStatus.read_at
+          } : { is_read: false, read_at: null }
+        }
+        
+        return {
+          ...msg,
+          sender: sender || {
+            id: msg.sender_id,
+            name: 'Unknown User',
+            avatar_url: null,
+            role: 'member' as const
+          },
+          read_status: readStatus,
+          reply_to: undefined
+        } as MessageV2
+      })
+      
+      // Reverse and prepend to existing messages (older messages go to the top)
+      setMessages(prev => [...transformedMessages.reverse(), ...prev])
+      setOffset(prev => prev + moreMessages.length)
+      setHasMore(moreMessages.length === pageSize)
+    } catch (error) {
+      console.error('Failed to load more messages:', error)
+    } finally {
+      setIsLoadingMore(false)
+    }
+  }, [user, conversationId, offset, hasMore, isLoadingMore])
+  
+  // Reset when conversation changes
+  useEffect(() => {
+    setMessages([])
+    setOffset(0)
+    setHasMore(true)
+    setIsLoadingMore(false)
+  }, [conversationId])
+  
+  return {
+    messages,
+    isLoading,
+    error,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+    refetch
+  }
+}
+
 // ============================================================================
 // Export all hooks
 // ============================================================================
@@ -906,6 +1075,7 @@ export {
   // Core hooks
   useConversationsV2,
   useConversationMessagesV2,
+  useConversationMessagesPaginated,
   useUnreadCountV2,
   useConversationDetailsV2,
   
