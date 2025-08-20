@@ -1,0 +1,90 @@
+# Page snapshot
+
+```yaml
+- banner:
+  - link "KEPCO Logo":
+    - /url: /
+    - img "KEPCO Logo"
+  - button
+  - button "사용자":
+    - img "사용자"
+  - button "메뉴 토글"
+- main:
+  - text: 한국전력공사 강원본부 전력관리처
+  - heading "AI 학습동아리 함께 성장하는 미래" [level=1]
+  - paragraph: 생성형 AI를 활용하여 업무 생산성을 향상시키고, 구성원들과 함께 실무 경험과 노하우를 공유합니다
+  - textbox "AI 도구, 활용사례, 학습자료를 검색해보세요..."
+  - button "검색"
+  - button "활용사례 보기"
+  - button "커뮤니티 둘러보기"
+  - heading "협업 학습" [level=3]
+  - paragraph: 동료들과 함께 AI 활용법을 배우고 경험을 공유합니다
+  - heading "실무 적용" [level=3]
+  - paragraph: 업무에 바로 적용할 수 있는 실용적인 AI 도구를 학습합니다
+  - heading "생산성 향상" [level=3]
+  - paragraph: AI를 활용하여 업무 효율성을 극대화합니다
+  - heading "함께 만들어가는 성과" [level=2]
+  - paragraph: AI 학습동아리가 함께 달성한 의미있는 결과들입니다
+  - text: 28+ 동아리 멤버 전력관리처 직원들이 함께 하고 있습니다 1+ AI 활용사례 실무에 적용된 다양한 사례들을 공유했습니다 5+ 학습 세션 정기적인 워크샵과 스터디를 진행했습니다 12점 평균 활동점수 멤버들의 평균 활동 점수입니다
+  - heading "동아리 주요 활동" [level=2]
+  - paragraph: AI 학습동아리에서 제공하는 다양한 활동과 서비스를 만나보세요
+  - text: AI 활용사례 공유 실무에서 활용한 ChatGPT, Claude, Copilot 등의 구체적인 사용법과 효과를 공유합니다. 실시간 커뮤니티 AI 도구 사용 중 궁금한 점이나 문제를 동료들과 실시간으로 해결할 수 있습니다. 정기 워크샵 월 2회 정기 워크샵을 통해 최신 AI 트렌드와 실무 활용법을 함께 학습합니다. 학습자료 라이브러리 검증된 AI 도구 가이드, 프롬프트 템플릿, 활용 팁을 체계적으로 관리합니다. 프로젝트 협업 부서별 AI 도입 프로젝트를 함께 진행하고 성과를 공유합니다. 성과 인정 우수한 AI 활용 사례는 포상하고, 전사적으로 확산할 수 있도록 지원합니다.
+  - heading "최근 활용사례" [level=2]
+  - paragraph: 동료들이 공유한 최신 AI 활용 경험을 확인해보세요
+  - link "모든 사례 보기":
+    - /url: /cases
+  - 'link "일상 PPT 발표자료 제작 AI 활용 사례 안녕하세요 전자제어부 김준성입니다. 최근 AI를 활용해서 한번 PPT 꾸며보면 어떨까 하는 생각이 들어 직접 시도해보았습니다. 먼저 제가 시... ppt 파워포인트 김준성 #1 · 2025. 8. 6. 5 0"':
+    - /url: /cases/fc7d2a80-a689-4a0b-b29a-dea508b62616
+    - text: 일상 PPT 발표자료 제작 AI 활용 사례 안녕하세요 전자제어부 김준성입니다. 최근 AI를 활용해서 한번 PPT 꾸며보면 어떨까 하는 생각이 들어 직접 시도해보았습니다. 먼저 제가 시... ppt 파워포인트
+    - img
+    - text: "김준성 #1 · 2025. 8. 6. 5 0"
+  - link "나의 게시글 작성하기":
+    - /url: /cases/new
+- contentinfo:
+  - img "KEPCO Logo"
+  - text: KEPCO AI 학습동아리
+  - paragraph: 한국전력공사 강원본부 전력관리처 생성형 AI 학습동아리
+  - heading "빠른 링크" [level=3]
+  - list:
+    - listitem:
+      - link "AI 활용사례":
+        - /url: /cases
+    - listitem:
+      - link "학습자료":
+        - /url: /resources
+    - listitem:
+      - link "자유게시판":
+        - /url: /community
+    - listitem:
+      - link "활동일정":
+        - /url: /activities
+  - heading "학습자료" [level=3]
+  - list:
+    - listitem:
+      - link "튜토리얼":
+        - /url: /resources/tutorials
+    - listitem:
+      - link "가이드":
+        - /url: /resources/guides
+    - listitem:
+      - link "AI 도구":
+        - /url: /resources/tools
+    - listitem:
+      - link "자주묻는질문":
+        - /url: /faq
+  - heading "연락처" [level=3]
+  - list:
+    - listitem: 강원도 춘천시 후석로 304
+    - listitem: 033-359-2548
+    - listitem: jaajung@kepco.co.kr
+  - text: © 2025 KEPCO. All Rights Reserved.
+  - link "개인정보처리방침":
+    - /url: /privacy
+  - link "이용약관":
+    - /url: /terms
+- region "Notifications alt+T"
+- text: "Core: completed QCM: ✅ | Conn: ✅ | RT: ✅ | GM: ✅"
+- button "Open Tanstack query devtools":
+  - img
+- alert
+```
