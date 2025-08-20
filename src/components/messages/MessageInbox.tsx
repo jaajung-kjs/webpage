@@ -9,7 +9,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useConversationsV2, type ConversationV2 } from '@/hooks/features/useMessagesV2'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -30,7 +30,7 @@ interface MessageInboxProps {
 }
 
 export function MessageInbox({ onConversationSelect, className }: MessageInboxProps) {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const { data: conversations, isLoading: loading, error, refetch } = useConversationsV2()
   const [refreshing, setRefreshing] = useState(false)
 

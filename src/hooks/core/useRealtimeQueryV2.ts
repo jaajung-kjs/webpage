@@ -16,7 +16,7 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 import { useQuery, useQueryClient, UseQueryOptions, UseMutationOptions, useMutation } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { useConnectionV2 } from './useConnectionV2'
-import { useAuthV2 } from '../features/useAuthV2'
+import { useAuth } from '@/providers'
 import type { RealtimePostgresChangesPayload, RealtimeChannel } from '@supabase/supabase-js'
 import { Database } from '@/lib/database.types'
 
@@ -98,7 +98,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
   const query = useQuery(options)
   const queryClient = useQueryClient()
   const { isConnected, networkQuality } = useConnectionV2()
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   
   const channelRef = useRef<RealtimeChannel | null>(null)
   const offlineQueueRef = useRef<OfflineOperation[]>([])

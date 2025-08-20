@@ -43,7 +43,7 @@ export const V2Hooks = {
 // Import statements for easy copy-paste
 export const ImportExamples = {
   // Core V2 imports
-  auth: "import { useAuthV2, hasPermission, useRequireAuth } from '@/hooks'",
+  auth: "import { useAuth } from '@/providers' // useAuthV2 integrated into AuthProvider",
   connection: "import { useConnectionV2, useNetworkQuality } from '@/hooks'",
   realtime: "import { useRealtimeQueryV2, useRealtimeListV2 } from '@/hooks'",
   cache: "import { CacheKeys, QueryOptionsPresets } from '@/hooks'",

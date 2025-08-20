@@ -8,7 +8,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
@@ -46,7 +46,7 @@ export function MessageButton({
   disabled,
   onMessageSent
 }: MessageButtonProps) {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   

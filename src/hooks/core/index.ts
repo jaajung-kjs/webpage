@@ -8,4 +8,4 @@ export * from './useConnectionV2'
 export * from './useRealtimeQueryV2'
 export * from './useCacheStrategyV2'
 
-// Note: useAuthV2 is exported from features/ directory
+// Note: useAuth is now available from @/providers (AuthProvider integration)

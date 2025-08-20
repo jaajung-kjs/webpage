@@ -9,7 +9,7 @@
 'use client'
 
 import { useState, useRef, useEffect, memo } from 'react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useConversationMessagesV2, useSendMessageV2, useMarkAsReadV2, type MessageV2 } from '@/hooks/features/useMessagesV2'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -53,7 +53,7 @@ export function ConversationThread({
   onBack,
   className
 }: ConversationThreadProps) {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const { data: messages, isLoading: loading, error, refetch } = useConversationMessagesV2(conversationId)
   const sendMessageMutation = useSendMessageV2()
   const { mutate: markAsRead } = useMarkAsReadV2()

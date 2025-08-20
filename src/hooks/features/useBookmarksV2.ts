@@ -15,7 +15,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { useRealtimeQueryV2 } from '@/hooks/core/useRealtimeQueryV2'
-import { useAuthV2 } from './useAuthV2'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import type { Tables, TablesInsert, Json } from '@/lib/database.types'
 
@@ -95,7 +95,7 @@ export interface UpdateBookmarkParams {
  * 북마크 여부 확인 Hook
  */
 export function useIsBookmarkedV2(targetId?: string, targetType?: string) {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   
   return useQuery<boolean>({
     queryKey: ['bookmarks-v2', 'status', targetId, targetType, user?.id],
@@ -124,7 +124,7 @@ export function useIsBookmarkedV2(targetId?: string, targetType?: string) {
  * 북마크 토글 Hook
  */
 export function useToggleBookmarkV2() {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const queryClient = useQueryClient()
   
   return useMutation<boolean, Error, CreateBookmarkParams>({
@@ -223,7 +223,7 @@ export function useMyBookmarksV2(options?: {
   limit?: number
   offset?: number
 }) {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   
   return useRealtimeQueryV2<BookmarkedContentV2[]>({
     queryKey: ['bookmarks-v2', 'my-bookmarks', user?.id, options],
@@ -387,7 +387,7 @@ export function useMyBookmarksV2(options?: {
  * 북마크 통계 조회 Hook
  */
 export function useBookmarkStatsV2() {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   
   return useQuery<BookmarkStatsV2>({
     queryKey: ['bookmarks-v2', 'stats', user?.id],
@@ -474,7 +474,7 @@ export function useBookmarkStatsV2() {
  * 북마크 업데이트 Hook (메타데이터)
  */
 export function useUpdateBookmarkV2() {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   
   return useMutation<void, Error, UpdateBookmarkParams>({
@@ -524,7 +524,7 @@ export function useUpdateBookmarkV2() {
  * 북마크 일괄 삭제 Hook
  */
 export function useDeleteBookmarksV2() {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const queryClient = useQueryClient()
   
   return useMutation<void, Error, string[]>({
@@ -559,7 +559,7 @@ export function useSearchBookmarksV2(query: string, options?: {
   category?: string
   limit?: number
 }) {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   
   return useQuery<BookmarkedContentV2[]>({
     queryKey: ['bookmarks-v2', 'search', query, options, user?.id],

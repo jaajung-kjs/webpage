@@ -8,12 +8,12 @@
 'use client'
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient, connectionCore } from '@/lib/core/connection-core'
 import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import type { User, Session } from '@supabase/supabase-js'
 import type { Tables } from '@/lib/database.types'
-import { UserRole } from '@/hooks/types/v2-types'
+import { UserRole, UserV2, UserV2Update } from '@/hooks/types/v2-types'
 
 // 권한 체크 헬퍼
 const hasPermission = (requiredRole: UserRole, userRole?: UserRole): boolean => {
@@ -45,10 +45,12 @@ interface AuthContextValue {
   isAuthenticated: boolean
   isSigningOut: boolean
   
-  // 권한 체크
+  // 권한 체크 (boolean 값)
   isMember: boolean
   isAdmin: boolean
   isLeader: boolean
+  isViceLeader: boolean
+  canModerate: boolean
   canViewDetails: boolean
   canDownload: boolean
   canMessage: boolean
@@ -59,12 +61,35 @@ interface AuthContextValue {
   canManageMembers: boolean
   canEditAllContent: boolean
   
-  // 메서드 (실제 구현)
+  // 권한 체크 헬퍼
+  hasPermission: (requiredRole: UserRole) => boolean
+  
+  // 기본 인증 메서드
   signIn: (email: string, password: string) => Promise<{ error: any }>
   signUp: (email: string, password: string, metadata?: any) => Promise<{ error: any }>
   signOut: () => Promise<{ error: any }>
-  updateProfile: (updates: any) => Promise<{ error: any }>
+  updateProfile: (updates: UserV2Update) => Promise<{ error: any }>
   resendEmailConfirmation: (email: string) => Promise<{ error: any }>
+  
+  // 확장된 인증 메서드
+  sendPasswordResetEmail: (email: string) => void
+  sendPasswordResetEmailAsync: (email: string) => Promise<boolean>
+  updatePassword: (newPassword: string) => void
+  updatePasswordAsync: (newPassword: string) => Promise<boolean>
+  reauthenticate: (credentials: { email: string; password: string }) => void
+  reauthenticateAsync: (credentials: { email: string; password: string }) => Promise<boolean>
+  deleteAccount: () => void
+  updateLastLogin: () => Promise<void>
+  
+  // 호환성을 위한 deprecated 메서드
+  incrementActivityScore: (params?: { points?: number; action_type?: string }) => void
+  
+  // React Query 뮤테이션 상태
+  isUpdatingProfile: boolean
+  isSendingPasswordReset: boolean
+  isUpdatingPassword: boolean
+  isReauthenticating: boolean
+  isDeletingAccount: boolean
 }
 
 // Context
@@ -190,6 +215,118 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [queryClient]) // user?.id 제거 - 초기화는 한 번만 실행하고 onAuthStateChange에서 사용자 변경 처리
 
+  // React Query 뮤테이션들
+  
+  // 프로필 업데이트 뮤테이션 (Optimistic Update)
+  const updateProfileMutation = useMutation({
+    mutationFn: async (updates: UserV2Update) => {
+      if (!user?.id) throw new Error('User not authenticated')
+      
+      const { data, error } = await supabaseClient()
+        .from('users_v2')
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id)
+        .is('deleted_at', null)
+        .select()
+        .single()
+      
+      if (error) throw error
+      return data as Tables<'users_v2'>
+    },
+    onMutate: async (updates) => {
+      // 이전 데이터 백업
+      await queryClient.cancelQueries({ queryKey: ['user-profile-v2', user?.id] })
+      const previousProfile = queryClient.getQueryData<Tables<'users_v2'>>(['user-profile-v2', user?.id])
+      
+      // Optimistic Update
+      if (previousProfile) {
+        queryClient.setQueryData<Tables<'users_v2'>>(['user-profile-v2', user?.id], {
+          ...previousProfile,
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+      }
+      
+      return { previousProfile }
+    },
+    onError: (err, _, context) => {
+      // 에러 시 롤백
+      if (context?.previousProfile) {
+        queryClient.setQueryData(['user-profile-v2', user?.id], context.previousProfile)
+      }
+    },
+    onSuccess: (data) => {
+      // 관련 쿼리 무효화
+      queryClient.invalidateQueries({ queryKey: ['members-v2'] })
+      queryClient.invalidateQueries({ queryKey: ['user-activities-v2', user?.id] })
+    }
+  })
+
+  // 비밀번호 재설정 이메일 전송
+  const sendPasswordResetEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const { error } = await supabaseClient().auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/reset-password`
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
+  // 비밀번호 업데이트
+  const updatePasswordMutation = useMutation({
+    mutationFn: async (newPassword: string) => {
+      const { error } = await supabaseClient().auth.updateUser({
+        password: newPassword
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
+  // 재인증
+  const reauthenticateMutation = useMutation({
+    mutationFn: async ({ email, password }: { email: string; password: string }) => {
+      const { error } = await supabaseClient().auth.signInWithPassword({
+        email,
+        password
+      })
+      
+      if (error) throw error
+      return true
+    }
+  })
+
+  // 계정 삭제 (Soft Delete)
+  const deleteAccountMutation = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('User not authenticated')
+      
+      const { error } = await supabaseClient()
+        .from('users_v2')
+        .update({ 
+          deleted_at: new Date().toISOString(),
+          email: `deleted_${user.id}@deleted.com`, // 이메일 무효화
+          name: 'Deleted User'
+        })
+        .eq('id', user.id)
+      
+      if (error) throw error
+      
+      // Auth 사용자도 삭제 (관리자 권한 필요 시 생략)
+      // await supabaseClient().auth.admin.deleteUser(user.id)
+    },
+    onSuccess: () => {
+      queryClient.clear()
+      // 로그아웃 처리는 signOut을 호출하여 진행
+    }
+  })
+
   // 권한 체크 계산
   const isAuthenticated = !!(session && user && profile)
   const role = profile?.role as UserRole | undefined
@@ -197,6 +334,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const isMember = hasPermission('member', role)
   const isAdmin = role === 'admin'
   const isLeader = role === 'leader' || role === 'admin'
+  const isViceLeader = hasPermission('vice-leader', role)
+  const canModerate = hasPermission('vice-leader', role)
   const canViewDetails = hasPermission('member', role)
   const canDownload = hasPermission('member', role)
   const canMessage = hasPermission('member', role)
@@ -206,6 +345,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const canAccessAdmin = hasPermission('vice-leader', role)
   const canManageMembers = hasPermission('vice-leader', role)
   const canEditAllContent = hasPermission('admin', role)
+  
+  // 권한 체크 헬퍼
+  const hasPermissionCheck = (requiredRole: UserRole): boolean => {
+    return hasPermission(requiredRole, role)
+  }
 
   // 인증 메서드들
   const signIn = async (email: string, password: string) => {
@@ -264,24 +408,60 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const updateProfile = async (updates: Partial<Tables<'users_v2'>>) => {
-    if (!user?.id) return { error: new Error('User not authenticated') }
+  const updateProfile = async (updates: UserV2Update) => {
+    try {
+      await updateProfileMutation.mutateAsync(updates)
+      return { error: null }
+    } catch (error) {
+      return { error }
+    }
+  }
+
+  // 마지막 로그인 시간 업데이트
+  const updateLastLogin = async () => {
+    if (!user?.id) return
     
-    const { error } = await supabaseClient()
-        .from('users_v2')
-      .update({
-        ...updates,
-        updated_at: new Date().toISOString()
-      })
+    await supabaseClient()
+      .from('users_v2')
+      .update({ last_login_at: new Date().toISOString() })
       .eq('id', user.id)
       .is('deleted_at', null)
-    
-    if (!error) {
-      // 프로필 캐시 무효화
-      queryClient.invalidateQueries({ queryKey: ['user-profile-v2', user.id] })
-    }
-    
-    return { error }
+  }
+
+  // 확장된 인증 메서드들
+  const sendPasswordResetEmail = (email: string) => {
+    sendPasswordResetEmailMutation.mutate(email)
+  }
+
+  const sendPasswordResetEmailAsync = async (email: string) => {
+    return await sendPasswordResetEmailMutation.mutateAsync(email)
+  }
+
+  const updatePassword = (newPassword: string) => {
+    updatePasswordMutation.mutate(newPassword)
+  }
+
+  const updatePasswordAsync = async (newPassword: string) => {
+    return await updatePasswordMutation.mutateAsync(newPassword)
+  }
+
+  const reauthenticate = (credentials: { email: string; password: string }) => {
+    reauthenticateMutation.mutate(credentials)
+  }
+
+  const reauthenticateAsync = async (credentials: { email: string; password: string }) => {
+    return await reauthenticateMutation.mutateAsync(credentials)
+  }
+
+  const deleteAccount = () => {
+    deleteAccountMutation.mutate()
+  }
+
+  // 호환성을 위한 deprecated 메서드
+  const incrementActivityScore = (params?: { points?: number; action_type?: string }) => {
+    console.warn('incrementActivityScore is deprecated. Activity scores are now handled automatically by DB triggers.')
+    // 사용자 정보 갱신 (호환성 유지)
+    queryClient.invalidateQueries({ queryKey: ['user-profile-v2', user?.id] })
   }
 
   const resendEmailConfirmation = async (email: string) => {
@@ -306,10 +486,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated,
     isSigningOut,
     
-    // 권한
+    // 권한 체크 (boolean 값)
     isMember,
     isAdmin,
     isLeader,
+    isViceLeader,
+    canModerate,
     canViewDetails,
     canDownload,
     canMessage,
@@ -320,12 +502,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     canManageMembers,
     canEditAllContent,
     
-    // 메서드
+    // 권한 체크 헬퍼
+    hasPermission: hasPermissionCheck,
+    
+    // 기본 인증 메서드
     signIn,
     signUp,
     signOut,
     updateProfile,
-    resendEmailConfirmation
+    resendEmailConfirmation,
+    
+    // 확장된 인증 메서드
+    sendPasswordResetEmail,
+    sendPasswordResetEmailAsync,
+    updatePassword,
+    updatePasswordAsync,
+    reauthenticate,
+    reauthenticateAsync,
+    deleteAccount,
+    updateLastLogin,
+    
+    // 호환성을 위한 deprecated 메서드
+    incrementActivityScore,
+    
+    // React Query 뮤테이션 상태
+    isUpdatingProfile: updateProfileMutation.isPending,
+    isSendingPasswordReset: sendPasswordResetEmailMutation.isPending,
+    isUpdatingPassword: updatePasswordMutation.isPending,
+    isReauthenticating: reauthenticateMutation.isPending,
+    isDeletingAccount: deleteAccountMutation.isPending
   }
 
   return (
@@ -352,10 +557,12 @@ export function useAuth() {
       isAuthenticated: false,
       isSigningOut: false,
       
-      // 권한
+      // 권한 체크 (boolean 값)
       isMember: false,
       isAdmin: false,
       isLeader: false,
+      isViceLeader: false,
+      canModerate: false,
       canViewDetails: false,
       canDownload: false,
       canMessage: false,
@@ -366,12 +573,35 @@ export function useAuth() {
       canManageMembers: false,
       canEditAllContent: false,
       
-      // 메서드 (no-op functions for build time)
+      // 권한 체크 헬퍼
+      hasPermission: () => false,
+      
+      // 기본 인증 메서드 (no-op functions for build time)
       signIn: async () => ({ error: new Error('Not available during build') }),
       signUp: async () => ({ error: new Error('Not available during build') }),
       signOut: async () => ({ error: new Error('Not available during build') }),
       updateProfile: async () => ({ error: new Error('Not available during build') }),
-      resendEmailConfirmation: async () => ({ error: new Error('Not available during build') })
+      resendEmailConfirmation: async () => ({ error: new Error('Not available during build') }),
+      
+      // 확장된 인증 메서드
+      sendPasswordResetEmail: () => {},
+      sendPasswordResetEmailAsync: async () => false,
+      updatePassword: () => {},
+      updatePasswordAsync: async () => false,
+      reauthenticate: () => {},
+      reauthenticateAsync: async () => false,
+      deleteAccount: () => {},
+      updateLastLogin: async () => {},
+      
+      // 호환성을 위한 deprecated 메서드
+      incrementActivityScore: () => {},
+      
+      // React Query 뮤테이션 상태
+      isUpdatingProfile: false,
+      isSendingPasswordReset: false,
+      isUpdatingPassword: false,
+      isReauthenticating: false,
+      isDeletingAccount: false
     } as AuthContextValue
   }
   return context

@@ -13,7 +13,7 @@ export * from './usePrefetch'
 export * from './useActivitiesV2'
 export * from './useActivityLogsV2'
 export * from './useAuditLogsV2'
-export * from './useAuthV2'
+// export * from './useAuthV2' - Moved to AuthProvider, use useAuth from @/providers
 export * from './useBookmarksV2'
 export * from './useCommentsV2'
 export * from './useContentV2'

@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useAuthV2 } from '../features/useAuthV2'
+import { useAuth } from '@/providers'
 
 // 캐시 키 생성 유틸리티
 export const CacheKeys = {
@@ -51,7 +51,7 @@ export const CacheKeys = {
  */
 export function useCacheStrategyV2() {
   const queryClient = useQueryClient()
-  const { user, isAuthenticated } = useAuthV2()
+  const { user, isAuthenticated } = useAuth()
 
   /**
    * 지능적 캐시 무효화

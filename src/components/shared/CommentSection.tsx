@@ -38,7 +38,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
@@ -110,7 +110,7 @@ export default function CommentSection({
   enableThreading = true,
   autoCollapseDepth = 2
 }: CommentSectionProps) {
-  const { user, isMember, canModerate } = useAuthV2()
+  const { user, isMember, canModerate } = useAuth()
   
   const { data: commentsData, isLoading: loading, refetch } = useCommentsV2(contentId)
   const createCommentMutation = useCreateCommentV2()
@@ -159,7 +159,7 @@ export default function CommentSection({
 
 
   const handleSubmit = async () => {
-    if (!user || !newComment.trim() || !isMember()) return
+    if (!user || !newComment.trim() || !isMember) return
 
     try {
       await createCommentMutation.mutateAsync({
@@ -178,7 +178,7 @@ export default function CommentSection({
   }
 
   const handleReply = async (parentId: string) => {
-    if (!user || !isMember()) return
+    if (!user || !isMember) return
     
     const content = replyContents[parentId]?.trim()
     if (!content) return
@@ -204,7 +204,7 @@ export default function CommentSection({
       return
     }
     
-    if (!isMember()) {
+    if (!isMember) {
       toast.error('동아리 회원만 좋아요를 누를 수 있습니다.')
       return
     }
@@ -290,7 +290,7 @@ export default function CommentSection({
         
         <CardContent>
           {/* Comment Input */}
-          {user && isMember() ? (
+          {user && isMember ? (
             <div className="space-y-4 mb-6">
               <div className="flex gap-3">
                 <Avatar>
@@ -378,7 +378,7 @@ export default function CommentSection({
                     }))
                   }}
                     isAuthor={comment.author_id === (user as any)?.id}
-                    canModerate={canModerate()}
+                    canModerate={canModerate}
                     isReplying={comment.id ? (replyingToComments[comment.id] || false) : false}
                     isEditing={comment.id ? (editingComments[comment.id] || false) : false}
                     editContent={comment.id ? (editContents[comment.id] || '') : ''}

@@ -8,7 +8,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useCreateConversationV2, useSendMessageV2 } from '@/hooks/features/useMessagesV2'
 import { useProfileList } from '@/hooks/features/useProfileV2'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -50,7 +50,7 @@ export function NewMessageDialog({
   onOpenChange,
   onConversationStart
 }: NewMessageDialogProps) {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedRecipient, setSelectedRecipient] = useState<Member | null>(null)
   const [message, setMessage] = useState('')

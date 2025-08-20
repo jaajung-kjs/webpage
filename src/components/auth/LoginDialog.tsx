@@ -2,8 +2,8 @@
  * LoginDialog Component - V2 Migration
  * 
  * Authentication dialog with sign-in and sign-up functionality
- * Uses useAuthV2 for user state and Supabase auth directly for auth operations
- * Migration: useAuthV2 + direct supabaseClient().auth calls
+ * Uses useAuth for user state and Supabase auth directly for auth operations
+ * Migration: useAuth + direct supabaseClient().auth calls
  */
 
 'use client'
@@ -31,7 +31,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useMutation } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { Loader2 } from 'lucide-react'
@@ -69,11 +69,11 @@ export default function LoginDialog({ open, onOpenChange, defaultTab = 'login' }
   const [emailForVerification, setEmailForVerification] = useState('')
   const [showPasswordResetModal, setShowPasswordResetModal] = useState(false)
   const { 
-    signOut, // V2 uses signOut mutation, sign-in/up handled directly with Supabase
-    user, // V2 returns user as V2 profile data
+    signOut, // Uses signOut mutation, sign-in/up handled directly with Supabase
+    user, // Returns user as V2 profile data
     isAuthenticated,
     updateProfile
-  } = useAuthV2()
+  } = useAuth()
   const router = useRouter()
 
   // Update activeTab when defaultTab changes

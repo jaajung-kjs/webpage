@@ -43,7 +43,7 @@ import {
   Check,
   X
 } from 'lucide-react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useMembershipV2 } from '@/hooks/features/useMembershipV2'
 import { supabaseClient } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
@@ -76,7 +76,7 @@ const experienceLevels: Record<string, string> = {
 }
 
 export default function MembershipApplicationManager() {
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const membershipV2 = useMembershipV2()
   
   // Use hooks for data fetching

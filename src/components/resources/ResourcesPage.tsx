@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useContentV2 } from '@/hooks/features/useContentV2'
 import { toast } from 'sonner'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
@@ -35,7 +35,7 @@ const sortOptions = [
 
 export default function ResourcesPage() {
   const router = useRouter()
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')

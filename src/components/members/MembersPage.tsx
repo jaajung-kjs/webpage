@@ -46,7 +46,7 @@ import {
   Zap,
   Clock
 } from 'lucide-react'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { Tables } from '@/lib/database.types'
 import { toast } from 'sonner'
 import type { Database } from '@/lib/database.types'
@@ -86,7 +86,7 @@ const skillColors = getSkillLevelColors()
 const skillIcons = getSkillLevelIcons()
 
 function MembersPage() {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeRole, setActiveRole] = useState('all')
   const [activeSkill, setActiveSkill] = useState('all')
@@ -539,7 +539,7 @@ function MembersPage() {
 
                   {/* Contact Button */}
                   <div className="mt-4 flex space-x-2">
-                    {isMember() && (user as any)?.id !== member.id && (
+                    {isMember && (user as any)?.id !== member.id && (
                       <MessageButton
                         recipientId={member.id}
                         recipientName={member.name}
@@ -553,7 +553,7 @@ function MembersPage() {
                     <Button 
                       variant="outline" 
                       size="sm" 
-                      className={isMember() && (user as any)?.id !== member.id ? "flex-1" : "w-full"}
+                      className={isMember && (user as any)?.id !== member.id ? "flex-1" : "w-full"}
                       onClick={() => {
                         window.location.href = `/profile/${member.id}`
                       }}

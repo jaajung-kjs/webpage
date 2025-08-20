@@ -17,7 +17,7 @@ import {
 import { useContentV2 } from '@/hooks/features/useContentV2'
 import { useInteractionsV2 } from '@/hooks/features/useInteractionsV2'
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { toast } from 'sonner'
 import DetailLayout from '@/components/shared/DetailLayout'
 import CommentSection from '@/components/shared/CommentSection'
@@ -46,7 +46,7 @@ const typeIcons = {
 }
 
 export default function ResourceDetailPage({ resourceId }: ResourceDetailPageProps) {
-  const { user, isMember } = useAuthV2()
+  const { user, isMember } = useAuth()
   const router = useRouter()
   
   // Use V2 hooks

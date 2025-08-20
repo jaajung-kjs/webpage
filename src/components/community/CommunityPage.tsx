@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { useAuthV2 } from '@/hooks/features/useAuthV2'
+import { useAuth } from '@/providers'
 import { useContentV2 } from '@/hooks/features/useContentV2'
 
 import { toast } from 'sonner'
@@ -45,7 +45,7 @@ const sortOptions = [
 
 export default function CommunityPage() {
   const router = useRouter()
-  const { user } = useAuthV2()
+  const { user } = useAuth()
   const [searchTerm, setSearchTerm] = useState('')
   const [activeCategory, setActiveCategory] = useState('all')
   const [sortBy, setSortBy] = useState('latest')
