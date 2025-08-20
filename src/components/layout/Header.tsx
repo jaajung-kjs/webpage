@@ -106,7 +106,8 @@ export default function Header() {
               alt="KEPCO Logo" 
               width={24} 
               height={24} 
-              className="h-6 w-auto"
+              className="h-6"
+              style={{ width: 'auto' }}
               priority
             />
             <div className="hidden font-bold lg:inline-block">
@@ -319,7 +320,8 @@ function MobileNav({ onClose, onOpenMessage }: { onClose?: () => void, onOpenMes
             alt="KEPCO Logo" 
             width={24} 
             height={24} 
-            className="h-6 w-auto"
+            className="h-6"
+            style={{ width: 'auto' }}
           />
           <div className="text-xs text-muted-foreground">AI 학습동아리</div>
         </div>

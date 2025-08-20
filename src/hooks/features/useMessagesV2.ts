@@ -26,7 +26,6 @@
 import { useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabaseClient } from '@/lib/core/connection-core'
-import { realtimeCore } from '@/lib/core/realtime-core'
 import { userMessageSubscriptionManager } from '@/lib/realtime/UserMessageSubscriptionManager'
 import { useRealtimeQueryV2 } from '@/hooks/core/useRealtimeQueryV2'
 import { useAuth } from '@/providers'

@@ -1,13 +1,8 @@
 /**
- * useRealtimeQueryV2 - V2 스키마 기반 향상된 실시간 쿼리 Hook
+ * useRealtimeQueryV2 - 최적화된 실시간 쿼리 Hook
  * 
- * 주요 개선사항:
- * - V2 테이블들과의 완전 통합
- * - 더 정교한 실시간 필터링
- * - 배치 업데이트 최적화
- * - 연결 품질 기반 적응형 동기화
- * - 충돌 해결 메커니즘
- * - 오프라인 큐잉 지원
+ * Supabase의 자동 재연결과 실시간 기능에 의존
+ * 불필요한 복잡성 제거
  */
 
 'use client'
@@ -45,34 +40,19 @@ export type ViewNameV2 = keyof Views
 // 실시간 이벤트 타입
 export type RealtimeEventV2 = 'INSERT' | 'UPDATE' | 'DELETE' | '*'
 
-// 업데이트 전략 타입
+// 업데이트 전략 타입 (간소화)
 export type UpdateStrategyV2 = 
   | 'invalidate'      // 쿼리 무효화 (기본)
   | 'merge'          // 데이터 병합
-  | 'replace'        // 데이터 교체
-  | 'append'         // 데이터 추가
-  | 'remove'         // 데이터 제거
-  | 'smart'          // 지능적 업데이트
+  | 'replace'        // 데이터 교체 (호환성)
 
-// 충돌 해결 전략
-export type ConflictResolutionV2 = 
-  | 'server-wins'    // 서버 데이터 우선
-  | 'client-wins'    // 클라이언트 데이터 우선
-  | 'merge'          // 필드별 병합
-  | 'ask-user'       // 사용자에게 선택 요청
-
-// V2 실시간 옵션
+// V2 실시간 옵션 (간소화)
 export interface RealtimeOptionsV2 {
   enabled?: boolean
   table: TableNameV2
   event?: RealtimeEventV2
-  filter?: string | ((data: any) => boolean)
+  filter?: string
   updateStrategy?: UpdateStrategyV2
-  conflictResolution?: ConflictResolutionV2
-  batchSize?: number
-  debounceMs?: number
-  priority?: 'high' | 'medium' | 'low'
-  offlineQueue?: boolean
   schema?: string
 }
 
@@ -81,163 +61,44 @@ export interface RealtimeQueryOptionsV2<T> extends UseQueryOptions<T, Error> {
   realtime?: RealtimeOptionsV2
 }
 
-// 오프라인 작업 타입
-interface OfflineOperation {
-  id: string
-  type: 'INSERT' | 'UPDATE' | 'DELETE'
-  table: TableNameV2
-  data: any
-  timestamp: number
-  retryCount: number
-}
-
 /**
- * V2 실시간 쿼리 Hook
+ * V2 실시간 쿼리 Hook (간소화)
  */
 export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<T>) {
   const query = useQuery(options)
   const queryClient = useQueryClient()
-  const { isConnected, networkQuality } = useConnectionV2()
-  const { user } = useAuth()
+  const { isConnected } = useConnectionV2()
   
   const channelRef = useRef<RealtimeChannel | null>(null)
-  const offlineQueueRef = useRef<OfflineOperation[]>([])
-  const [conflictData, setConflictData] = useState<any>(null)
   const [isRealtimeConnected, setIsRealtimeConnected] = useState(false)
 
-  // 지능적 업데이트 함수
-  const smartUpdate = useCallback((
+  // 간단한 merge 업데이트 함수
+  const mergeUpdate = useCallback((
     payload: RealtimePostgresChangesPayload<any>,
-    updateStrategy: UpdateStrategyV2,
     currentData: T
   ) => {
-    if (!currentData) return null
+    if (!currentData || !Array.isArray(currentData)) return null
 
     const { eventType, new: newRecord, old: oldRecord } = payload
-
-    switch (updateStrategy) {
-      case 'smart':
-        // 항상 merge 사용 (네트워크는 안정적이라고 가정)
-        return smartUpdate(payload, 'merge', currentData)
-
-      case 'merge':
-        if (Array.isArray(currentData)) {
-          const list = [...currentData]
-          const recordId = (newRecord as any)?.id || (oldRecord as any)?.id
-          const index = list.findIndex((item) => (item as any).id === recordId)
-          
-          if (eventType === 'INSERT') {
-            // 중복 체크: 이미 존재하는 항목이면 업데이트, 없으면 추가
-            if (index !== -1) {
-              list[index] = { ...list[index], ...newRecord }
-              return list
-            } else {
-              return [...list, newRecord]
-            }
-          } else if (eventType === 'UPDATE' && index !== -1) {
-            list[index] = { ...list[index], ...newRecord }
-            return list
-          } else if (eventType === 'DELETE' && index !== -1) {
-            list.splice(index, 1)
-            return list
-          }
-        }
-        break
-
-      case 'replace':
-        if (Array.isArray(currentData)) {
-          const list = [...currentData]
-          const index = list.findIndex((item) => (item as any).id === ((newRecord as any)?.id || (oldRecord as any)?.id))
-          
-          if (eventType === 'INSERT') {
-            return [...list, newRecord]
-          } else if (eventType === 'UPDATE' && index !== -1) {
-            list[index] = newRecord
-            return list
-          } else if (eventType === 'DELETE' && index !== -1) {
-            list.splice(index, 1)
-            return list
-          }
-        }
-        break
-
-      case 'append':
-        if (eventType === 'INSERT' && Array.isArray(currentData)) {
-          return [...currentData, newRecord]
-        }
-        break
-
-      case 'remove':
-        if (eventType === 'DELETE' && Array.isArray(currentData)) {
-          return currentData.filter((item) => (item as any).id !== oldRecord?.id)
-        }
-        break
-
-      default:
-        return null
+    const list = [...currentData]
+    const recordId = (newRecord as any)?.id || (oldRecord as any)?.id
+    const index = list.findIndex((item) => (item as any).id === recordId)
+    
+    if (eventType === 'INSERT') {
+      // 중복 체크
+      if (index === -1) {
+        return [...list, newRecord]
+      }
+    } else if (eventType === 'UPDATE' && index !== -1) {
+      list[index] = { ...list[index], ...newRecord }
+      return list
+    } else if (eventType === 'DELETE' && index !== -1) {
+      list.splice(index, 1)
+      return list
     }
 
     return null
-  }, [networkQuality])
-
-  // 충돌 해결 함수
-  const resolveConflict = useCallback((
-    serverData: any,
-    clientData: any,
-    resolution: ConflictResolutionV2
-  ) => {
-    switch (resolution) {
-      case 'server-wins':
-        return serverData
-      case 'client-wins':
-        return clientData
-      case 'merge':
-        return { ...clientData, ...serverData, updated_at: serverData.updated_at }
-      case 'ask-user':
-        setConflictData({ server: serverData, client: clientData })
-        return null
-      default:
-        return serverData
-    }
   }, [])
-
-  // 오프라인 작업 큐 처리
-  const processOfflineQueue = useCallback(async () => {
-    if (!isConnected || offlineQueueRef.current.length === 0) return
-
-    const operations = [...offlineQueueRef.current]
-    offlineQueueRef.current = []
-
-    for (const operation of operations) {
-      try {
-        let query = supabaseClient().from(operation.table)
-
-        switch (operation.type) {
-          case 'INSERT':
-            await query.insert(operation.data)
-            break
-          case 'UPDATE':
-            await query.update(operation.data).eq('id', operation.data.id)
-            break
-          case 'DELETE':
-            await query.delete().eq('id', operation.data.id)
-            break
-        }
-      } catch (error) {
-        // 재시도 로직
-        if (operation.retryCount < 3) {
-          offlineQueueRef.current.push({
-            ...operation,
-            retryCount: operation.retryCount + 1
-          })
-        }
-        console.error('Offline operation failed:', error)
-      }
-    }
-
-    // 큐 처리 후 쿼리 무효화
-    queryClient.invalidateQueries({ queryKey: options.queryKey })
-  }, [isConnected, queryClient]) // queryKey를 dependency에서 제거
 
   // 실시간 채널 설정
   useEffect(() => {
@@ -250,7 +111,7 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
     const queryKeyString = Array.isArray(options.queryKey) 
       ? options.queryKey.filter(k => k != null).join('-')
       : String(options.queryKey)
-    const uniqueId = Math.random().toString(36).substr(2, 9)
+    const uniqueId = Math.random().toString(36).substring(2, 11)
     const channelName = `realtime-v2-${table}-${queryKeyString}-${uniqueId}`
     channelRef.current = supabaseClient().channel(channelName)
 
@@ -267,22 +128,17 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
         event: event as any,
         schema,
         table,
-        filter: typeof filter === 'string' ? filter : undefined
+        filter: filter || undefined
       }, async (payload: any) => {
-        // 필터 함수 적용
-        if (typeof filter === 'function' && !filter((payload as any).new || (payload as any).old)) {
-          return
-        }
-
         // 현재 데이터 가져오기
         const currentData = queryClient.getQueryData<T>(options.queryKey!)
 
         if (updateStrategy === 'invalidate') {
-          // 즉시 무효화 (네트워크는 안정적이라고 가정)
+          // 기본: 쿼리 무효화
           queryClient.invalidateQueries({ queryKey: options.queryKey })
-        } else if (currentData) {
-          // 데이터 직접 업데이트
-          const updatedData = smartUpdate(payload, updateStrategy, currentData)
+        } else if (updateStrategy === 'merge' && currentData) {
+          // merge: 데이터 직접 업데이트
+          const updatedData = mergeUpdate(payload, currentData)
           if (updatedData !== null) {
             queryClient.setQueryData(options.queryKey!, updatedData)
           }
@@ -356,80 +212,29 @@ export function useRealtimeQueryV2<T = unknown>(options: RealtimeQueryOptionsV2<
     options.realtime?.filter,
     options.realtime?.updateStrategy,
     options.realtime?.schema,
-    networkQuality,
     queryClient,
-    smartUpdate
+    mergeUpdate
   ])
-
-  // 오프라인 큐 처리
-  useEffect(() => {
-    if (isConnected) {
-      processOfflineQueue()
-    }
-  }, [isConnected, processOfflineQueue])
 
   return {
     ...query,
-    // V2 확장 기능
-    isRealtimeConnected,
-    conflictData,
-    offlineQueueLength: offlineQueueRef.current.length,
-    
-    // 충돌 해결 액션
-    resolveConflict: (resolution: 'server' | 'client') => {
-      if (conflictData) {
-        const resolved = resolution === 'server' ? conflictData.server : conflictData.client
-        queryClient.setQueryData(options.queryKey!, resolved)
-        setConflictData(null)
-      }
-    },
-    
-    // 오프라인 작업 추가
-    addOfflineOperation: (operation: Omit<OfflineOperation, 'id' | 'timestamp' | 'retryCount'>) => {
-      if (options.realtime?.offlineQueue) {
-        offlineQueueRef.current.push({
-          ...operation,
-          id: Math.random().toString(36),
-          timestamp: Date.now(),
-          retryCount: 0
-        })
-      }
-    }
+    // 간소화된 V2 확장 기능
+    isRealtimeConnected
   }
 }
 
 /**
- * V2 실시간 뮤테이션 Hook
+ * V2 실시간 뮤테이션 Hook (간소화)
  */
 export function useRealtimeMutationV2<TData = any, TError = Error, TVariables = void, TContext = unknown>(
   options: UseMutationOptions<TData, TError, TVariables, TContext> & {
     table?: TableNameV2
-    optimistic?: boolean
-    offline?: boolean
   }
 ) {
-  const { isConnected } = useConnectionV2()
   const queryClient = useQueryClient()
   
   const mutation = useMutation({
     ...options,
-    onMutate: async (variables) => {
-      // 옵티미스틱 업데이트
-      if (options.optimistic && options.onMutate) {
-        return await options.onMutate(variables)
-      }
-      
-      return options.onMutate?.(variables)
-    },
-    mutationFn: async (variables) => {
-      // 오프라인 상태면 큐에 추가
-      if (!isConnected && options.offline) {
-        // TODO: 오프라인 큐 구현
-        throw new Error('Offline - queued for later')
-      }
-      
-      return options.mutationFn!(variables)
-    },
     onSuccess: (data, variables, context) => {
       // 관련 실시간 쿼리들 무효화
       if (options.table) {
@@ -439,14 +244,6 @@ export function useRealtimeMutationV2<TData = any, TError = Error, TVariables = 
       }
       
       options.onSuccess?.(data, variables, context)
-    },
-    onError: (error, variables, context) => {
-      // 옵티미스틱 업데이트 롤백
-      if (options.optimistic && context) {
-        // 롤백 로직 구현
-      }
-      
-      options.onError?.(error, variables, context)
     }
   })
 
@@ -516,28 +313,23 @@ export function useRealtimeCountV2(
 }
 
 /**
- * 실시간 연결 상태 Hook
+ * 실시간 연결 상태 Hook (간소화)
  */
 export function useRealtimeStatusV2() {
-  const [status, setStatus] = useState({
-    isConnected: false,
-    channelCount: 0,
-    lastHeartbeat: null as string | null
-  })
+  const [isConnected, setIsConnected] = useState(false)
 
   useEffect(() => {
-    // Supabase 실시간 상태 모니터링 로직
-    // 실제 구현은 Supabase 클라이언트의 내부 상태에 의존
-    const interval = setInterval(() => {
-      setStatus({
-        isConnected: supabaseClient().realtime.isConnected(),
-        channelCount: supabaseClient().realtime.channels.length,
-        lastHeartbeat: new Date().toISOString()
-      })
-    }, 5000)
+    // Supabase 실시간 연결 상태 체크
+    const checkStatus = () => {
+      setIsConnected(supabaseClient().realtime?.isConnected() ?? false)
+    }
+
+    // 5초마다 체크
+    const interval = setInterval(checkStatus, 5000)
+    checkStatus() // 초기 체크
 
     return () => clearInterval(interval)
   }, [])
 
-  return status
+  return { isConnected }
 }

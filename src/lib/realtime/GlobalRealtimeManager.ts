@@ -1,18 +1,18 @@
 /**
- * GlobalRealtimeManager - 실시간 동기화 관리자
+ * GlobalRealtimeManager - 최적화된 실시간 동기화 관리자
  * 
- * 모든 사용자가 같은 정보를 실시간으로 동기화해서 볼 수 있도록 관리
- * 단순화된 버전 - 새로운 subscribe API 사용
+ * Supabase의 channel API를 직접 사용하여 실시간 동기화
  */
 
 import { QueryClient } from '@tanstack/react-query'
-import { realtimeCore } from '@/lib/core/realtime-core'
+import { supabaseClient } from '@/lib/core/connection-core'
+import type { RealtimeChannel } from '@supabase/supabase-js'
 
 class GlobalRealtimeManager {
   private static instance: GlobalRealtimeManager
   private getQueryClient: (() => QueryClient | null) | null = null
   private isInitialized = false
-  private unsubscribers: Map<string, () => void> = new Map()
+  private channel: RealtimeChannel | null = null
 
   private constructor() {}
 
@@ -42,14 +42,8 @@ class GlobalRealtimeManager {
     console.log('[GlobalRealtime] Initializing global subscriptions...')
     
     try {
-      // 모든 사용자가 구독하는 테이블들 (메시지 관련 테이블 제외)
-      await Promise.all([
-        this.subscribeToContentTable(),
-        this.subscribeToUsersTable(),
-        this.subscribeToCommentsTable(),
-        this.subscribeToActivityParticipantsTable(),
-        this.subscribeToInteractionsTable()
-      ])
+      // 단일 채널로 모든 글로벌 구독 통합
+      this.setupGlobalChannel()
       
       this.isInitialized = true
       console.log('[GlobalRealtime] Initialization complete')
@@ -59,178 +53,91 @@ class GlobalRealtimeManager {
     }
   }
 
-  /**
-   * content_v2 테이블 구독 - 모든 콘텐츠 변경사항 실시간 동기화
-   */
-  private async subscribeToContentTable(): Promise<void> {
-    // INSERT 이벤트
-    const unsubInsert = await realtimeCore.subscribe(
-      'content_v2',
-      'INSERT',
-      (payload) => {
-        console.log('[GlobalRealtime] Content inserted:', payload.new)
-        // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
+  private setupGlobalChannel(): void {
+    // 기존 채널이 있으면 정리
+    if (this.channel) {
+      console.log('[GlobalRealtime] Cleaning up existing channel')
+      supabaseClient().removeChannel(this.channel)
+      this.channel = null
+    }
+
+    // Supabase channel API 직접 사용
+    this.channel = supabaseClient()
+      .channel('global-realtime')
+      // content_v2 구독
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'content_v2'
+      }, (payload: any) => {
+        console.log('[GlobalRealtime] Content changed:', payload.eventType)
         const queryClient = this.getQueryClient?.()
         queryClient?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        queryClient?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
-        queryClient?.invalidateQueries({ queryKey: ['trending-contents-v2'], exact: false })
-      }
-    )
-
-    // UPDATE 이벤트
-    const unsubUpdate = await realtimeCore.subscribe(
-      'content_v2',
-      'UPDATE',
-      (payload) => {
-        console.log('[GlobalRealtime] Content updated:', payload.new?.id)
-        // 특정 콘텐츠 및 목록 캐시 무효화 - 올바른 키 사용
-        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', payload.new?.id] })
-        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
-      }
-    )
-
-    // DELETE 이벤트
-    const unsubDelete = await realtimeCore.subscribe(
-      'content_v2',
-      'DELETE',
-      (payload) => {
-        console.log('[GlobalRealtime] Content deleted:', payload.old?.id)
-        // 콘텐츠 목록 캐시 무효화 - 올바른 키 사용
-        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
-        this.getQueryClient?.()?.invalidateQueries({ queryKey: ['infinite-contents-v2'], exact: false })
-      }
-    )
-
-    this.unsubscribers.set('content-insert', unsubInsert)
-    this.unsubscribers.set('content-update', unsubUpdate)
-    this.unsubscribers.set('content-delete', unsubDelete)
-  }
-
-  /**
-   * users_v2 테이블 구독 - 사용자 정보 실시간 동기화
-   */
-  private async subscribeToUsersTable(): Promise<void> {
-    const unsubscribe = await realtimeCore.subscribe(
-      'users_v2',
-      '*',
-      (payload) => {
-        console.log('[GlobalRealtime] User changed:', payload.new?.id || payload.old?.id)
-        // 사용자 관련 캐시 무효화
+        queryClient?.invalidateQueries({ queryKey: ['content-v2', payload.new?.id || payload.old?.id] })
+      })
+      // users_v2 구독
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'users_v2'
+      }, (payload: any) => {
         const userId = payload.new?.id || payload.old?.id
         if (userId) {
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['user', userId] })
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['profile', userId] })
         }
-      }
-    )
-
-    this.unsubscribers.set('users', unsubscribe)
-  }
-
-  /**
-   * comments_v2 테이블 구독 - 댓글 실시간 동기화
-   */
-  private async subscribeToCommentsTable(): Promise<void> {
-    const unsubscribe = await realtimeCore.subscribe(
-      'comments_v2',
-      '*',
-      (payload) => {
-        console.log('[GlobalRealtime] Comment changed')
-        // 댓글 관련 캐시 무효화 - 올바른 키 사용
+      })
+      // comments_v2 구독
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'comments_v2'
+      }, (payload: any) => {
         const contentId = payload.new?.content_id || payload.old?.content_id
         if (contentId) {
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['comments-v2', contentId] })
-          // 콘텐츠의 댓글 수도 업데이트되어야 함
-          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', contentId] })
         }
-      }
-    )
-
-    this.unsubscribers.set('comments', unsubscribe)
-  }
-
-  /**
-   * activity_participants_v2 테이블 구독 - 활동 참여 실시간 동기화
-   */
-  private async subscribeToActivityParticipantsTable(): Promise<void> {
-    const unsubscribe = await realtimeCore.subscribe(
-      'activity_participants_v2',
-      '*',
-      (payload) => {
-        console.log('[GlobalRealtime] Activity participant changed')
-        // 활동 참여 관련 캐시 무효화
+      })
+      // activity_participants_v2 구독
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'activity_participants_v2'
+      }, (payload: any) => {
         const activityId = payload.new?.activity_id || payload.old?.activity_id
         if (activityId) {
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['participants', activityId] })
-          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['activity', activityId] })
         }
-      }
-    )
-
-    this.unsubscribers.set('participants', unsubscribe)
-  }
-
-  /**
-   * interactions_v2 테이블 구독 - 좋아요/북마크 실시간 동기화
-   */
-  private async subscribeToInteractionsTable(): Promise<void> {
-    const unsubscribe = await realtimeCore.subscribe(
-      'interactions_v2',
-      '*',
-      (payload) => {
-        console.log('[GlobalRealtime] Interaction changed')
-        // 상호작용 관련 캐시 무효화 - 올바른 키 사용
+      })
+      // interactions_v2 구독
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'interactions_v2'
+      }, (payload: any) => {
         const targetId = payload.new?.target_id || payload.old?.target_id
         if (targetId) {
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['interactions-v2', targetId] })
           this.getQueryClient?.()?.invalidateQueries({ queryKey: ['content-v2', targetId] })
-          // 목록에서도 좋아요 수 업데이트 필요
-          this.getQueryClient?.()?.invalidateQueries({ queryKey: ['contents-v2'], exact: false })
         }
-      }
-    )
-
-    this.unsubscribers.set('interactions', unsubscribe)
+      })
+      .subscribe((status) => {
+        console.log('[GlobalRealtime] Channel status:', status)
+        // Supabase가 자동으로 재연결 처리
+      })
   }
 
   cleanup(): void {
     console.log('[GlobalRealtime] Cleaning up subscriptions...')
     
-    // 모든 구독 해제
-    this.unsubscribers.forEach((unsubscribe) => {
-      unsubscribe()
-    })
-    this.unsubscribers.clear()
+    // 채널 구독 해제
+    if (this.channel) {
+      supabaseClient().removeChannel(this.channel)
+      this.channel = null
+    }
     
     this.isInitialized = false
     console.log('[GlobalRealtime] Cleanup complete')
-  }
-
-  // 호환성을 위한 메서드들
-  async setupUserSubscriptions(userId: string): Promise<void> {
-    console.log(`[GlobalRealtime] User subscriptions for ${userId} (handled separately)`)
-  }
-
-  async cleanupUserSubscriptions(): Promise<void> {
-    console.log('[GlobalRealtime] User subscriptions cleanup (handled separately)')
-  }
-
-  isChannelSubscribed(channelName: string): boolean {
-    return this.unsubscribers.has(channelName)
-  }
-
-  getSubscriptionMetrics() {
-    return {
-      totalEvents: 0,
-      eventsByType: {},
-      eventsByChannel: {},
-      errorCount: 0
-    }
-  }
-
-  getSubscriptionStates() {
-    return new Map()
   }
 }
 

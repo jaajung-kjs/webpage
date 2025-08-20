@@ -15,7 +15,8 @@ export default function Footer() {
                 alt="KEPCO Logo" 
                 width={24} 
                 height={24} 
-                className="h-6 w-auto"
+                className="h-6"
+                style={{ width: 'auto' }}
               />
               <div>
                 <div className="font-bold">KEPCO</div>

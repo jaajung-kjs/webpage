@@ -8,7 +8,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools'
 import { connectionCore } from '@/lib/core/connection-core'
-import { realtimeCore } from '@/lib/core/realtime-core'
 import { globalRealtimeManager } from '@/lib/realtime/GlobalRealtimeManager'
 
 interface CoreProviderState {
@@ -94,7 +93,6 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
 
     return () => {
       console.log('[CoreProvider] Cleaning up...')
-      realtimeCore.cleanup()
       globalRealtimeManager.cleanup()
     }
   }, [])
@@ -104,7 +102,6 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       (window as any).__DEBUG__ = {
         connection: () => connectionCore.getStatus(),
-        realtime: () => realtimeCore.getStatus(),
         recreateClient: () => connectionCore.recreateClient(),
         clearCache: () => queryClient.clear(),
       }
