@@ -938,6 +938,7 @@ function useConversationMessagesPaginated(conversationId: string) {
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [offset, setOffset] = useState(0)
+  const [prevConversationId, setPrevConversationId] = useState<string | null>(null)
   const pageSize = 20
   
   // Initial load
@@ -946,9 +947,10 @@ function useConversationMessagesPaginated(conversationId: string) {
     { limit: pageSize, offset: 0 }
   )
   
-  // Set initial messages
+  // Set initial messages - 캐시된 데이터도 즉시 표시
   useEffect(() => {
-    if (initialMessages) {
+    // initialMessages가 있거나 빈 배열이어도 설정
+    if (initialMessages !== undefined) {
       setMessages(initialMessages)
       setHasMore(initialMessages.length === pageSize)
       setOffset(initialMessages.length)
@@ -1056,13 +1058,17 @@ function useConversationMessagesPaginated(conversationId: string) {
     }
   }, [user, conversationId, offset, hasMore, isLoadingMore])
   
-  // Reset when conversation changes
+  // Reset when conversation changes - 진짜로 다른 대화방인 경우만 리셋
   useEffect(() => {
-    setMessages([])
-    setOffset(0)
-    setHasMore(true)
-    setIsLoadingMore(false)
-  }, [conversationId])
+    if (prevConversationId && prevConversationId !== conversationId) {
+      // 다른 대화방으로 이동한 경우만 메시지 초기화
+      setMessages([])
+      setOffset(0)
+      setHasMore(true)
+      setIsLoadingMore(false)
+    }
+    setPrevConversationId(conversationId)
+  }, [conversationId, prevConversationId])
   
   return {
     messages,
