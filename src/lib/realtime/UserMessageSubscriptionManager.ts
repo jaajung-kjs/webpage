@@ -153,7 +153,14 @@ export class UserMessageSubscriptionManager {
       })
       .subscribe((status) => {
         console.log('[UserMessageSubscription] Channel status:', status)
-        // Supabase가 자동으로 재연결 처리
+        
+        // CHANNEL_ERROR 시 자동 재구독 (자가 치유)
+        if (status === 'CHANNEL_ERROR') {
+          console.log('[UserMessageSubscription] Channel error detected, resubscribing in 1s...')
+          setTimeout(() => {
+            this.setupMessageSubscriptions() // 기존 채널 제거하고 다시 구독
+          }, 1000) // 1초 후 재시도 (무한 루프 방지)
+        }
       })
   }
 
