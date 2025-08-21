@@ -27,8 +27,8 @@ export class ConnectionCore {
     this.listeners = new Set()
     this.client = this.createNewClient()
     
-    // 백그라운드 복귀 시 WebSocket 재연결 처리
-    this.setupVisibilityHandler()
+    // WebSocket 재연결 처리 설정
+    this.setupReconnectionHandlers()
   }
 
   static getInstance(): ConnectionCore {
@@ -82,32 +82,48 @@ export class ConnectionCore {
     return () => this.listeners.delete(listener)
   }
 
-  // Visibility 변경 핸들러 - 백그라운드에서 돌아올 때 WebSocket 재연결
-  private setupVisibilityHandler(): void {
-    if (typeof document === 'undefined') return
-    
-    console.log('[ConnectionCore] Visibility handler initialized')
-    
-    document.addEventListener('visibilitychange', async () => {
-      console.log(`[ConnectionCore] Visibility changed to: ${document.visibilityState}`)
+  // WebSocket 재연결 핸들러 통합 - 모든 재연결 시나리오 처리
+  private setupReconnectionHandlers(): void {
+    // 1. Visibility 변경 감지 (백그라운드 복귀)
+    if (typeof document !== 'undefined') {
+      console.log('[ConnectionCore] Setting up visibility handler')
       
-      if (document.visibilityState === 'visible') {
-        console.log('[ConnectionCore] 🔄 Returning from background, refreshing WebSocket connection...')
+      document.addEventListener('visibilitychange', async () => {
+        console.log(`[ConnectionCore] Visibility changed to: ${document.visibilityState}`)
         
-        // 세션 갱신 및 WebSocket 재연결
-        const { data: { session } } = await this.client.auth.getSession()
-        
-        if (session?.access_token) {
-          console.log('[ConnectionCore] Session found, updating realtime auth token')
-          this.client.realtime.setAuth(session.access_token)
-          console.log('[ConnectionCore] ✅ WebSocket reconnection initiated')
-        } else {
-          console.log('[ConnectionCore] ⚠️ No session found, skipping WebSocket reconnection')
+        if (document.visibilityState === 'visible') {
+          console.log('[ConnectionCore] 🔄 Returning from background')
+          await this.refreshWebSocketConnection()
+        } else if (document.visibilityState === 'hidden') {
+          console.log('[ConnectionCore] 💤 Going to background')
         }
-      } else if (document.visibilityState === 'hidden') {
-        console.log('[ConnectionCore] 💤 Going to background')
+      })
+    }
+    
+    // 2. 토큰 자동 갱신 감지 (장시간 idle 후 자동 갱신)
+    this.client.auth.onAuthStateChange((event, session) => {
+      console.log(`[ConnectionCore] Auth event: ${event}`)
+      
+      if (event === 'TOKEN_REFRESHED' && session?.access_token) {
+        console.log('[ConnectionCore] 🔐 Token refreshed, updating WebSocket')
+        this.client.realtime.setAuth(session.access_token)
       }
     })
+    
+    console.log('[ConnectionCore] ✅ Reconnection handlers initialized')
+  }
+  
+  // WebSocket 연결 갱신 헬퍼
+  private async refreshWebSocketConnection(): Promise<void> {
+    const { data: { session } } = await this.client.auth.getSession()
+    
+    if (session?.access_token) {
+      console.log('[ConnectionCore] Refreshing WebSocket with new token')
+      this.client.realtime.setAuth(session.access_token)
+      console.log('[ConnectionCore] ✅ WebSocket refreshed')
+    } else {
+      console.log('[ConnectionCore] ⚠️ No session found')
+    }
   }
 }
 
