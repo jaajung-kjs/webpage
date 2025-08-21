@@ -57,8 +57,8 @@ export function useConnectionV2() {
     isError: state.connectionState === 'offline',
     isReconnecting: false, // Supabase가 자동 처리
     reconnect: async () => {
-      // 디버그용 수동 재생성
-      await connectionCore.recreateClient()
+      // Visibility handler가 자동으로 처리하므로 수동 재연결 불필요
+      console.log('[useConnectionV2] Manual reconnect called - handled by visibility handler')
       return true
     }
   }

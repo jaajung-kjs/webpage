@@ -102,7 +102,6 @@ export function CoreProvider({ children }: { children: React.ReactNode }) {
     if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
       (window as any).__DEBUG__ = {
         connection: () => connectionCore.getStatus(),
-        recreateClient: () => connectionCore.recreateClient(),
         clearCache: () => queryClient.clear(),
       }
       console.log('[CoreProvider] Debug functions: window.__DEBUG__')

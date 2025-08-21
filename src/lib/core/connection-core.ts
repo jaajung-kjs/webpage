@@ -26,6 +26,9 @@ export class ConnectionCore {
   private constructor() {
     this.listeners = new Set()
     this.client = this.createNewClient()
+    
+    // 백그라운드 복귀 시 WebSocket 재연결 처리
+    this.setupVisibilityHandler()
   }
 
   static getInstance(): ConnectionCore {
@@ -79,22 +82,32 @@ export class ConnectionCore {
     return () => this.listeners.delete(listener)
   }
 
-  // 극히 드문 경우의 수동 재생성 (디버그용)
-  async recreateClient(): Promise<void> {
-    console.log('[ConnectionCore] Manual recreate (debug only)')
+  // Visibility 변경 핸들러 - 백그라운드에서 돌아올 때 WebSocket 재연결
+  private setupVisibilityHandler(): void {
+    if (typeof document === 'undefined') return
     
-    // 기존 realtime 정리
-    try {
-      this.client.realtime?.disconnect()
-    } catch (error) {
-      console.warn('[ConnectionCore] Cleanup error:', error)
-    }
+    console.log('[ConnectionCore] Visibility handler initialized')
     
-    // 새 클라이언트 생성
-    this.client = this.createNewClient()
-    
-    // 리스너에게 알림
-    this.listeners.forEach(listener => listener(this.client))
+    document.addEventListener('visibilitychange', async () => {
+      console.log(`[ConnectionCore] Visibility changed to: ${document.visibilityState}`)
+      
+      if (document.visibilityState === 'visible') {
+        console.log('[ConnectionCore] 🔄 Returning from background, refreshing WebSocket connection...')
+        
+        // 세션 갱신 및 WebSocket 재연결
+        const { data: { session } } = await this.client.auth.getSession()
+        
+        if (session?.access_token) {
+          console.log('[ConnectionCore] Session found, updating realtime auth token')
+          this.client.realtime.setAuth(session.access_token)
+          console.log('[ConnectionCore] ✅ WebSocket reconnection initiated')
+        } else {
+          console.log('[ConnectionCore] ⚠️ No session found, skipping WebSocket reconnection')
+        }
+      } else if (document.visibilityState === 'hidden') {
+        console.log('[ConnectionCore] 💤 Going to background')
+      }
+    })
   }
 }
 
