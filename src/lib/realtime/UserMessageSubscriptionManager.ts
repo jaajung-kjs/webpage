@@ -69,7 +69,7 @@ export class UserMessageSubscriptionManager {
         event: '*',
         schema: 'public',
         table: 'messages_v2'
-      }, (payload: any) => {
+      }, async (payload: any) => {
         const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
         const senderId = payload.new?.sender_id
         
@@ -81,24 +81,35 @@ export class UserMessageSubscriptionManager {
           callback.onMessagesChange?.(payload)
         })
         
-        // 내가 보낸 메시지는 캐시 무효화 하지 않음
+        // 내가 보낸 메시지는 스킵
         if (senderId === this.userId) return
 
-        // 새 메시지 알림
-        toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
-
-        // 캐시 무효화 - 정확히 해당하는 쿼리만 무효화
-        this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['conversations-v2', this.userId]
-        })
-        this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['unread-count-v2', this.userId]
-        })
-        // 해당 대화방의 메시지만 무효화 (모든 옵션 변형 포함)
-        this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['conversation-messages-v2', conversationId],
-          exact: false
-        })
+        // 이 메시지가 내가 참여한 대화방의 메시지인지 확인
+        const { data: conversation } = await supabaseClient()
+          .from('conversations_v2')
+          .select('id')
+          .eq('id', conversationId)
+          .or(`user1_id.eq.${this.userId},user2_id.eq.${this.userId}`)
+          .maybeSingle()
+        
+        // 내가 참여한 대화방의 메시지인 경우에만 처리
+        if (conversation) {
+          // 새 메시지 알림
+          toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
+          
+          // 캐시 무효화 - 정확히 해당하는 쿼리만 무효화
+          this.getQueryClient?.()?.invalidateQueries({ 
+            queryKey: ['conversations-v2', this.userId]
+          })
+          this.getQueryClient?.()?.invalidateQueries({ 
+            queryKey: ['unread-count-v2', this.userId]
+          })
+          // 해당 대화방의 메시지만 무효화 (모든 옵션 변형 포함)
+          this.getQueryClient?.()?.invalidateQueries({ 
+            queryKey: ['conversation-messages-v2', conversationId],
+            exact: false
+          })
+        }
       })
       // message_read_status_v2 구독
       .on('postgres_changes', {
