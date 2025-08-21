@@ -286,7 +286,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
       conversationId,
       () => {
         console.log('[ConversationMessages] 실시간 변경 감지, 무효화 실행')
-        // exact: false로 해야 options에 관계없이 모든 관련 쿼리가 무효화됨
+        // 모든 옵션 변형의 쿼리를 무효화
         queryClient.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId],
           exact: false
@@ -300,7 +300,7 @@ function useConversationMessagesV2(conversationId: string, options?: {
   }, [user?.id, conversationId]) // options, queryClient 제거 - 불필요한 재구독 방지
   
   return useRealtimeQueryV2<MessageV2[]>({
-    queryKey: ['conversation-messages-v2', conversationId, user?.id, options],
+    queryKey: ['conversation-messages-v2', conversationId, user?.id, options ? JSON.stringify(options) : null],
     queryFn: async () => {
       if (!user || !conversationId) return []
       
@@ -456,10 +456,10 @@ function useConversationMessagesV2(conversationId: string, options?: {
     },
     enabled: !!user && !!conversationId,
     gcTime: 10 * 60 * 1000, // 10 minutes
-    staleTime: 1 * 1000, // 1초로 빠른 응답
-    refetchOnWindowFocus: true, // 포커스 시 새로고침
-    refetchInterval: false // polling 비활성화 (직접 실시간 구독으로 처리)
-    // refetchOnWindowFocus와 refetchOnReconnect는 기본값(true) 사용
+    staleTime: 60 * 1000, // 60초로 변경 - 실시간 구독이 있으므로 충분
+    refetchOnWindowFocus: false, // 실시간 구독으로 충분하므로 비활성화
+    refetchInterval: false, // polling 비활성화 (직접 실시간 구독으로 처리)
+    refetchOnReconnect: true // 재연결 시에는 새로고침
   })
 }
 
@@ -635,23 +635,33 @@ function useSendMessageV2() {
         read_status: { is_read: false, read_at: null } // 안읽음이 기본
       } as MessageV2
       
-      // 모든 관련 캐시에 optimistic message 추가
+      // 캐시 키를 표준화하여 올바른 쿼리만 업데이트
+      const standardCacheKeys = [
+        ['conversation-messages-v2', variables.conversation_id],
+      ]
+      
+      // 현재 캐시에서 데이터 가져오기 (자동으로 여러 키 패턴 처리)
+      const queries = queryClient.getQueriesData<MessageV2[]>({
+        queryKey: ['conversation-messages-v2', variables.conversation_id],
+        exact: false
+      })
+      
       let previousData: MessageV2[] | undefined
       
-      for (const key of cacheKeys) {
-        const data = queryClient.getQueryData<MessageV2[]>(key)
+      // 모든 캐시된 쿼리에 optimistic 메시지 추가
+      queries.forEach(([queryKey, data]) => {
         if (data && !previousData) {
           previousData = data
         }
         
-        queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+        queryClient.setQueryData(queryKey, (old: MessageV2[] = []) => {
           // temp ID 중복 체크 방지
           if (old.some(msg => msg.id === tempId)) {
             return old
           }
           return [...old, optimisticMessage]
         })
-      }
+      })
       
       return { previousData, tempId, optimisticMessage }
     },
@@ -660,18 +670,17 @@ function useSendMessageV2() {
       const tempId = (context as any)?.tempId
       
       if (tempId && data) {
-        const cacheKeys = [
-          ['conversation-messages-v2', variables.conversation_id],
-          ['conversation-messages-v2', variables.conversation_id, user?.id],
-          ['conversation-messages-v2', variables.conversation_id, user?.id, undefined],
-          ['conversation-messages-v2', variables.conversation_id, user?.id, {}]
-        ]
+        // 모든 캐시된 쿼리에서 temp 메시지 교체
+        const queries = queryClient.getQueriesData<MessageV2[]>({
+          queryKey: ['conversation-messages-v2', variables.conversation_id],
+          exact: false
+        })
         
-        for (const key of cacheKeys) {
-          queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+        queries.forEach(([queryKey]) => {
+          queryClient.setQueryData(queryKey, (old: MessageV2[] = []) => {
             return old.map(msg => msg.id === tempId ? data : msg)
           })
-        }
+        })
       }
       
       // 대화 목록만 업데이트 (last message 갱신을 위해)
@@ -685,18 +694,17 @@ function useSendMessageV2() {
       const tempId = (context as any)?.tempId
       
       if (tempId) {
-        const cacheKeys = [
-          ['conversation-messages-v2', variables.conversation_id],
-          ['conversation-messages-v2', variables.conversation_id, user?.id],
-          ['conversation-messages-v2', variables.conversation_id, user?.id, undefined],
-          ['conversation-messages-v2', variables.conversation_id, user?.id, {}]
-        ]
+        // 모든 캐시된 쿼리에서 temp 메시지 제거
+        const queries = queryClient.getQueriesData<MessageV2[]>({
+          queryKey: ['conversation-messages-v2', variables.conversation_id],
+          exact: false
+        })
         
-        for (const key of cacheKeys) {
-          queryClient.setQueryData(key, (old: MessageV2[] = []) => {
+        queries.forEach(([queryKey]) => {
+          queryClient.setQueryData(queryKey, (old: MessageV2[] = []) => {
             return old.filter(msg => msg.id !== tempId)
           })
-        }
+        })
       }
       
       // 에러 토스트는 컴포넌트에서 처리

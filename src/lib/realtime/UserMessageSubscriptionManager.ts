@@ -87,15 +87,14 @@ export class UserMessageSubscriptionManager {
         // 새 메시지 알림
         toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
 
-        // 캐시 무효화
+        // 캐시 무효화 - 정확히 해당하는 쿼리만 무효화
         this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['conversations-v2', this.userId],
-          exact: false
+          queryKey: ['conversations-v2', this.userId]
         })
         this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['unread-count-v2', this.userId],
-          exact: false
+          queryKey: ['unread-count-v2', this.userId]
         })
+        // 해당 대화방의 메시지만 무효화 (모든 옵션 변형 포함)
         this.getQueryClient?.()?.invalidateQueries({ 
           queryKey: ['conversation-messages-v2', conversationId],
           exact: false
@@ -113,21 +112,27 @@ export class UserMessageSubscriptionManager {
           callback.onReadStatusChange?.(payload)
         })
 
-        // 캐시 무효화
+        // 캐시 무효화 - 정확한 쿼리만 타겟팅
         if (payload.new?.user_id === this.userId) {
           this.getQueryClient?.()?.invalidateQueries({ 
-            queryKey: ['unread-count-v2', this.userId],
+            queryKey: ['unread-count-v2', this.userId]
+          })
+        }
+        
+        // 해당 메시지의 대화방만 무효화
+        const messageId = payload.new?.message_id || payload.old?.message_id
+        if (messageId) {
+          // 메시지 ID로 대화방 ID를 찾아야 하는 경우 보류
+          // 현재는 모든 대화 메시지를 갱신
+          this.getQueryClient?.()?.invalidateQueries({ 
+            queryKey: ['conversation-messages-v2'],
             exact: false
           })
         }
         
+        // 대화 목록은 정확히 해당 사용자만
         this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['conversation-messages-v2'],
-          exact: false
-        })
-        this.getQueryClient?.()?.invalidateQueries({ 
-          queryKey: ['conversations-v2'],
-          exact: false
+          queryKey: ['conversations-v2', this.userId]
         })
       })
       // conversations_v2 구독
