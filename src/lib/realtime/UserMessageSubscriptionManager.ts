@@ -5,7 +5,7 @@
  */
 
 import { QueryClient } from '@tanstack/react-query'
-import { supabaseClient } from '@/lib/core/connection-core'
+import { supabaseClient, connectionCore } from '@/lib/core/connection-core'
 import { toast } from 'sonner'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
@@ -23,6 +23,10 @@ export class UserMessageSubscriptionManager {
   private isInitialized = false
   private channel: RealtimeChannel | null = null
   private callbacks: Map<string, MessageCallbacks> = new Map()
+  private retryCount = 0
+  private maxRetries = 5
+  private retryTimeoutId: NodeJS.Timeout | null = null
+  private unsubscribeConnectionChange: (() => void) | null = null
 
   async initialize(userId: string, queryClientGetter: () => QueryClient | null): Promise<void> {
     // 같은 사용자로 이미 초기화된 경우 스킵
@@ -44,6 +48,13 @@ export class UserMessageSubscriptionManager {
       // 사용자별 메시지 구독 설정
       await this.setupMessageSubscriptions()
       
+      // TOKEN_REFRESHED 이벤트 리스닝 (재연결 시 채널 재구독)
+      this.unsubscribeConnectionChange = connectionCore.onClientChange(() => {
+        console.log('[UserMessageSubscription] Connection refreshed, resubscribing channel...')
+        this.retryCount = 0 // 재연결 시 재시도 카운터 리셋
+        this.setupMessageSubscriptions()
+      })
+      
       this.isInitialized = true
       console.log('[UserMessageSubscriptionManager] Initialized for user:', userId)
     } catch (error) {
@@ -64,14 +75,23 @@ export class UserMessageSubscriptionManager {
     // 단일 채널로 모든 메시지 관련 구독 통합
     this.channel = supabaseClient()
       .channel(`user-messages-${this.userId}`)
-      // messages_v2 구독
+      // messages_v2 구독 - INSERT 이벤트만 구독하여 안정성 향상
       .on('postgres_changes', {
-        event: '*',
+        event: 'INSERT',
         schema: 'public',
         table: 'messages_v2'
       }, async (payload: any) => {
         const conversationId = payload.new?.conversation_id || payload.old?.conversation_id
         const senderId = payload.new?.sender_id
+        const eventType = payload.eventType
+        
+        console.log('[UserMessageSubscription] Message event:', {
+          eventType,
+          conversationId,
+          senderId,
+          myUserId: this.userId,
+          isMyMessage: senderId === this.userId
+        })
         
         if (!conversationId) return
         
@@ -81,19 +101,40 @@ export class UserMessageSubscriptionManager {
           callback.onMessagesChange?.(payload)
         })
         
+        // INSERT 이벤트만 구독하므로 이 체크는 불필요하지만 안전을 위해 유지
+        if (eventType !== 'INSERT') {
+          console.log('[UserMessageSubscription] Not INSERT event, skipping toast')
+          return
+        }
+        
         // 내가 보낸 메시지는 스킵
-        if (senderId === this.userId) return
+        if (senderId === this.userId) {
+          console.log('[UserMessageSubscription] Skipping toast - my message')
+          return
+        }
 
         // 이 메시지가 내가 참여한 대화방의 메시지인지 확인
-        const { data: conversation } = await supabaseClient()
+        console.log('[UserMessageSubscription] Checking if conversation belongs to me...')
+        const { data: conversation, error } = await supabaseClient()
           .from('conversations_v2')
           .select('id')
           .eq('id', conversationId)
           .or(`user1_id.eq.${this.userId},user2_id.eq.${this.userId}`)
           .maybeSingle()
         
+        if (error) {
+          console.error('[UserMessageSubscription] Error checking conversation:', error)
+          return
+        }
+        
+        console.log('[UserMessageSubscription] Conversation check result:', { 
+          found: !!conversation,
+          conversationId 
+        })
+        
         // 내가 참여한 대화방의 메시지인 경우에만 처리
         if (conversation) {
+          console.log('[UserMessageSubscription] Showing toast for new message')
           // 새 메시지 알림
           toast.message('💬 새 메시지', { description: '새 메시지가 도착했습니다', duration: 3000 })
           
@@ -109,7 +150,20 @@ export class UserMessageSubscriptionManager {
             queryKey: ['conversation-messages-v2', conversationId],
             exact: false
           })
+        } else {
+          console.log('[UserMessageSubscription] Not my conversation, skipping toast')
         }
+      })
+      // UPDATE 이벤트 구독 추가
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages_v2'
+      }, (payload: any) => {
+        // 콜백만 실행 (Toast는 생략)
+        this.callbacks.forEach((callback) => {
+          callback.onMessagesChange?.(payload)
+        })
       })
       // message_read_status_v2 구독
       .on('postgres_changes', {
@@ -165,12 +219,30 @@ export class UserMessageSubscriptionManager {
       .subscribe((status) => {
         console.log('[UserMessageSubscription] Channel status:', status)
         
-        // CHANNEL_ERROR 시 자동 재구독 (자가 치유)
+        // CHANNEL_ERROR 시 자동 재구독 (지수 백오프)
         if (status === 'CHANNEL_ERROR') {
-          console.log('[UserMessageSubscription] Channel error detected, resubscribing in 1s...')
-          setTimeout(() => {
-            this.setupMessageSubscriptions() // 기존 채널 제거하고 다시 구독
-          }, 1000) // 1초 후 재시도 (무한 루프 방지)
+          // 이전 재시도 타이머 취소
+          if (this.retryTimeoutId) {
+            clearTimeout(this.retryTimeoutId)
+            this.retryTimeoutId = null
+          }
+          
+          if (this.retryCount < this.maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, this.retryCount), 30000) // 최대 30초
+            this.retryCount++
+            console.log(`[UserMessageSubscription] Channel error detected, retry ${this.retryCount}/${this.maxRetries} in ${delay}ms...`)
+            
+            this.retryTimeoutId = setTimeout(() => {
+              this.setupMessageSubscriptions() // 기존 채널 제거하고 다시 구독
+              this.retryTimeoutId = null
+            }, delay)
+          } else {
+            console.error('[UserMessageSubscription] Max retries reached, waiting for token refresh...')
+          }
+        } else if (status === 'SUBSCRIBED') {
+          // 성공적으로 구독되면 재시도 카운터 리셋
+          console.log('[UserMessageSubscription] Successfully subscribed')
+          this.retryCount = 0
         }
       })
   }
@@ -213,15 +285,28 @@ export class UserMessageSubscriptionManager {
   }
 
   cleanup(): void {
+    // 재시도 타이머 정리
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId)
+      this.retryTimeoutId = null
+    }
+    
     // 채널 구독 해제
     if (this.channel) {
       supabaseClient().removeChannel(this.channel)
       this.channel = null
     }
     
+    // ConnectionCore 리스너 해제
+    if (this.unsubscribeConnectionChange) {
+      this.unsubscribeConnectionChange()
+      this.unsubscribeConnectionChange = null
+    }
+    
     this.callbacks.clear()
     this.userId = null
     this.getQueryClient = null
+    this.retryCount = 0
     this.isInitialized = false
   }
 

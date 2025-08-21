@@ -5,7 +5,7 @@
  */
 
 import { QueryClient } from '@tanstack/react-query'
-import { supabaseClient } from '@/lib/core/connection-core'
+import { supabaseClient, connectionCore } from '@/lib/core/connection-core'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 
 class GlobalRealtimeManager {
@@ -13,6 +13,10 @@ class GlobalRealtimeManager {
   private getQueryClient: (() => QueryClient | null) | null = null
   private isInitialized = false
   private channel: RealtimeChannel | null = null
+  private retryCount = 0
+  private maxRetries = 5
+  private retryTimeoutId: NodeJS.Timeout | null = null
+  private unsubscribeConnectionChange: (() => void) | null = null
 
   private constructor() {}
 
@@ -44,6 +48,13 @@ class GlobalRealtimeManager {
     try {
       // 단일 채널로 모든 글로벌 구독 통합
       this.setupGlobalChannel()
+      
+      // TOKEN_REFRESHED 이벤트 리스닝 (재연결 시 채널 재구독)
+      this.unsubscribeConnectionChange = connectionCore.onClientChange(() => {
+        console.log('[GlobalRealtime] Connection refreshed, resubscribing channel...')
+        this.retryCount = 0 // 재연결 시 재시도 카운터 리셋
+        this.setupGlobalChannel()
+      })
       
       this.isInitialized = true
       console.log('[GlobalRealtime] Initialization complete')
@@ -124,12 +135,30 @@ class GlobalRealtimeManager {
       .subscribe((status) => {
         console.log('[GlobalRealtime] Channel status:', status)
         
-        // CHANNEL_ERROR 시 자동 재구독 (자가 치유)
+        // CHANNEL_ERROR 시 자동 재구독 (지수 백오프)
         if (status === 'CHANNEL_ERROR') {
-          console.log('[GlobalRealtime] Channel error detected, resubscribing in 1s...')
-          setTimeout(() => {
-            this.setupGlobalChannel() // 기존 채널 제거하고 다시 구독
-          }, 1000) // 1초 후 재시도 (무한 루프 방지)
+          // 이전 재시도 타이머 취소
+          if (this.retryTimeoutId) {
+            clearTimeout(this.retryTimeoutId)
+            this.retryTimeoutId = null
+          }
+          
+          if (this.retryCount < this.maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, this.retryCount), 30000) // 최대 30초
+            this.retryCount++
+            console.log(`[GlobalRealtime] Channel error detected, retry ${this.retryCount}/${this.maxRetries} in ${delay}ms...`)
+            
+            this.retryTimeoutId = setTimeout(() => {
+              this.setupGlobalChannel() // 기존 채널 제거하고 다시 구독
+              this.retryTimeoutId = null
+            }, delay)
+          } else {
+            console.error('[GlobalRealtime] Max retries reached, waiting for token refresh...')
+          }
+        } else if (status === 'SUBSCRIBED') {
+          // 성공적으로 구독되면 재시도 카운터 리셋
+          console.log('[GlobalRealtime] Successfully subscribed')
+          this.retryCount = 0
         }
       })
   }
@@ -137,12 +166,25 @@ class GlobalRealtimeManager {
   cleanup(): void {
     console.log('[GlobalRealtime] Cleaning up subscriptions...')
     
+    // 재시도 타이머 정리
+    if (this.retryTimeoutId) {
+      clearTimeout(this.retryTimeoutId)
+      this.retryTimeoutId = null
+    }
+    
     // 채널 구독 해제
     if (this.channel) {
       supabaseClient().removeChannel(this.channel)
       this.channel = null
     }
     
+    // ConnectionCore 리스너 해제
+    if (this.unsubscribeConnectionChange) {
+      this.unsubscribeConnectionChange()
+      this.unsubscribeConnectionChange = null
+    }
+    
+    this.retryCount = 0
     this.isInitialized = false
     console.log('[GlobalRealtime] Cleanup complete')
   }

@@ -87,6 +87,10 @@ export class ConnectionCore {
       if (event === 'TOKEN_REFRESHED' && session?.access_token) {
         console.log('[ConnectionCore] 🔐 Token refreshed, updating WebSocket')
         this.client.realtime.setAuth(session.access_token)
+        
+        // 리스너들에게 재연결 알림 (채널 재구독용)
+        console.log('[ConnectionCore] Notifying listeners about reconnection')
+        this.listeners.forEach(listener => listener(this.client))
       }
     })
     
