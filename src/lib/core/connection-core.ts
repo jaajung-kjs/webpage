@@ -27,7 +27,7 @@ export class ConnectionCore {
     this.listeners = new Set()
     this.client = this.createNewClient()
     
-    // WebSocket 재연결 처리 설정
+    // 토큰 갱신 핸들러 설정
     this.setupReconnectionHandlers()
   }
 
@@ -54,12 +54,8 @@ export class ConnectionCore {
       },
       realtime: {
         params: { eventsPerSecond: 10 },
-        timeout: 20000,
-        heartbeatIntervalMs: 30000, // Supabase 자동 heartbeat
-        reconnectAfterMs: (attempts: number) => {
-          // 빠른 재연결: 0.5s, 1s, 2s, 5s, 5s...
-          return attempts === 0 ? 500 : Math.min(1000 * attempts, 5000)
-        }
+        // Supabase의 기본 설정을 사용하여 안정성 향상
+        // timeout, heartbeat, reconnect는 Supabase가 자동 관리
       }
     })
   }
@@ -82,48 +78,19 @@ export class ConnectionCore {
     return () => this.listeners.delete(listener)
   }
 
-  // WebSocket 재연결 핸들러 통합 - 모든 재연결 시나리오 처리
+  // 토큰 갱신 핸들러만 설정 - Supabase가 나머지 처리
   private setupReconnectionHandlers(): void {
-    // 1. Visibility 변경 감지 (백그라운드 복귀)
-    if (typeof document !== 'undefined') {
-      console.log('[ConnectionCore] Setting up visibility handler')
-      
-      document.addEventListener('visibilitychange', async () => {
-        console.log(`[ConnectionCore] Visibility changed to: ${document.visibilityState}`)
-        
-        if (document.visibilityState === 'visible') {
-          console.log('[ConnectionCore] 🔄 Returning from background')
-          await this.refreshWebSocketConnection()
-        } else if (document.visibilityState === 'hidden') {
-          console.log('[ConnectionCore] 💤 Going to background')
-        }
-      })
-    }
-    
-    // 2. 토큰 자동 갱신 감지 (장시간 idle 후 자동 갱신)
     this.client.auth.onAuthStateChange((event, session) => {
       console.log(`[ConnectionCore] Auth event: ${event}`)
       
+      // TOKEN_REFRESHED 시 setAuth 호출하면 Supabase가 자동 재연결
       if (event === 'TOKEN_REFRESHED' && session?.access_token) {
         console.log('[ConnectionCore] 🔐 Token refreshed, updating WebSocket')
         this.client.realtime.setAuth(session.access_token)
       }
     })
     
-    console.log('[ConnectionCore] ✅ Reconnection handlers initialized')
-  }
-  
-  // WebSocket 연결 갱신 헬퍼
-  private async refreshWebSocketConnection(): Promise<void> {
-    const { data: { session } } = await this.client.auth.getSession()
-    
-    if (session?.access_token) {
-      console.log('[ConnectionCore] Refreshing WebSocket with new token')
-      this.client.realtime.setAuth(session.access_token)
-      console.log('[ConnectionCore] ✅ WebSocket refreshed')
-    } else {
-      console.log('[ConnectionCore] ⚠️ No session found')
-    }
+    console.log('[ConnectionCore] ✅ Token refresh handler initialized')
   }
 }
 
