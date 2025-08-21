@@ -938,7 +938,6 @@ function useConversationMessagesPaginated(conversationId: string) {
   const [hasMore, setHasMore] = useState(true)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [offset, setOffset] = useState(0)
-  const [prevConversationId, setPrevConversationId] = useState<string | null>(null)
   const pageSize = 20
   
   // Initial load
@@ -955,7 +954,7 @@ function useConversationMessagesPaginated(conversationId: string) {
       setHasMore(initialMessages.length === pageSize)
       setOffset(initialMessages.length)
     }
-  }, [initialMessages])
+  }, [initialMessages, conversationId]) // conversationId 추가하여 대화방 변경 시 즉시 업데이트
   
   // Load more function
   const loadMore = useCallback(async () => {
@@ -1058,17 +1057,15 @@ function useConversationMessagesPaginated(conversationId: string) {
     }
   }, [user, conversationId, offset, hasMore, isLoadingMore])
   
-  // Reset when conversation changes - 진짜로 다른 대화방인 경우만 리셋
+  // Reset pagination state when conversation changes
   useEffect(() => {
-    if (prevConversationId && prevConversationId !== conversationId) {
-      // 다른 대화방으로 이동한 경우만 메시지 초기화
-      setMessages([])
-      setOffset(0)
-      setHasMore(true)
-      setIsLoadingMore(false)
-    }
-    setPrevConversationId(conversationId)
-  }, [conversationId, prevConversationId])
+    // 대화방이 변경되면 페이지네이션 상태만 리셋
+    // 메시지는 initialMessages가 업데이트될 때 자동으로 교체됨
+    setOffset(0)
+    setHasMore(true)
+    setIsLoadingMore(false)
+    // setMessages는 제거 - initialMessages effect에서 처리
+  }, [conversationId])
   
   return {
     messages,
