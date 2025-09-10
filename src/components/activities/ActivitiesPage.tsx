@@ -366,17 +366,39 @@ function ActivitiesPage() {
   }
 
   const handleDeleteActivity = async (activityId: string) => {
-    if (!user) return
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+
+    console.log('[ActivitiesPage] Deleting activity:', activityId)
+
+    // 확인 대화상자 추가
+    if (!confirm('정말로 이 활동을 삭제하시겠습니까?')) {
+      return
+    }
 
     try {
       // Use the V2 delete function which handles both activity and content deletion
       await deleteActivityMutation(activityId)
       
+      console.log('[ActivitiesPage] Activity deleted successfully')
       toast.success('활동이 성공적으로 삭제되었습니다.')
       refetch()
     } catch (error: any) {
-      console.error('Error deleting activity:', error)
-      toast.error(error.message || '활동 삭제에 실패했습니다.')
+      console.error('[ActivitiesPage] Error deleting activity:', error)
+      
+      // 더 구체적인 에러 메시지
+      const errorMessage = error.message || error.error || '활동 삭제에 실패했습니다.'
+      toast.error(errorMessage)
+      
+      // 콘솔에 전체 에러 정보 출력
+      console.error('[ActivitiesPage] Full error object:', {
+        error,
+        stack: error.stack,
+        message: error.message,
+        cause: error.cause
+      })
     }
   }
 

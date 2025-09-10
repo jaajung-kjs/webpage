@@ -161,7 +161,7 @@ export function useActivitiesV2() {
           .from('activities_v2')
           .select(`
             *,
-            content:content_v2!content_id(
+            content:content_v2!content_id!inner(
               id,
               title,
               summary,
@@ -169,9 +169,12 @@ export function useActivitiesV2() {
               author_id,
               status,
               created_at,
+              deleted_at,
               author:users_v2!author_id(id, name, avatar_url)
             )
           `, { count: 'exact' })
+          .is('content.deleted_at', null)  // deleted_at이 null인 것만 (삭제되지 않은 것)
+          .neq('content.status', 'archived')  // archived 상태가 아닌 것만
           .range(pageParam, pageParam + pageSize - 1)
           .order('event_date', { ascending: true })
 
@@ -705,6 +708,8 @@ export function useActivitiesV2() {
     mutationFn: async (activityId: string) => {
       if (!user?.id) throw new Error('User not authenticated')
 
+      console.log('[useActivitiesV2] Deleting activity:', activityId)
+
       // Get activity to find content_id
       const { data: activity, error: activityError } = await supabase
         .from('activities_v2')
@@ -712,20 +717,30 @@ export function useActivitiesV2() {
         .eq('id', activityId)
         .single()
 
-      if (activityError) throw activityError
+      if (activityError) {
+        console.error('[useActivitiesV2] Error fetching activity:', activityError)
+        throw new Error(`활동 조회 실패: ${activityError.message}`)
+      }
 
-      // Soft delete the content (which will cascade to activity via RLS)
+      console.log('[useActivitiesV2] Found activity with content_id:', activity.content_id)
+
+      // Soft delete the content (status를 'archived'로 변경하고 deleted_at 설정)
       const { data: contentData, error: contentError } = await supabase
         .from('content_v2')
         .update({ 
-          status: 'deleted',
+          status: 'archived',  // 'deleted' 대신 'archived' 사용
           deleted_at: new Date().toISOString()
         })
         .eq('id', activity.content_id)
         .select()
         .single()
 
-      if (contentError) throw contentError
+      if (contentError) {
+        console.error('[useActivitiesV2] Error deleting content:', contentError)
+        throw new Error(`콘텐츠 삭제 실패: ${contentError.message}`)
+      }
+
+      console.log('[useActivitiesV2] Activity deleted successfully')
       return contentData
     },
     onSuccess: () => {
