@@ -342,51 +342,71 @@ export function useActivitiesV2() {
     mutationFn: async (formData: ActivityFormData) => {
       if (!user?.id) throw new Error('User not authenticated')
 
+      console.log('[useActivitiesV2] Creating activity with data:', formData)
+
       // 1. 콘텐츠 생성
+      const contentInsertData = {
+        content_type: 'activity',
+        title: formData.title,
+        content: formData.content,
+        summary: formData.summary || formData.content.substring(0, 200),
+        author_id: user.id,
+        status: 'published' as const,
+        // category 필드 추가 - activity 타입에 맞는 카테고리 설정
+        category: formData.event_type // regular, study, dinner, lecture 중 하나
+      }
+
+      console.log('[useActivitiesV2] Inserting content:', contentInsertData)
+
       const { data: contentData, error: contentError } = await supabase
         .from('content_v2')
-        .insert({
-          content_type: 'activity',
-          title: formData.title,
-          content: formData.content,
-          summary: formData.summary,
-          author_id: user.id,
-          status: 'published'
-        })
+        .insert(contentInsertData)
         .select()
         .single()
 
-      if (contentError) throw contentError
+      if (contentError) {
+        console.error('[useActivitiesV2] Content creation error:', contentError)
+        throw new Error(`콘텐츠 생성 실패: ${contentError.message}`)
+      }
+
+      console.log('[useActivitiesV2] Content created:', contentData)
 
       // 2. 활동 정보 생성
+      const activityInsertData = {
+        content_id: contentData.id,
+        event_type: formData.event_type,
+        event_date: formData.event_date,
+        event_time: formData.event_time || '10:00',
+        end_date: formData.end_date,
+        end_time: formData.end_time,
+        location: formData.location || '',
+        location_detail: formData.location_detail,
+        is_online: formData.is_online || false,
+        online_url: formData.online_url,
+        max_participants: formData.max_participants || null,
+        registration_deadline: formData.registration_deadline,
+        requirements: formData.requirements
+      }
+
+      console.log('[useActivitiesV2] Inserting activity:', activityInsertData)
+
       const { data: activityData, error: activityError } = await supabase
         .from('activities_v2')
-        .insert({
-          content_id: contentData.id,
-          event_type: formData.event_type,
-          event_date: formData.event_date,
-          event_time: formData.event_time,
-          end_date: formData.end_date,
-          end_time: formData.end_time,
-          location: formData.location,
-          location_detail: formData.location_detail,
-          is_online: formData.is_online,
-          online_url: formData.online_url,
-          max_participants: formData.max_participants,
-          registration_deadline: formData.registration_deadline,
-          requirements: formData.requirements
-        })
+        .insert(activityInsertData)
         .select()
         .single()
 
       if (activityError) {
+        console.error('[useActivitiesV2] Activity creation error:', activityError)
         // 활동 생성 실패 시 콘텐츠 삭제
         await supabase
           .from('content_v2')
           .delete()
           .eq('id', contentData.id)
-        throw activityError
+        throw new Error(`활동 생성 실패: ${activityError.message}`)
       }
+
+      console.log('[useActivitiesV2] Activity created:', activityData)
 
       return { content: contentData, activity: activityData }
     },

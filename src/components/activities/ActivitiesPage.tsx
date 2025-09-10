@@ -272,34 +272,61 @@ function ActivitiesPage() {
   }
 
   const handleCreateActivity = async () => {
-    if (!user || !formData.title.trim() || !formData.description.trim()) {
+    if (!user) {
+      toast.error('로그인이 필요합니다.')
+      return
+    }
+    
+    if (!formData.title.trim() || !formData.description.trim()) {
       toast.error('제목과 설명을 입력해주세요.')
       return
     }
 
+    if (!formData.date) {
+      toast.error('활동 날짜를 선택해주세요.')
+      return
+    }
+
+    console.log('[ActivitiesPage] Creating activity with form data:', formData)
+
     try {
       // Use the V2 create activity function which handles both content and activity creation
       const activityFormData = {
-        title: formData.title,
-        content: formData.description,
-        summary: formData.description.substring(0, 200),
+        title: formData.title.trim(),
+        content: formData.description.trim(),
+        summary: formData.description.substring(0, 200).trim(),
         event_type: formData.category as any,
         event_date: formData.date,
-        event_time: formData.time,
-        location: formData.location,
+        event_time: formData.time || '10:00',
+        location: formData.location?.trim() || '미정',
         is_online: false,
-        max_participants: formData.max_participants
+        max_participants: formData.max_participants > 0 ? formData.max_participants : undefined
       }
       
-      await createActivityMutation(activityFormData)
+      console.log('[ActivitiesPage] Calling createActivityMutation with:', activityFormData)
+      
+      const result = await createActivityMutation(activityFormData)
+      
+      console.log('[ActivitiesPage] Activity creation result:', result)
 
       toast.success('활동이 성공적으로 등록되었습니다.')
       setCreateDialogOpen(false)
       resetForm()
       refetch()
     } catch (error: any) {
-      console.error('Error creating activity:', error)
-      toast.error(error.message || '활동 등록에 실패했습니다.')
+      console.error('[ActivitiesPage] Error creating activity:', error)
+      
+      // 더 구체적인 에러 메시지 표시
+      const errorMessage = error.message || error.error || '활동 등록에 실패했습니다.'
+      toast.error(errorMessage)
+      
+      // 콘솔에 전체 에러 객체 출력
+      console.error('[ActivitiesPage] Full error object:', {
+        error,
+        stack: error.stack,
+        message: error.message,
+        cause: error.cause
+      })
     }
   }
 
