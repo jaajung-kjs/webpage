@@ -52,9 +52,10 @@ next-env.d.ts
 *.swo
 
 # Python
-*.py
 __pycache__/
 *.pyc
+# But keep Vercel API Python files
+!api/*.py
 
 # Backup files
 *.old
