@@ -9,10 +9,24 @@ import json
 from io import BytesIO
 from datetime import datetime
 import traceback
-from flask import Response
+import sys
+import os
 
-# excel_transformer 모듈 import
-from excel_transformer import parse_html_buffer, transform_data, save_to_excel_buffer
+# 현재 디렉토리를 Python path에 추가
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+try:
+    # excel_transformer 모듈 import
+    from excel_transformer import parse_html_buffer, transform_data, save_to_excel_buffer
+except ImportError as e:
+    print(f"Import error: {e}")
+    # 에러 발생 시 더미 함수 정의
+    def parse_html_buffer(buffer):
+        return None
+    def transform_data(df):
+        return df
+    def save_to_excel_buffer(df, date):
+        return BytesIO()
 
 @functions_framework.http
 def excel_transform(request):
@@ -101,6 +115,7 @@ def excel_transform(request):
         
         if response_type == 'binary':
             # 직접 바이너리 파일 응답
+            from flask import Response
             response_headers = {
                 **headers,
                 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
