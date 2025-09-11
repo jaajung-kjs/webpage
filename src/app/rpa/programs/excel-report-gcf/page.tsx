@@ -130,10 +130,17 @@ export default function ExcelReportGCFPage() {
 
       // 응답 타입 확인
       const contentType = response.headers.get('content-type')
+      console.log('Response content-type:', contentType)
       
       if (contentType && contentType.includes('application/json')) {
         // JSON 응답 (Base64 인코딩된 파일)
         const data = await response.json()
+        console.log('Received JSON response:', { 
+          success: data.success, 
+          hasFile: !!data.file,
+          filename: data.filename,
+          recordCount: data.recordCount 
+        })
         
         if (!data.success) {
           throw new Error(data.error || '파일 처리에 실패했습니다.')
@@ -177,9 +184,18 @@ export default function ExcelReportGCFPage() {
 
   // 결과 다운로드 핸들러
   const handleDownload = () => {
-    if (!result?.file || !result?.filename) return
+    if (!result?.file || !result?.filename) {
+      console.error('Download failed: No result data', result)
+      return
+    }
     
     try {
+      console.log('Starting download:', {
+        filename: result.filename,
+        fileLength: result.file?.length,
+        recordCount: result.recordCount
+      })
+      
       // Base64를 Blob으로 변환
       const byteCharacters = atob(result.file)
       const byteNumbers = new Array(byteCharacters.length)
@@ -189,6 +205,11 @@ export default function ExcelReportGCFPage() {
       const byteArray = new Uint8Array(byteNumbers)
       const blob = new Blob([byteArray], { 
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      })
+      
+      console.log('Created blob:', {
+        size: blob.size,
+        type: blob.type
       })
       
       // 다운로드 링크 생성
