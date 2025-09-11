@@ -10,6 +10,7 @@ from datetime import datetime
 import argparse
 import sys
 import os
+from io import BytesIO
 from html.parser import HTMLParser
 from openpyxl import Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
@@ -56,6 +57,25 @@ class HTMLTableParser(HTMLParser):
             self.current_cell += data
 
 
+def parse_html_buffer(buffer):
+    """BytesIO 버퍼를 파싱하여 데이터프레임으로 변환"""
+    
+    # 버퍼에서 읽기 (EUC-KR 인코딩 우선 시도)
+    try:
+        content = buffer.read().decode('euc-kr')
+    except UnicodeDecodeError:
+        # EUC-KR이 실패하면 UTF-8 시도
+        buffer.seek(0)
+        try:
+            content = buffer.read().decode('utf-8')
+        except UnicodeDecodeError:
+            # UTF-8도 실패하면 cp949 시도 (Windows 한글)
+            buffer.seek(0)
+            content = buffer.read().decode('cp949')
+    
+    # HTML 파싱 (공통 로직 호출)
+    return parse_html_content(content)
+
 def parse_html_file(filepath):
     """HTML 파일을 파싱하여 데이터프레임으로 변환"""
     
@@ -67,6 +87,12 @@ def parse_html_file(filepath):
         # EUC-KR이 실패하면 UTF-8 시도
         with open(filepath, 'r', encoding='utf-8') as f:
             content = f.read()
+    
+    # HTML 파싱 (공통 로직 호출)
+    return parse_html_content(content)
+
+def parse_html_content(content):
+    """HTML 컨텐츠를 파싱하여 데이터프레임으로 변환 (공통 로직)"""
     
     # HTML 파싱
     parser = HTMLTableParser()
@@ -342,6 +368,126 @@ def save_to_excel(df, output_path, report_date):
     # 파일 저장
     wb.save(output_path)
     print(f"✅ Excel 파일이 생성되었습니다: {output_path}")
+
+
+def save_to_excel_buffer(df, report_date):
+    """데이터프레임을 Excel BytesIO 버퍼로 저장 (서식 포함)"""
+    
+    # 워크북 생성
+    wb = Workbook()
+    ws = wb.active
+    
+    # 제목 추가
+    title = f"일일 휴전계획 보고({report_date.strftime('%m.%d')})"
+    ws.merge_cells('A1:M1')
+    ws['A1'] = title
+    ws['A1'].font = Font(size=14, bold=True)
+    ws['A1'].alignment = Alignment(horizontal='center', vertical='center')
+    
+    # 헤더 스타일 정의
+    header_font = Font(bold=True)
+    header_fill = PatternFill(start_color="D3D3D3", end_color="D3D3D3", fill_type="solid")
+    header_alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+    thin_border = Border(
+        left=Side(style='thin'),
+        right=Side(style='thin'),
+        top=Side(style='thin'),
+        bottom=Side(style='thin')
+    )
+    
+    # 활선 작업 행의 배경색 정의 (연한 노란색)
+    live_work_fill = PatternFill(start_color="FFFF99", end_color="FFFF99", fill_type="solid")
+    
+    # 첫 번째 헤더 행 (병합된 셀들)
+    ws.merge_cells('A4:A5')
+    ws['A4'] = '구분'
+    ws.merge_cells('B4:B5')
+    ws['B4'] = '순번'
+    ws.merge_cells('C4:F4')
+    ws['C4'] = '휴전일시'
+    ws['C5'] = '시작'
+    ws['D5'] = '종료'
+    ws['E5'] = '2차'
+    ws['F5'] = '변전소'
+    ws.merge_cells('G4:G5')
+    ws['G4'] = '전압'
+    ws.merge_cells('H4:H5')
+    ws['H4'] = '설비명'
+    ws.merge_cells('I4:I5')
+    ws['I4'] = '공사개요'
+    ws.merge_cells('J4:J5')
+    ws['J4'] = '구분'
+    ws.merge_cells('K4:K5')
+    ws['K4'] = '주관부서'
+    ws.merge_cells('L4:L5')
+    ws['L4'] = '감독자'
+    ws.merge_cells('M4:M5')
+    ws['M4'] = '도급업체명'
+    
+    # 헤더 스타일 적용
+    for row in ws['A4:M5']:
+        for cell in row:
+            if cell.value:
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_alignment
+                cell.border = thin_border
+    
+    # 데이터 추가
+    row_num = 6  # 데이터 시작 행
+    for idx, row_data in enumerate(df.itertuples(index=False), 1):
+        # 활선 작업 여부 확인
+        is_live_work = ('활선' in str(row_data.공사개요) or 
+                       '활선' in str(row_data.수속절차) if hasattr(row_data, '수속절차') else False)
+        
+        # 셀에 데이터 입력
+        ws[f'A{row_num}'] = row_data.구분1차
+        ws[f'B{row_num}'] = idx
+        ws[f'C{row_num}'] = row_data.휴전시작시간
+        ws[f'D{row_num}'] = row_data.휴전종료시간
+        ws[f'E{row_num}'] = row_data.사업소_2차
+        ws[f'F{row_num}'] = row_data.변전소
+        ws[f'G{row_num}'] = row_data.전압
+        ws[f'H{row_num}'] = row_data.설비명
+        ws[f'I{row_num}'] = row_data.공사개요
+        ws[f'J{row_num}'] = row_data.구분
+        ws[f'K{row_num}'] = row_data.주관부서
+        ws[f'L{row_num}'] = row_data.감독자
+        ws[f'M{row_num}'] = row_data.도급업체명
+        
+        # 스타일 적용
+        for col in 'ABCDEFGHIJKLM':
+            cell = ws[f'{col}{row_num}']
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='center' if col in 'ABCDG' else 'left', 
+                                     vertical='center', wrap_text=True)
+            # 활선 작업인 경우 배경색 적용
+            if is_live_work:
+                cell.fill = live_work_fill
+        
+        row_num += 1
+    
+    # 컬럼 너비 조정
+    ws.column_dimensions['A'].width = 8
+    ws.column_dimensions['B'].width = 6
+    ws.column_dimensions['C'].width = 12
+    ws.column_dimensions['D'].width = 12
+    ws.column_dimensions['E'].width = 10
+    ws.column_dimensions['F'].width = 15
+    ws.column_dimensions['G'].width = 8
+    ws.column_dimensions['H'].width = 20
+    ws.column_dimensions['I'].width = 30
+    ws.column_dimensions['J'].width = 8
+    ws.column_dimensions['K'].width = 12
+    ws.column_dimensions['L'].width = 10
+    ws.column_dimensions['M'].width = 15
+    
+    # BytesIO 버퍼에 저장
+    output_buffer = BytesIO()
+    wb.save(output_buffer)
+    output_buffer.seek(0)
+    
+    return output_buffer
 
 
 def main():
