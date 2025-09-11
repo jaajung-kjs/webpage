@@ -165,7 +165,7 @@ export function useFileUploadForEditor() {
   return useFileUpload({
     bucket: 'attachments',
     folder: 'content',
-    maxSizeInMB: 10,
+    maxSizeInMB: 50, // 50MB로 증가
     // 기본적으로 모든 파일 타입 허용
     allowedTypes: undefined
   })
@@ -178,6 +178,6 @@ export function useMultipleFileUploadForEditor() {
   return useMultipleFileUpload({
     bucket: 'attachments',
     folder: 'content',
-    maxSizeInMB: 10
+    maxSizeInMB: 50 // 50MB로 증가
   })
 }
