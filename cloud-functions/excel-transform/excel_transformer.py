@@ -119,7 +119,7 @@ def parse_html_content(content):
                 '구분': row[9],
                 '주관부서': row[10],
                 '감독자': row[11],
-                '도급업체명': row[12] if len(row) > 12 else '',
+                '도급업체명': row[12] if len(row) > 12 else '',  # 원본 데이터는 도급업체명이지만 사용하지 않음
                 '수속절차': row[13] if len(row) > 13 else '',
                 '휴전종류': row[14] if len(row) > 14 else ''
             })
@@ -422,7 +422,7 @@ def save_to_excel_buffer(df, report_date):
     ws.merge_cells('L4:L5')
     ws['L4'] = '감독자'
     ws.merge_cells('M4:M5')
-    ws['M4'] = '도급업체명'
+    ws['M4'] = '안전관리자'
     
     # 헤더 스타일 적용
     for row in ws['A4:M5']:
@@ -435,25 +435,25 @@ def save_to_excel_buffer(df, report_date):
     
     # 데이터 추가
     row_num = 6  # 데이터 시작 행
-    for idx, row_data in enumerate(df.itertuples(index=False), 1):
-        # 활선 작업 여부 확인
-        is_live_work = ('활선' in str(row_data.공사개요) or 
-                       '활선' in str(row_data.수속절차) if hasattr(row_data, '수속절차') else False)
+    for idx, row in df.iterrows():
+        # 활선 작업 여부 확인 (구분 컬럼이 '활선'인지 확인)
+        is_live_work = (row['구분'] == '활선')
         
         # 셀에 데이터 입력
-        ws[f'A{row_num}'] = row_data.구분1차
-        ws[f'B{row_num}'] = idx
-        ws[f'C{row_num}'] = row_data.휴전시작시간
-        ws[f'D{row_num}'] = row_data.휴전종료시간
-        ws[f'E{row_num}'] = row_data.사업소_2차
-        ws[f'F{row_num}'] = row_data.변전소
-        ws[f'G{row_num}'] = row_data.전압
-        ws[f'H{row_num}'] = row_data.설비명
-        ws[f'I{row_num}'] = row_data.공사개요
-        ws[f'J{row_num}'] = row_data.구분
-        ws[f'K{row_num}'] = row_data.주관부서
-        ws[f'L{row_num}'] = row_data.감독자
-        ws[f'M{row_num}'] = row_data.도급업체명
+        ws[f'A{row_num}'] = row['구분']
+        # 순번은 Excel 함수로 자동 생성 (현재 행 번호 - 5)
+        ws[f'B{row_num}'] = f'=ROW()-5'
+        ws[f'C{row_num}'] = row['휴전일시_시작']
+        ws[f'D{row_num}'] = row['휴전일시_종료']
+        ws[f'E{row_num}'] = row['2차']
+        ws[f'F{row_num}'] = row['변전소']
+        ws[f'G{row_num}'] = row['전압']
+        ws[f'H{row_num}'] = row['설비명']
+        ws[f'I{row_num}'] = row['공사개요']
+        ws[f'J{row_num}'] = row['구분2']
+        ws[f'K{row_num}'] = row['주관부서']
+        ws[f'L{row_num}'] = row['감독자']
+        ws[f'M{row_num}'] = row.get('안전관리자', '')
         
         # 스타일 적용
         for col in 'ABCDEFGHIJKLM':
