@@ -340,26 +340,18 @@ def save_to_excel(df, output_path, report_date):
         for col in range(1, 14):
             cell = ws.cell(row=current_row, column=col)
             cell.border = thin_border
-            # 순번 컬럼(B열)은 중앙 정렬
-            if col == 2:
-                cell.alignment = Alignment(horizontal='center', vertical='center')
-            else:
-                cell.alignment = Alignment(vertical='center', wrap_text=True)
+            # 모든 셀을 가운데 정렬로 설정
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             
             # 활선 작업인 경우 배경색 적용
             if row['구분'] == '활선':
                 cell.fill = live_work_fill
     
-    # 구분 컬럼 스타일 재적용 (병합 없이 각 셀에 가운데 정렬 적용)
-    for idx, row in df.iterrows():
-        current_row = start_row + idx
-        cell = ws[f'A{current_row}']
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
     # 컬럼 너비 조정
     column_widths = {
-        'A': 8, 'B': 6, 'C': 18, 'D': 18, 'E': 10, 'F': 12,
-        'G': 8, 'H': 25, 'I': 40, 'J': 8, 'K': 15, 'L': 20, 'M': 12
+        'A': 8, 'B': 6, 'C': 12, 'D': 12, 'E': 10, 'F': 15,
+        'G': 8, 'H': 30, 'I': 60, 'J': 8, 'K': 12, 'L': 25, 'M': 25
     }
     
     for col, width in column_widths.items():
@@ -459,8 +451,8 @@ def save_to_excel_buffer(df, report_date):
         for col in 'ABCDEFGHIJKLM':
             cell = ws[f'{col}{row_num}']
             cell.border = thin_border
-            cell.alignment = Alignment(horizontal='center' if col in 'ABCDG' else 'left', 
-                                     vertical='center', wrap_text=True)
+            # 모든 셀을 가운데 정렬로 설정
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
             # 활선 작업인 경우 배경색 적용
             if is_live_work:
                 cell.fill = live_work_fill
@@ -475,12 +467,12 @@ def save_to_excel_buffer(df, report_date):
     ws.column_dimensions['E'].width = 10
     ws.column_dimensions['F'].width = 15
     ws.column_dimensions['G'].width = 8
-    ws.column_dimensions['H'].width = 20
-    ws.column_dimensions['I'].width = 30
+    ws.column_dimensions['H'].width = 30
+    ws.column_dimensions['I'].width = 60
     ws.column_dimensions['J'].width = 8
     ws.column_dimensions['K'].width = 12
-    ws.column_dimensions['L'].width = 10
-    ws.column_dimensions['M'].width = 15
+    ws.column_dimensions['L'].width = 25
+    ws.column_dimensions['M'].width = 25
     
     # BytesIO 버퍼에 저장
     output_buffer = BytesIO()
