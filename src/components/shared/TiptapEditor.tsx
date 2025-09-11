@@ -468,7 +468,7 @@ export default function TiptapEditor({
         ref={fileInputRef}
         type="file"
         multiple
-        accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,.tar,.gz,.txt,.md,.json,.xml,.csv,.mp4,.mp3,.wav,.avi,.mov,.mkv"
+        accept="image/*,application/pdf,.doc,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/msword,.xls,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,.ppt,.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,.zip,.rar,.7z,.tar,.gz,.txt,.md,.json,.xml,.csv,.mp4,.mp3,.wav,.avi,.mov,.mkv"
         className="hidden"
         onChange={(e) => {
           const files = Array.from(e.target.files || [])
