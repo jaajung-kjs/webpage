@@ -36,6 +36,7 @@ import { useImageUploadForEditor, useMultipleFileUploadForEditor } from '@/hooks
 interface TiptapEditorProps {
   value: string
   onChange: (value: string) => void
+  onFileUpload?: (url: string, name: string, type: string, size: number) => void
   placeholder?: string
   height?: number
   className?: string
@@ -44,6 +45,7 @@ interface TiptapEditorProps {
 export default function TiptapEditor({
   value,
   onChange,
+  onFileUpload,
   placeholder = 'Write your content here...',
   height = 400,
   className
@@ -152,6 +154,9 @@ export default function TiptapEditor({
       for (const file of files) {
         const result = await imageUploadMutation.mutateAsync(file)
         editor.chain().focus().setImage({ src: result.url }).run()
+        
+        // 파일 업로드 콜백 호출
+        onFileUpload?.(result.url, result.name, result.type, result.size)
       }
       
       toast.success(`${files.length}개 이미지가 업로드되었습니다.`)
@@ -179,6 +184,9 @@ export default function TiptapEditor({
             .insertContent(`<a href="${result.url}" target="_blank">📎 ${result.name}</a>`)
             .run()
         }
+        
+        // 파일 업로드 콜백 호출
+        onFileUpload?.(result.url, result.name, result.type, result.size)
       }
       
       toast.success(`${files.length}개 파일이 업로드되었습니다.`)

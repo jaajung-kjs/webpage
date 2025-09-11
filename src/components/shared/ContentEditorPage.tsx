@@ -89,6 +89,7 @@ export default function ContentEditorPage({
   const [tagInput, setTagInput] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [attachments, setAttachments] = useState<any[]>([])
   const isMobile = useIsMobile()
   const isEditMode = !!editId
 
@@ -109,6 +110,11 @@ export default function ContentEditorPage({
       form.setValue('category', (existingContent as any).category || '')
       form.setValue('content', existingContent.content || '')
       form.setValue('tags', (existingContent.tags || []).map((tag: any) => typeof tag === 'string' ? tag : tag.name))
+      
+      // 기존 첨부 파일 로드
+      if ((existingContent as any).metadata?.attachments) {
+        setAttachments((existingContent as any).metadata.attachments)
+      }
     }
   }, [isEditMode, existingContent, form])
 
@@ -198,6 +204,19 @@ export default function ContentEditorPage({
     form.setValue('tags', currentTags.filter(tag => tag !== tagToRemove))
   }
 
+  // 파일 업로드 핸들러
+  const handleFileUpload = (url: string, name: string, type: string, size: number) => {
+    const newAttachment = {
+      id: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      file_name: name,
+      file_url: url,
+      file_type: type,
+      file_size: size,
+      attachment_type: type.startsWith('image/') ? 'image' : 'file'
+    }
+    setAttachments(prev => [...prev, newAttachment])
+  }
+
   const onSubmit = async (values: FormValues) => {
     if (!user) {
       toast.error('로그인이 필요합니다.')
@@ -226,6 +245,10 @@ export default function ContentEditorPage({
           title: values.title.trim(),
           category: values.category, // 카테고리도 업데이트
           content: values.content.trim(),
+          metadata: {
+            ...(existingContent as any)?.metadata,
+            attachments: attachments.length > 0 ? attachments : undefined
+          },
           updated_at: new Date().toISOString()
         }
 
@@ -248,6 +271,7 @@ export default function ContentEditorPage({
           title: values.title.trim(),
           content: values.content.trim(),
           author_id: (user as any).id,
+          metadata: attachments.length > 0 ? { attachments } : {},
           status: 'published' // Set status to published so it appears on the board
         }
         
@@ -474,6 +498,7 @@ export default function ContentEditorPage({
                       <TiptapEditor
                         value={field.value}
                         onChange={field.onChange}
+                        onFileUpload={handleFileUpload}
                         placeholder={placeholders.content}
                         height={400}
                       />
