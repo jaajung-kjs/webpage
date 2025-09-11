@@ -174,24 +174,58 @@ export default function TiptapEditor({
       const results = await fileUploadMutation.mutateAsync(files)
       
       for (const result of results) {
+        // 디버깅: 파일 정보 확인
+        console.log('Uploaded file result:', {
+          name: result.name,
+          type: result.type,
+          url: result.url,
+          size: result.size
+        })
+        
+        // MIME 타입이 없거나 빈 문자열인 경우 확장자로 판단
+        let fileType = result.type
+        if (!fileType || fileType === '') {
+          // 파일 이름에서 확장자 추출
+          const extension = result.name.split('.').pop()?.toLowerCase()
+          console.log('File extension:', extension)
+          
+          // 확장자 기반 MIME 타입 매핑
+          const mimeTypeMap: Record<string, string> = {
+            'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'ppt': 'application/vnd.ms-powerpoint',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'xls': 'application/vnd.ms-excel',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'doc': 'application/msword',
+            'pdf': 'application/pdf'
+          }
+          
+          fileType = mimeTypeMap[extension || ''] || 'application/octet-stream'
+          console.log('Fallback MIME type:', fileType)
+        }
+        
         // Insert as image or link based on file type
-        if (result.type.startsWith('image/')) {
+        if (fileType.startsWith('image/')) {
           editor.chain().focus().setImage({ src: result.url }).run()
         } else {
+          // 파일 링크 삽입
+          const linkHtml = `<a href="${result.url}" target="_blank">📎 ${result.name}</a>`
+          console.log('Inserting link:', linkHtml)
           editor
             .chain()
             .focus()
-            .insertContent(`<a href="${result.url}" target="_blank">📎 ${result.name}</a>`)
+            .insertContent(linkHtml)
             .run()
         }
         
         // 파일 업로드 콜백 호출
-        onFileUpload?.(result.url, result.name, result.type, result.size)
+        onFileUpload?.(result.url, result.name, fileType, result.size)
       }
       
       toast.success(`${files.length}개 파일이 업로드되었습니다.`)
     } catch (error: any) {
       console.error('Error uploading files:', error)
+      toast.error('파일 업로드 중 오류가 발생했습니다.')
       // 에러 처리는 V2 훅에서 자동으로 처리됨
     }
   }
