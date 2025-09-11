@@ -132,8 +132,15 @@ export default function ExcelReportGCFPage() {
       const contentType = response.headers.get('content-type')
       console.log('Response content-type:', contentType)
       
-      if (contentType && contentType.includes('application/json')) {
-        // JSON 응답 (Base64 인코딩된 파일)
+      // HTML 응답인 경우 에러 처리
+      if (contentType && contentType.includes('text/html')) {
+        const text = await response.text()
+        console.error('Received HTML response instead of JSON:', text.substring(0, 500))
+        throw new Error('서버 응답 형식 오류: HTML이 반환되었습니다. CORS 또는 URL 문제일 수 있습니다.')
+      }
+      
+      // JSON 응답 처리를 시도
+      try {
         const data = await response.json()
         console.log('Received JSON response:', { 
           success: data.success, 
@@ -152,24 +159,10 @@ export default function ExcelReportGCFPage() {
           recordCount: data.recordCount,
           message: data.message
         })
-      } else {
-        // 직접 바이너리 응답
-        const blob = await response.blob()
-        const base64 = await new Promise<string>((resolve) => {
-          const reader = new FileReader()
-          reader.onloadend = () => {
-            const base64data = reader.result as string
-            resolve(base64data.split(',')[1])
-          }
-          reader.readAsDataURL(blob)
-        })
-        
-        setResult({
-          file: base64,
-          filename: `일일_휴전계획_보고_${new Date().getMonth() + 1}.${new Date().getDate()}.xlsx`,
-          recordCount: 0,
-          message: 'Excel 파일이 성공적으로 변환되었습니다.'
-        })
+      } catch (jsonError) {
+        // JSON 파싱 실패 시
+        console.error('JSON parsing failed:', jsonError)
+        throw new Error('응답 처리 실패: JSON 파싱 오류')
       }
 
       setProgress(100)
